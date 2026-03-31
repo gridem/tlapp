@@ -26,6 +26,33 @@ fun(finalize, f) { return fwd(f) & expression_tag; }
 
 }  // namespace detail
 
+struct PredicateMode {};
+struct InitMode {};
+struct NextMode {};
+
+// Bound expression wrapper.
+// At this stage it preserves current runtime semantics and carries the intended
+// evaluation role in its type, so later refactors can specialize on mode
+// without changing the public DSL surface.
+tname(T_mode, T_expr)
+struct BoundExpression : expression_tag_type {
+  using mode_type = std::decay_t<T_mode>;
+  using expr_type = std::decay_t<T_expr>;
+
+  tname(T) explicit BoundExpression(T&& expr) : expr_{fwd(expr)} {}
+
+  fun(operator(), ctx) const { return detail::extract(fwd(ctx), expr_); }
+
+ private:
+  expr_type expr_;
+};
+
+fun(bind, expr, mode) {
+  using Mode = std::decay_t<T_mode>;
+  using PreparedExpr = std::decay_t<decltype(detail::prepare(fwd(expr)))>;
+  return BoundExpression<Mode, PreparedExpr>{detail::prepare(fwd(expr))};
+}
+
 // Extracts the expression values and invokes the corresponding lambda.
 funs(evaluate, f, v) {
   static_assert(!(is_immediate<T_v> && ...));
