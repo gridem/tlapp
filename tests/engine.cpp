@@ -7,6 +7,16 @@
 
 namespace test {
 
+namespace {
+
+Boolean nonBooleanCheckResult() {
+  return Boolean{[](Context&) {
+    return LogicResult::fromRaw([](Context&) { return true; });
+  }};
+}
+
+}  // namespace
+
 struct Model1 : IModel {
   Boolean init() override { return x == 1 || x == 2; }
   Boolean next() override { return x++ == 5 - x; }
@@ -111,6 +121,48 @@ TEST_F(EngineFixture, QuantifierExistsMany) {
   e.createModel<Model8>();
   e.init();
   checkStats(Stats{1, 2, 2, 2});
+}
+
+struct Model9 : IModel {
+  Boolean init() override { return x == 1; }
+  Boolean next() override { return x++ == x + 1; }
+  std::optional<Boolean> skip() override { return nonBooleanCheckResult(); }
+
+  Var<int> x{"x"};
+};
+
+TEST_F(EngineFixture, SkipRejectsBranchProducingResult) {
+  e.createModel<Model9>();
+  ASSERT_NO_THROW(e.init());
+  ASSERT_THROW(e.loopNext(), EngineBooleanError);
+}
+
+struct Model10 : IModel {
+  Boolean init() override { return x == 1; }
+  Boolean next() override { return x++ == x + 1; }
+  std::optional<Boolean> ensure() override { return nonBooleanCheckResult(); }
+
+  Var<int> x{"x"};
+};
+
+TEST_F(EngineFixture, EnsureRejectsBranchProducingResult) {
+  e.createModel<Model10>();
+  ASSERT_NO_THROW(e.init());
+  ASSERT_THROW(e.loopNext(), EngineBooleanError);
+}
+
+struct Model11 : IModel {
+  Boolean init() override { return x == 1; }
+  Boolean next() override { return x++ == x + 1; }
+  std::optional<Boolean> stop() override { return nonBooleanCheckResult(); }
+
+  Var<int> x{"x"};
+};
+
+TEST_F(EngineFixture, StopRejectsBranchProducingResult) {
+  e.createModel<Model11>();
+  ASSERT_NO_THROW(e.init());
+  ASSERT_THROW(e.loopNext(), EngineBooleanError);
 }
 
 }  // namespace test

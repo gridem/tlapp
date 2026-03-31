@@ -136,6 +136,42 @@ TEST(Quantifier, ExistsExpr) {
   check(!false, {1, 3, 2}, 2);
 }
 
+TEST(Quantifier, ExistsAssignmentPredicateCreatesBranches) {
+  Var<int> x{"x"};
+
+  auto e = exists(std::vector<int>{1, 2}, [&] lam_arg(i) { return x == i; });
+
+  Context ctx;
+  auto res = e(ctx);
+  auto&& ors = std::get<LogicResult>(res);
+
+  ASSERT_EQ(2, ors.size());
+  EXPECT_EQ(0, ctx.size());
+
+  ASSERT_TRUE(ors[0](ctx));
+  EXPECT_EQ(1, ctx.size());
+  EXPECT_EQ(1, x(ctx));
+
+  x.getRef(ctx).reset();
+  ASSERT_TRUE(ors[1](ctx));
+  EXPECT_EQ(2, x(ctx));
+}
+
+TEST(Quantifier, ForallAssignmentPredicateKeepsSingleConjunction) {
+  Var<int> x{"x"};
+
+  auto e = forall(std::vector<int>{1, 2}, [&] lam_arg(i) { return x == i; });
+
+  Context ctx;
+  auto res = e(ctx);
+  auto&& ands = std::get<LogicResult>(res);
+
+  ASSERT_EQ(1, ands.size());
+  ASSERT_FALSE(ands[0](ctx));
+  // The first assignment is still applied before the later equality fails.
+  EXPECT_EQ(1, x(ctx));
+}
+
 TEST(Quantifier, ForallMacro) {
   Var<std::vector<int>> vec{"vec"};
   Var<int> x{"x"};

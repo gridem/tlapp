@@ -116,6 +116,52 @@ TEST(Boolean, Or) {
   }
 }
 
+TEST(Boolean, AndFalseSkipsAssignmentBranches) {
+  Var<int> x{"x"};
+
+  Context ctx;
+  auto e = (x == 1 || x == 2) && false;
+  auto res = e(ctx);
+
+  ASSERT_FALSE(std::get<bool>(res));
+  EXPECT_EQ(0, ctx.size());
+}
+
+TEST(Boolean, OrTrueSkipsAssignmentBranches) {
+  Var<int> x{"x"};
+
+  Context ctx;
+  auto e = true || (x == 1 || x == 2);
+  auto res = e(ctx);
+
+  ASSERT_TRUE(std::get<bool>(res));
+  EXPECT_EQ(0, ctx.size());
+}
+
+TEST(Boolean, AndMixesAssignmentBranchesWithChecks) {
+  Var<int> x{"x"};
+  Var<int> y{"y"};
+
+  Context ctx;
+  y.getRef(ctx) = 1;
+
+  auto e = (x == 1 || x == 2) && y > 0;
+  auto res = e(ctx);
+  auto&& ors = std::get<LogicResult>(res);
+
+  ASSERT_EQ(2, ors.size());
+  // `x` should remain unregistered until a branch is actually executed.
+  EXPECT_EQ(1, ctx.size());
+
+  ASSERT_TRUE(ors[0](ctx));
+  EXPECT_EQ(2, ctx.size());
+  EXPECT_EQ(1, x(ctx));
+
+  x.getRef(ctx).reset();
+  ASSERT_TRUE(ors[1](ctx));
+  EXPECT_EQ(2, x(ctx));
+}
+
 TEST(Boolean, OpOr) {
   Var<int> x{"x"};
   Var<int> y{"y"};
