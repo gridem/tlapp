@@ -13,12 +13,17 @@
 
 ## Build and test
 - Requires CMake, a C++20 compiler, GoogleTest, and glog (see `CMakeLists.txt`).
-- Typical build:
-  - `cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo`
-  - `cmake --build build`
-- Run tests:
-  - `./build/tlapp2_tests` (CTest discovery is not enabled by default)
-- Sample binaries are emitted under `build/samples/` with names matching their source files.
+- Prefer Ninja builds.
+- For normal development and test runs, prefer a Debug build:
+  - `cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug`
+  - `cmake --build build/debug --target tlapp2_tests`
+  - `./build/debug/tlapp2_tests` (CTest discovery is not enabled by default)
+- For performance work and benchmarks, prefer a separate optimized build:
+  - `cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo`
+  - `cmake --build build/rel`
+- If an activated Conda environment causes CMake to pick the wrong GTest package, pass `GTest_DIR` explicitly in the configure command instead of changing `CMakeLists.txt`. On this machine, the Homebrew config path is:
+  - `-DGTest_DIR=/opt/homebrew/opt/googletest/lib/cmake/GTest`
+- Sample binaries are emitted under the chosen build directory's `samples/` subdirectory.
 
 ## Coding conventions and patterns
 - Indentation is 2 spaces; braces on the same line; keep headers lightweight with `#pragma once`.
@@ -29,3 +34,4 @@
 
 ## Notes
 - `scripts/perf*.sh` assume a specific build output path (`.build/RelWithDebInfo`). Adjust or mirror that layout if you need to use them.
+- Keep environment-specific package paths out of repo CMake files; prefer passing them explicitly at configure time.
