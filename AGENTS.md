@@ -27,6 +27,7 @@
 
 ## Coding conventions and patterns
 - Indentation is 2 spaces; braces on the same line; keep headers lightweight with `#pragma once`.
+- Prefer existing repo style and local patterns over alternate equivalent forms. If nearby code already uses a macro/helper pattern, follow that style instead of rewriting it into a different personal style.
 - The codebase relies on macro helpers from `src/macro.h` (`tname`, `fun`, `fwd`, `lam`, `let`, `if_is`, `if_eq`, etc.). Prefer these utilities instead of rolling new template boilerplate.
 - Tagged-expression pattern matching is central; see `src/tag.h`, `src/expression.h`, and operator overloads in `src/operation.h`/`src/infix.h` before changing operator behavior.
 - For Boolean logic behavior and normalization, follow the existing patterns in `src/boolean.h` and `src/evaluate.h`.
