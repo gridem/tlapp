@@ -66,6 +66,24 @@ using Boolean = Expression<BooleanResult>;
 
 namespace detail {
 
+template <>
+struct PredicateResult<bool> {
+  static bool apply(bool result) { return result; }
+};
+
+template <>
+struct PredicateNeedsCheck<BooleanResult> : std::true_type {};
+
+template <>
+struct PredicateResult<BooleanResult> {
+  static bool apply(const BooleanResult& result) {
+    if (auto b = std::get_if<bool>(&result)) {
+      return *b;
+    }
+    throw EngineBooleanError("Invalid boolean value type: must be simple bool");
+  }
+};
+
 fun(isAssign, var, ctx) {
   /*
     Possible context options:

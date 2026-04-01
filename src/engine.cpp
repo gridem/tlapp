@@ -6,28 +6,20 @@
 
 namespace {
 
-std::optional<bool> tryCheck(const std::optional<Boolean>& e, Context& ctx) {
+std::optional<BoundPredicate<Boolean>> bindPredicate(
+    std::optional<Boolean> e) {
   if (!e) {
     return {};
   }
-  ctx.setCheck(true);
-  auto res = (*e)(ctx);
-  ctx.setCheck(false);
-  if (auto b = std::get_if<bool>(&res)) {
-    return *b;
-  } else {
-    throw EngineBooleanError("Invalid boolean value type: must be simple bool");
-  }
+  return bind(std::move(*e), PredicateMode{});
 }
 
-bool holds(const std::optional<Boolean>& e, Context& ctx) {
-  auto b = tryCheck(e, ctx);
-  return b ? *b : false;
+bool holds(const std::optional<BoundPredicate<Boolean>>& e, Context& ctx) {
+  return e ? (*e)(ctx) : false;
 }
 
-bool notHolds(const std::optional<Boolean>& e, Context& ctx) {
-  auto b = tryCheck(e, ctx);
-  return b ? !*b : false;
+bool notHolds(const std::optional<BoundPredicate<Boolean>>& e, Context& ctx) {
+  return e ? !(*e)(ctx) : false;
 }
 
 }  // namespace
@@ -52,7 +44,7 @@ void Engine::run() {
 void Engine::init() {
   VLOG(1) << "Init started";
   // Get Init expression to initialize init states.
-  auto init = model_->init();
+  auto init = bind(model_->init(), InitMode{});
 
   // Initialize state with types.
   ctx_.setState(LogicState::Init);
@@ -69,16 +61,16 @@ void Engine::init() {
     throw EngineInitError("Invalid init expression: no possible variants");
   }
 
-  skip_ = model_->skip();
-  ensure_ = model_->ensure();
-  stop_ = model_->stop();
+  skip_ = bindPredicate(model_->skip());
+  ensure_ = bindPredicate(model_->ensure());
+  stop_ = bindPredicate(model_->stop());
 
   LOG(INFO) << "Init done: " << asString(stats_.init);
 }
 
 void Engine::loopNext() {
   VLOG(1) << "Loop next started";
-  auto next = model_->next();
+  auto next = bind(model_->next(), NextMode{});
   auto&& vars = ctx_.vars();
   auto&& nexts = ctx_.nexts();
 

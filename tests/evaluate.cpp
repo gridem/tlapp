@@ -86,16 +86,20 @@ TEST(Evaluate, EvaluatorLazy) {
   EXPECT_EQ(3, e(ctx));
 }
 
-TEST(Evaluate, BindPredicateModePreparesVar) {
+TEST(Evaluate, BindPredicateModeUnwrapsBooleanResult) {
   Var<int> i{"i"};
 
-  auto bound = bind(i, PredicateMode{});
-  static_assert(is_eq<PredicateMode, typename decltype(bound)::mode_type>);
+  auto expr = i == 2;
+  auto bound = bind(expr, PredicateMode{});
+  static_assert(is_eq<BoundPredicate<decltype(expr)>, decltype(bound)>);
+  static_assert(is_eq<bool, decltype(bound(std::declval<Context&>()))>);
 
   Context ctx;
   i.getRef(ctx) = 2;
+  EXPECT_TRUE(bound(ctx));
 
-  EXPECT_EQ(2, bound(ctx));
+  i.getRef(ctx) = 3;
+  EXPECT_FALSE(bound(ctx));
 }
 
 TEST(Evaluate, BindPredicateModePreservesPredicateSemantics) {
@@ -103,7 +107,7 @@ TEST(Evaluate, BindPredicateModePreservesPredicateSemantics) {
 
   auto expr = i > 2;
   auto bound = bind(expr, PredicateMode{});
-  static_assert(is_eq<PredicateMode, typename decltype(bound)::mode_type>);
+  static_assert(is_eq<BoundPredicate<decltype(expr)>, decltype(bound)>);
 
   Context ctx;
   i.getRef(ctx) = 1;
@@ -113,11 +117,50 @@ TEST(Evaluate, BindPredicateModePreservesPredicateSemantics) {
   EXPECT_TRUE(bound(ctx));
 }
 
+TEST(Evaluate, BindPredicateModeDoesNotForceCheckForBoolPredicate) {
+  auto expr = Expression<bool>{[](Context& ctx) {
+    return ctx.isCheck() ? false : true;
+  }};
+  auto bound = bind(expr, PredicateMode{});
+
+  Context ctx;
+  EXPECT_TRUE(bound(ctx));
+  EXPECT_FALSE(ctx.isCheck());
+}
+
+TEST(Evaluate, BindPredicateModeRejectsBranchProducingResult) {
+  auto expr = Boolean{[](Context&) {
+    return LogicResult::fromRaw([](Context&) { return true; });
+  }};
+  auto bound = bind(expr, PredicateMode{});
+
+  Context ctx;
+  ASSERT_FALSE(ctx.isCheck());
+  EXPECT_THROW(bound(ctx), EngineBooleanError);
+  EXPECT_FALSE(ctx.isCheck());
+}
+
+TEST(Evaluate, BindPredicateModeRestoresCheckFlagAfterThrow) {
+  auto expr = Boolean{[](Context& ctx) -> BooleanResult {
+    EXPECT_TRUE(ctx.isCheck());
+    throw 1;
+  }};
+  auto bound = bind(expr, PredicateMode{});
+
+  Context ctx;
+  ASSERT_FALSE(ctx.isCheck());
+  EXPECT_THROW(bound(ctx), int);
+  EXPECT_FALSE(ctx.isCheck());
+}
+
 TEST(Evaluate, BindInitModePreservesAssignmentSemantics) {
   Var<int> i{"i"};
 
-  auto bound = bind(i == 2, InitMode{});
-  static_assert(is_eq<InitMode, typename decltype(bound)::mode_type>);
+  auto expr = i == 2;
+  auto bound = bind(expr, InitMode{});
+  static_assert(is_eq<BoundInitAction<decltype(expr)>, decltype(bound)>);
+  static_assert(
+      is_eq<BooleanResult, decltype(bound(std::declval<Context&>()))>);
 
   Context ctx;
   auto res = bound(ctx);
@@ -131,8 +174,11 @@ TEST(Evaluate, BindInitModePreservesAssignmentSemantics) {
 TEST(Evaluate, BindNextModePreservesAssignmentSemantics) {
   Var<int> i{"i"};
 
-  auto bound = bind(i++ == 3, NextMode{});
-  static_assert(is_eq<NextMode, typename decltype(bound)::mode_type>);
+  auto expr = i++ == 3;
+  auto bound = bind(expr, NextMode{});
+  static_assert(is_eq<BoundNextAction<decltype(expr)>, decltype(bound)>);
+  static_assert(
+      is_eq<BooleanResult, decltype(bound(std::declval<Context&>()))>);
 
   Context ctx;
   i.getRef(ctx) = 1;

@@ -75,7 +75,7 @@ struct Engine {
 
   Stats stats_;
 
-  std::optional<Boolean> skip_;
-  std::optional<Boolean> ensure_;
-  std::optional<Boolean> stop_;
+  std::optional<BoundPredicate<Boolean>> skip_;
+  std::optional<BoundPredicate<Boolean>> ensure_;
+  std::optional<BoundPredicate<Boolean>> stop_;
 };

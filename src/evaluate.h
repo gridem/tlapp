@@ -1,6 +1,10 @@
 #pragma once
 
+#include <utility>
+
+#include "context.h"
 #include "error.h"
+#include "expression.h"
 #include "tag.h"
 
 namespace detail {
@@ -30,27 +34,69 @@ struct PredicateMode {};
 struct InitMode {};
 struct NextMode {};
 
-// Bound expression wrapper.
-// At this stage it preserves current runtime semantics and carries the intended
-// evaluation role in its type, so later refactors can specialize on mode
-// without changing the public DSL surface.
-tname(T_mode, T_expr)
-struct BoundExpression : expression_tag_type {
-  using mode_type = std::decay_t<T_mode>;
-  using expr_type = std::decay_t<T_expr>;
+namespace detail {
 
-  tname(T) explicit BoundExpression(T&& expr) : expr_{fwd(expr)} {}
+struct CheckModeGuard {
+  explicit CheckModeGuard(Context& ctx) : ctx_{ctx}, wasCheck_{ctx.isCheck()} {
+    ctx_.setCheck(true);
+  }
 
-  fun(operator(), ctx) const { return detail::extract(fwd(ctx), expr_); }
+  ~CheckModeGuard() { ctx_.setCheck(wasCheck_); }
 
  private:
-  expr_type expr_;
+  Context& ctx_;
+  bool wasCheck_;
 };
+
+template <typename T>
+struct PredicateResult {
+  static bool apply(const T&) = delete;
+};
+
+template <typename T>
+struct PredicateNeedsCheck : std::false_type {};
+
+fun(bindEval, ctx, expr, mode) {
+  if_eq(mode, PredicateMode) {
+    if constexpr (!is_immediate<T_expr> &&
+                  PredicateNeedsCheck<OperandType<T_expr>>::value) {
+      CheckModeGuard guard{ctx};
+      auto result = detail::extract(ctx, expr);
+      return PredicateResult<std::decay_t<decltype(result)>>::apply(result);
+    }
+    auto result = detail::extract(fwd(ctx), expr);
+    return PredicateResult<std::decay_t<decltype(result)>>::apply(result);
+  }
+  else {
+    return detail::extract(fwd(ctx), expr);
+  }
+}
+
+}  // namespace detail
+
+tname(T_expr) using PreparedExpression =
+    std::decay_t<decltype(detail::prepare(std::declval<T_expr>()))>;
+
+tname(T_expr, T_mode) using BoundResult = std::decay_t<decltype(
+    detail::bindEval(std::declval<Context&>(),
+                     std::declval<PreparedExpression<T_expr>&>(),
+                     std::declval<T_mode>()))>;
+
+tname(T_expr, T_mode) using BoundExpression = Expression<BoundResult<T_expr, T_mode>>;
+
+tname(T_expr) using BoundPredicate = BoundExpression<T_expr, PredicateMode>;
+
+tname(T_expr) using BoundInitAction = BoundExpression<T_expr, InitMode>;
+
+tname(T_expr) using BoundNextAction = BoundExpression<T_expr, NextMode>;
 
 fun(bind, expr, mode) {
   using Mode = std::decay_t<T_mode>;
-  using PreparedExpr = std::decay_t<decltype(detail::prepare(fwd(expr)))>;
-  return BoundExpression<Mode, PreparedExpr>{detail::prepare(fwd(expr))};
+  using BoundExpr = BoundExpression<T_expr, Mode>;
+  auto prepared = detail::prepare(fwd(expr));
+  return BoundExpr{[capture(prepared)] lam_arg(ctx) {
+    return detail::bindEval(ctx, prepared, Mode{});
+  }};
 }
 
 // Extracts the expression values and invokes the corresponding lambda.
