@@ -92,6 +92,47 @@ struct LivenessWithStopModel : IModel {
   Var<int> x{"x"};
 };
 
+struct WeakFairnessChoiceBase : IModel {
+  Boolean a() { return x == 0 && x++ == 0; }
+  Boolean b() { return x == 0 && x++ == 1; }
+
+  Boolean init() override { return x == 0; }
+  Boolean next() override { return a() || b(); }
+
+  Var<int> x{"x"};
+};
+
+struct WeakFairnessCombinedModel : WeakFairnessChoiceBase {
+  std::optional<LivenessBoolean> liveness() override { return wf(a() || b()); }
+};
+
+struct WeakFairnessSeparateModel : WeakFairnessChoiceBase {
+  std::optional<LivenessBoolean> liveness() override {
+    return wf(a()) && wf(b());
+  }
+};
+
+struct StrongFairnessChoiceBase : IModel {
+  Boolean cycle() {
+    return x == 0 && x++ == 1 || x == 1 && x++ == 0;
+  }
+
+  Boolean a() { return x == 0 && x++ == 2; }
+
+  Boolean init() override { return x == 0; }
+  Boolean next() override { return cycle() || a(); }
+
+  Var<int> x{"x"};
+};
+
+struct WeakFairnessOnlyModel : StrongFairnessChoiceBase {
+  std::optional<LivenessBoolean> liveness() override { return wf(a()); }
+};
+
+struct StrongFairnessOnlyModel : StrongFairnessChoiceBase {
+  std::optional<LivenessBoolean> liveness() override { return sf(a()); }
+};
+
 }  // namespace
 
 TEST_F(EngineFixture, EventuallyPassesWhenAllBehaviorsReachGoal) {
@@ -112,6 +153,26 @@ TEST_F(EngineFixture, EventuallyFailsOnDeadlockByStuttering) {
 TEST_F(EngineFixture, LivenessRejectsStop) {
   e.createModel<LivenessWithStopModel>();
   ASSERT_THROW(e.init(), EngineError);
+}
+
+TEST_F(EngineFixture, WeakFairnessCombinedActionPasses) {
+  e.createModel<WeakFairnessCombinedModel>();
+  ASSERT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, WeakFairnessSeparateActionsFail) {
+  e.createModel<WeakFairnessSeparateModel>();
+  ASSERT_THROW(e.run(), LivenessError);
+}
+
+TEST_F(EngineFixture, WeakFairnessCanPassWhenStrongFairnessFails) {
+  e.createModel<WeakFairnessOnlyModel>();
+  ASSERT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, StrongFairnessFailsWhenActionIsOnlyInfinitelyOftenEnabled) {
+  e.createModel<StrongFairnessOnlyModel>();
+  ASSERT_THROW(e.run(), LivenessError);
 }
 
 }  // namespace test

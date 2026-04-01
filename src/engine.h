@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <utility>
 #include <unordered_map>
@@ -52,6 +53,28 @@ struct Engine {
   const Stats& getStats() const;
 
  private:
+  using NodeId = size_t;
+
+  struct GraphInfo {
+    std::unordered_map<const State*, NodeId> stateIds;
+    std::vector<std::vector<NodeId>> outgoing;
+  };
+
+  struct PredicateCache {
+    std::vector<uint8_t> holds;
+  };
+
+  struct ActionCache {
+    std::vector<uint8_t> enabled;
+    std::vector<std::vector<NodeId>> targets;
+  };
+
+  struct SccInfo {
+    std::vector<std::vector<NodeId>> components;
+    std::vector<NodeId> componentOf;
+    std::vector<uint8_t> infinite;
+  };
+
   // Handles the obtained state.
   void handleResult(const BooleanResult& b, State& to);
 
@@ -59,13 +82,42 @@ struct Engine {
   // processing.
   void tryAddState(const State& state);
 
+  // Builds indexed adjacency for the admitted graph.
+  GraphInfo buildGraphInfo() const;
+
   // Evaluates predicate on a stored state.
   bool holdsOnState(const BoundPredicate<Boolean>& e, const State& state);
 
-  // Checks if there is a cycle (or deadlock-stutter) in the subgraph where the
-  // predicate is false.
-  bool findEventuallyCounterexample(const BoundPredicate<Boolean>& e,
-                                    std::vector<const State*>& cycle);
+  // Precomputes state-predicate results for all admitted nodes.
+  PredicateCache computePredicateCache(const BoundPredicate<Boolean>& e);
+
+  // Precomputes enabledness and matching targets for an action on all admitted
+  // nodes.
+  ActionCache computeActionCache(const BoundNextAction<Boolean>& action,
+                                 const GraphInfo& graph);
+
+  // Computes strongly connected components of the admitted graph.
+  SccInfo computeSccs(const GraphInfo& graph) const;
+
+  // Returns true if the SCC admits an infinite behavior.
+  bool isInfiniteScc(const std::vector<NodeId>& scc, const GraphInfo& graph) const;
+
+  // Extracts a cycle from the SCC.
+  bool extractCycleFromScc(const std::vector<NodeId>& scc, const GraphInfo& graph,
+                           std::vector<const State*>& cycle) const;
+
+  // Checks if there is an infinite SCC where the predicate is false
+  // everywhere.
+  bool findEventuallyCounterexample(const PredicateCache& predicate,
+                                    const SccInfo& sccs,
+                                    const GraphInfo& graph,
+                                    std::vector<const State*>& cycle) const;
+
+  // Checks whether the fairness obligation is violated by some SCC.
+  bool findFairnessCounterexample(const ActionCache& action, bool strong,
+                                  const SccInfo& sccs,
+                                  const GraphInfo& graph,
+                                  std::vector<const State*>& cycle) const;
 
   // Show trace of the current state.
   void trace(const State& state) const;
