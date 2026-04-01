@@ -54,10 +54,58 @@ using Quorums = std::set<Quorum>;
 
 using Messages = std::set<Message>;
 
+fun(hasMessageWithBal, msgs, type, bal) {
+  for (auto&& m : msgs) {
+    if (m.type == type && m.bal == bal) {
+      return true;
+    }
+  }
+  return false;
+}
+
+fun(withMessage, msgs, m) {
+  Messages result = msgs;
+  result.insert(m);
+  return result;
+}
+
+fun(showsSafeAt, msgs, quorum, bal, val) {
+  for (auto&& q : quorum) {
+    Set responded;
+    bool hasVote = false;
+    bool hasValue = false;
+    int mbal = -1;
+    bool consistent = true;
+
+    for (auto&& m : msgs) {
+      if (m.type != M1b || m.bal != bal || q.find(m.acc) == q.end()) {
+        continue;
+      }
+      responded.insert(m.acc);
+      if (m.mbal < 0) {
+        continue;
+      }
+      if (!hasVote) {
+        hasVote = true;
+        mbal = m.mbal;
+      } else if (m.mbal != mbal) {
+        consistent = false;
+        break;
+      }
+      hasValue = hasValue || m.mval == val;
+    }
+
+    if (consistent && responded == q && (!hasVote || hasValue)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/PaxosHowToWinATuringAward/Paxos.tla
 struct Model : IModel {
-  fun(send, m) { return msgs++ == msgs $cup fwd(m); }
+  fun(send, m) { return msgs++ == evaluator_fun(withMessage, msgs, m); }
 
   funs(sendMessage, args) { return send(creator<Message>(fwd(args)...)); }
 
@@ -72,7 +120,8 @@ struct Model : IModel {
   fun(send2b, acc, bal, val) { return sendMessage(M2b, fwd(acc, bal, val)); }
 
   fun(phase1a, b) {
-    return send1a(fwd(b)) && unchanged(maxBal, maxVBal, maxVal);
+    return !evaluator_fun(hasMessageWithBal, msgs, M1a, b) && send1a(fwd(b)) &&
+           unchanged(maxBal, maxVBal, maxVal);
   }
 
   fun(phase1b, a) {
@@ -85,24 +134,9 @@ struct Model : IModel {
   }
 
   fun(phase2a, b, v) {
-    return !($E(m, msgs) {
-      return get_mem(m, type) == M2a && get_mem(m, bal) == b;
-    }) && $E(q, quorum) {
-      auto q1b = $if(m, msgs) {
-        return get_mem(m, type) == M1b && get_mem(m, acc) $in q &&
-               get_mem(m, bal) == b;
-      };
-      auto q1bv = $if(m, q1b) { return get_mem(m, mbal) >= 0; };
-      return $A(a, q) {
-        return $E(m, q1b) { return get_mem(m, acc) == a; };
-      }
-      &&(q1bv == Messages{} || $E(m, q1bv) {
-        return get_mem(m, mval) == v && $A(mm, q1bv) {
-          return get_mem(m, mbal) == get_mem(mm, mbal);
-        };
-      });
-    }
-    &&send2a(b, v) && unchanged(maxVal, maxVBal, maxBal);
+    return !evaluator_fun(hasMessageWithBal, msgs, M2a, b) &&
+           evaluator_fun(showsSafeAt, msgs, quorum, b, v) && send2a(b, v) &&
+           unchanged(maxVal, maxVBal, maxBal);
   }
 
   fun(phase2b, a) {
