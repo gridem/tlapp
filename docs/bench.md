@@ -220,3 +220,57 @@ The same benchmark commands were rerun 5 times on 2026-04-01 and the median
 | `quant_exists_early_hit_4096` | 0.337 | 0.005 | -0.332 | -98.5 |
 | `quant_exists_late_hit_4096` | 2.531 | 2.143 | -0.388 | -15.3 |
 | `quant_exists_assign_16` | 1.169 | 0.822 | -0.347 | -29.7 |
+
+## Liveness Benchmarks
+
+The liveness benchmarks live in
+[`samples/liveness_perf.cpp`](/Users/gridem/Documents/repo/tlapp2/samples/liveness_perf.cpp).
+
+Unlike the boolean and quantifier microbenchmarks, these scenarios:
+
+- build the reachable graph once
+- then benchmark repeated `Engine::checkLiveness()` calls on that fixed graph
+
+This isolates the current liveness analysis cost from one-time graph
+exploration.
+
+### Build And Run
+
+```sh
+cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DGTest_DIR=/opt/homebrew/opt/googletest/lib/cmake/GTest
+cmake --build build/rel --target liveness_perf
+GLOG_minloglevel=1 ./build/rel/samples/liveness_perf --gtest_brief=1
+```
+
+For the table below, the executable was run 5 times on 2026-04-01 and the
+median `per_iter_us` was recorded.
+
+### Scenarios
+
+| Benchmark | Scenario |
+| --- | --- |
+| `liveness_eventually_ring_4096` | `<>(node == 2048)` on a 4096-state deterministic ring, which exercises node-predicate caching plus SCC eventuality checking |
+| `liveness_wf_cycle_1024` | `WF(cycle)` on a 1024-state cycle with extra exit edges to a sink, which exercises fairness enabledness and in-SCC action-hit checks |
+| `liveness_sf_cycle_1024` | `SF(cycle)` on the same graph shape, isolating the strong-fairness check path |
+
+### Results
+
+| Benchmark | Iterations | Checksum | Median `per_iter_us` |
+| --- | ---: | ---: | ---: |
+| `liveness_eventually_ring_4096` | 200 | 1638600 | 541.046 |
+| `liveness_wf_cycle_1024` | 25 | 76875 | 45002.913 |
+| `liveness_sf_cycle_1024` | 25 | 76875 | 45215.127 |
+
+### Liveness Notes
+
+- The eventuality benchmark is comparatively cheap because it only needs one
+  cached predicate bit per node plus SCC inspection.
+- The fairness benchmarks are much more expensive because each fairness clause
+  still matches a large action formula against every admitted node and
+  reconstructs matching targets from the graph.
+- These numbers justify the next optimization step already noted in
+  [`plan/liveness.md`](/Users/gridem/Documents/repo/tlapp2/plan/liveness.md):
+  compact per-obligation bitsets and, longer term, sharing action-hit
+  information directly from exploration instead of recomputing it during the
+  liveness pass.
