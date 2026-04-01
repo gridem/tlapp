@@ -17,6 +17,26 @@ The first supported fragment should be conjunctions of:
 
 This is intentionally smaller than full temporal logic. It is enough to make progress on practical properties such as consensus progress under fairness assumptions.
 
+## Existing Groundwork
+
+The current branch already introduced mode-specific binding in `src/evaluate.h`:
+
+- `PredicateMode`
+- `InitMode`
+- `NextMode`
+- `bind(...)`
+- `BoundPredicate<T_expr>`
+- `BoundInitAction<T_expr>`
+- `BoundNextAction<T_expr>`
+
+The engine already uses this for:
+
+- `init()` via `bind(..., InitMode{})`
+- `next()` via `bind(..., NextMode{})`
+- `skip/ensure/stop` via `bind(..., PredicateMode{})`
+
+This means the liveness layer should build on the existing bound-expression API rather than introducing a separate predicate wrapper hierarchy.
+
 ## Minimal Public API
 
 Keep the existing model API for `init()` and `next()` unchanged. Add one optional method:
@@ -29,9 +49,9 @@ Introduce:
 
 ```cpp
 struct LivenessBoolean {
-  std::vector<Boolean> weakFairness;
-  std::vector<Boolean> strongFairness;
-  std::vector<Boolean> eventually;
+  std::vector<BoundNextAction<Boolean>> weakFairness;
+  std::vector<BoundNextAction<Boolean>> strongFairness;
+  std::vector<BoundPredicate<Boolean>> eventually;
 };
 ```
 
@@ -54,10 +74,11 @@ std::optional<LivenessBoolean> liveness() override {
 
 Notes:
 
-- `wf(Boolean)` and `sf(Boolean)` treat the `Boolean` as an action formula.
-- `eventually(Boolean)` treats the `Boolean` as a state predicate.
+- `wf(Boolean)` and `sf(Boolean)` bind the `Boolean` with `NextMode`.
+- `eventually(Boolean)` binds the `Boolean` with `PredicateMode`.
 - `&&` means conjunction of liveness obligations by merging the corresponding vectors.
 - No vector-based API is exposed to the user directly.
+- No separate `state(...)` / `action(...)` wrapper is required in the public API because mode-specific binding already provides the intended runtime semantics.
 
 ## Semantics
 
@@ -66,9 +87,21 @@ Notes:
 The existing `Boolean` DSL remains unchanged:
 
 - `init()` and `next()` still use the current assignment-aware semantics.
-- liveness checks always evaluate formulas in check mode.
+- liveness checks should reuse the new bound-expression modes instead of manually toggling `Context::setCheck(...)`.
 - `=` remains C++ assignment.
 - `==` remains the DSL relation operator, consistent with the README.
+
+Concretely:
+
+- eventuality predicates are stored as `BoundPredicate<Boolean>`
+- fairness formulas are stored as `BoundNextAction<Boolean>`
+
+This is important because fairness needs action semantics, not just predicate semantics:
+
+- enabledness of `A` at a state requires evaluating `A` as a next-state action
+- checking whether an edge satisfies `A` also needs next-state action semantics
+
+So storing fairness clauses as `BoundPredicate<Boolean>` would be insufficient.
 
 ### Liveness meaning
 
@@ -97,40 +130,35 @@ For liveness, the engine must build and retain the full reachable graph.
 
 ### New internal data
 
-Introduce stable node ids:
+Because the current engine already uses stable `const State*` identities in:
+
+- `processed_`
+- `toProcess_`
+- `uniqueStates_`
+
+the first liveness implementation can stay pointer-based and add:
+
+- adjacency list for all admitted transitions
+- optional reverse adjacency for counterexample reconstruction
+- a set/vector of graph states that excludes skipped states
+
+Suggested first-step shape:
+
+```cpp
+using StatePtr = const State*;
+
+std::unordered_map<StatePtr, std::vector<StatePtr>> edges_;
+std::vector<StatePtr> graphStates_;
+std::unordered_set<StatePtr> admittedStates_;
+```
+
+Longer term, this can be lowered to compact node ids:
 
 ```cpp
 using NodeId = uint32_t;
 ```
 
-Store:
-
-- canonical state storage
-- adjacency list for all transitions
-- reverse adjacency if useful for counterexample reconstruction
-- per-node cached results for state predicates
-- per-node cached enabledness for action formulas
-- per-edge cached action satisfaction
-
-Suggested shape:
-
-```cpp
-struct Edge {
-  NodeId to;
-  std::vector<uint8_t> weakHits;
-  std::vector<uint8_t> strongHits;
-};
-
-struct Node {
-  State state;
-  std::vector<Edge> out;
-  std::vector<uint8_t> eventuallyHolds;
-  std::vector<uint8_t> weakEnabled;
-  std::vector<uint8_t> strongEnabled;
-};
-```
-
-This can later be optimized to bitsets if the number of obligations is bounded or known to be small.
+and then extended with per-node/per-edge caches.
 
 ### Exploration changes
 
@@ -155,11 +183,11 @@ Run ordinary reachability as today, but build the full finite transition graph.
 
 Evaluate liveness obligations on the graph:
 
-- `eventually[i]` on nodes
-- enabledness of `weakFairness[i]` and `strongFairness[i]` on nodes
-- action occurrence of each fairness formula on edges
+- `eventually[i]` on nodes using the stored `BoundPredicate<Boolean>`
+- enabledness of `weakFairness[i]` and `strongFairness[i]` on nodes using the stored `BoundNextAction<Boolean>`
+- action occurrence of each fairness formula on edges using the stored `BoundNextAction<Boolean>`
 
-All of these checks must run in check mode.
+These checks should reuse the bound modes rather than manually rebinding formulas at each check site.
 
 ### Phase 3
 
@@ -172,6 +200,14 @@ An SCC is a liveness counterexample if:
 - for some `SF(A)`, `A` is enabled in at least one node of the SCC and no edge in the SCC satisfies `A`
 
 If such an SCC exists, produce a liveness failure.
+
+For the first `<>(P)`-only milestone, a simpler equivalent check is acceptable:
+
+- build the subgraph induced by states where `!P`
+- fail if that bad-state subgraph contains a directed cycle
+- also fail on reachable deadlock `!P` states if deadlocks are treated as stuttering
+
+This keeps the first implementation simple while still matching the intended eventuality semantics. Full SCC-based generalized checking becomes necessary once fairness support is added.
 
 ### Counterexample form
 
@@ -203,12 +239,17 @@ This should be documented explicitly because it affects the meaning of liveness 
 
 Add `LivenessBoolean` and `IModel::liveness()`.
 
+Store:
+
+- `BoundNextAction<Boolean>` for weak/strong fairness
+- `BoundPredicate<Boolean>` for eventualities
+
 ### Step 2
 
 Refactor engine graph storage:
 
 - keep full adjacency
-- keep node ids
+- keep pointer-based state identity first
 - preserve reachability behavior
 
 ### Step 3
@@ -218,7 +259,7 @@ Implement `<>(P)` checking only.
 This gives the simplest useful liveness check and validates:
 
 - graph construction
-- SCC detection
+- cycle detection in the bad-state subgraph
 - lasso counterexamples
 
 ### Step 4
@@ -263,6 +304,14 @@ Expected:
 - liveness fails
 - counterexample includes prefix and loop
 
+### API binding behavior
+
+Construct `wf(...)`, `sf(...)`, and `eventually(...)` values and verify that:
+
+- fairness clauses are stored as next-action bindings
+- eventualities are stored as predicate bindings
+- conjunction merges clause vectors without changing clause kinds
+
 ### `WF(A)` distinction
 
 Model where `A || B` keeps happening forever but `B` never happens even though it is continuously enabled.
@@ -302,6 +351,12 @@ Effective liveness checking here means:
 - run SCC-based analysis
 
 This is the main reason for introducing `LivenessBoolean` as a compiled set of obligations instead of trying to reuse ordinary `Boolean` evaluation directly.
+
+The recent `bind(...)` work also means the implementation should avoid paying repeated expression-preparation cost:
+
+- bind fairness formulas once with `NextMode`
+- bind eventuality formulas once with `PredicateMode`
+- reuse the bound expressions during graph checks
 
 ## Complexity Considerations
 
@@ -347,8 +402,8 @@ In practice, the real cost is:
 where:
 
 - `C_state` is the cost of evaluating one state predicate
-- `C_enabled` is the cost of checking whether an action formula is enabled in a state
-- `C_edge` is the cost of checking whether an edge satisfies an action formula
+- `C_enabled` is the cost of checking whether a bound next-action is enabled in a state
+- `C_edge` is the cost of checking whether a bound next-action matches an edge
 
 ### SCC search
 
@@ -453,7 +508,8 @@ Accept:
 
 - simple vectors of `uint8_t`
 - separate evaluation of liveness obligations
-- one SCC pass
+- pointer-based adjacency
+- cycle detection for `<>(P)` before full fairness support
 
 This keeps the implementation understandable and correct.
 
@@ -484,6 +540,7 @@ These can be deferred until after the first implementation:
 - whether to represent cached checks as dynamic bitsets instead of byte vectors
 - whether to support richer temporal formulas later
 - whether to expose liveness failures as dedicated exception types
+- whether fairness support should reject `stop()` configurations up front because early termination prevents sound liveness checking
 
 ## Non-Goals for Phase 1
 
