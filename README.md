@@ -151,6 +151,9 @@ The table below summarizes the mapping between TLA+ and TLA++:
 | Exists | `\E e \in set : ...` | `$E(e, set) { ... }` |
 | Set filter | `{e \in set : ... }` | `$if(e, set) { ... }` |
 | Unchanged | `UNCHANGED x` | `unchanged(x)` |
+| Eventually | `<> P` | `eventually(p)` |
+| Weak fairness | `WF_vars(A)` | `wf(a)` |
+| Strong fairness | `SF_vars(A)` | `sf(a)` |
 
 The rest of the operations can be found in samples and tests.
 
@@ -347,6 +350,8 @@ virtual std::optional<Boolean> skip();
 virtual std::optional<Boolean> ensure();
 // Stops on that state.
 virtual std::optional<Boolean> stop();
+// Liveness obligations.
+virtual std::optional<LivenessBoolean> liveness();
 ```
 
 So we could have additional engine behavior to modify the logic:
@@ -354,6 +359,46 @@ So we could have additional engine behavior to modify the logic:
 1. `skip` allows to skip that state based on a boolean logic. You can use both current and next variables in order to skip.
 2. `ensure` checks for invariants on each iterations. Useful to enforce correctness for each state. You can use both current and next variables in order to validate.
 3. `stop` allows to terminate the iterations earlier based on a condition. Pretty similar to `!ensure()`, but it's a valid stop condition that is treated separately. You can use both current and next variables in order to stop.
+4. `liveness` adds temporal obligations that are checked on the explored graph after reachability is finished.
+
+### Liveness
+
+The current liveness API supports conjunctions of:
+
+1. `eventually(p)` which corresponds to `<> P`.
+2. `wf(a)` which corresponds to weak fairness of an action.
+3. `sf(a)` which corresponds to strong fairness of an action.
+
+Example:
+
+```cpp
+Boolean advance() { return x < 3 && x++ == x + 1; }
+
+std::optional<LivenessBoolean> liveness() override {
+  return wf(advance()) && eventually(x == 3);
+}
+```
+
+There are 2 important details here:
+
+1. `wf(...)` and `sf(...)` expect an action formula, so they are evaluated in the same next-state style as `next()`.
+2. `eventually(...)` expects a state predicate, so it is evaluated in predicate/check mode without assignments.
+
+Liveness conjunction is explicit:
+
+```cpp
+return wf(a()) && wf(b()) && eventually(chosen());
+```
+
+This is not the same as:
+
+```cpp
+return wf(a() || b()) && eventually(chosen());
+```
+
+The first form requires fairness for `a` and `b` separately. The second form requires fairness only for the combined action `a \/ b`.
+
+The engine checks liveness after the full reachable graph is built. `eventually(p)` fails if there is a reachable infinite behavior where `p` never becomes true. Deadlocks are treated as stuttering self-loops for liveness, so a deadlocked state with `!p` also violates `eventually(p)`.
 
 ### Engine semantics
 
@@ -364,15 +409,26 @@ So we could have additional engine behavior to modify the logic:
 - **Check mode:** `skip/ensure/stop` are evaluated in check mode, so `==` is a
   pure comparison (no assignment side effects), and branch-producing results
   are rejected there.
+- **Liveness mode:** `eventually(...)` is evaluated in predicate/check mode,
+  while `wf(...)` and `sf(...)` are evaluated as next-state actions.
+- **Full graph for liveness:** liveness is checked after exploration over the
+  admitted state graph, not during the main state-generation loop.
+- **Deadlocks:** for liveness only, deadlocks are treated as stuttering
+  self-loops.
+- **`stop` incompatibility:** `stop()` cannot be used together with
+  `liveness()`, because early termination would make the liveness result
+  unsound.
 - **Quantifiers on empty sets:** `forall` returns `true`, `exists` returns
   `false`.
 - **Trace output:** traces are produced when stopping or on invariant failure,
-  and show the predecessor chain of states leading to that stop.
+  and also on liveness failure. They show the predecessor chain of states
+  leading to that stop or counterexample cycle.
 
 ### Enabling traces
 
-Traces are only emitted when a `stop` condition is hit or an `ensure` invariant
-fails. To see them, enable glog output (for example):
+Traces are emitted when a `stop` condition is hit, when an `ensure` invariant
+fails, or when a liveness condition fails. To see them, enable glog output (for
+example):
 
 ```
 GLOG_logtostderr=1 ./build/samples/die_hard
