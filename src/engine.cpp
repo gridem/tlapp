@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include <functional>
 #include <glog/logging.h>
 
 #include "as_string.h"
@@ -39,6 +40,7 @@ void Engine::setModel(Model&& model) { model_ = std::move(model); }
 void Engine::run() {
   init();
   loopNext();
+  checkLiveness();
 }
 
 void Engine::init() {
@@ -64,6 +66,15 @@ void Engine::init() {
   skip_ = bindPredicate(model_->skip());
   ensure_ = bindPredicate(model_->ensure());
   stop_ = bindPredicate(model_->stop());
+  liveness_ = model_->liveness();
+  if (liveness_) {
+    if (stop_) {
+      throw EngineError("Liveness cannot be used together with stop()");
+    }
+    if (!liveness_->weakFairness.empty() || !liveness_->strongFairness.empty()) {
+      throw EngineError("WF/SF liveness checking is not implemented yet");
+    }
+  }
 
   LOG(INFO) << "Init done: " << asString(stats_.init);
 }
@@ -95,6 +106,25 @@ void Engine::loopNext() {
 }
 
 const Stats& Engine::getStats() const { return stats_; }
+
+void Engine::checkLiveness() {
+  if (!liveness_) {
+    return;
+  }
+
+  for (auto&& predicate : liveness_->eventually) {
+    std::vector<const State*> cycle;
+    if (!findEventuallyCounterexample(predicate, cycle)) {
+      continue;
+    }
+    LOG(ERROR) << "Liveness eventually condition violated";
+    if (!cycle.empty()) {
+      trace(*cycle.front());
+      traceCycle(cycle);
+    }
+    throw LivenessError("Eventually condition violated");
+  }
+}
 
 void Engine::handleResult(const BooleanResult& b, State& to) {
   std::visit(
@@ -129,7 +159,8 @@ void Engine::handleResult(const BooleanResult& b, State& to) {
 void Engine::tryAddState(const State& state) {
   state.validate();
   ++stats_.loop.transitions;
-  if (auto inserted = tryEmplaceState(state)) {
+  auto [stored, inserted] = tryEmplaceState(state);
+  if (inserted) {
     if (holds(skip_, ctx_)) {
       VLOG(1) << "Skipping state due to skip expression, state: "
               << asString(ctx_);
@@ -138,21 +169,103 @@ void Engine::tryAddState(const State& state) {
     if (holds(stop_, ctx_)) {
       LOG(INFO) << "Stopping execution due to stop expression, state: "
                 << asString(ctx_);
-      trace(*inserted);
+      trace(*stored);
       throw EngineStop{};
     }
     if (notHolds(ensure_, ctx_)) {
       LOG(ERROR) << "Invariant doesn't hold for state: " << asString(ctx_);
-      trace(*inserted);
+      trace(*stored);
       throw EnsureError(asString("Invariant doesn't hold for state: ", ctx_));
     }
 
+    admittedStates_.insert(stored);
+    graphStates_.push_back(stored);
     ++stats_.loop.states;
-    toProcess_.push_back(inserted);
+    toProcess_.push_back(stored);
     VLOG(1) << "State inserted: " << asString(ctx_);
+  } else if (admittedStates_.find(stored) == admittedStates_.end()) {
+    VLOG(1) << "State exists but is not admitted, skipped: " << asString(ctx_);
+    return;
   } else {
     VLOG(1) << "State exists, skipped: " << asString(ctx_);
   }
+
+  if (from_ != nullptr && admittedStates_.find(from_) != admittedStates_.end()) {
+    edges_[from_].push_back(stored);
+  }
+}
+
+bool Engine::holdsOnState(const BoundPredicate<Boolean>& e, const State& state) {
+  ctx_.setState(LogicState::Init);
+  ctx_.setAddAllowed(false);
+  ctx_.setCheck(false);
+  ctx_.vars() = state;
+  ctx_.nexts().clearValues();
+  return e(ctx_);
+}
+
+bool Engine::findEventuallyCounterexample(const BoundPredicate<Boolean>& e,
+                                          std::vector<const State*>& cycle) {
+  std::unordered_set<const State*> bad;
+  bad.reserve(graphStates_.size());
+  for (auto&& state : graphStates_) {
+    if (!holdsOnState(e, *state)) {
+      bad.insert(state);
+    }
+  }
+  if (bad.empty()) {
+    return false;
+  }
+
+  std::unordered_map<const State*, int> color;
+  std::unordered_map<const State*, size_t> stackPos;
+  std::vector<const State*> stack;
+  std::function<bool(const State*)> dfs = [&](const State* state) {
+    color[state] = 1;
+    stackPos[state] = stack.size();
+    stack.push_back(state);
+
+    auto it = edges_.find(state);
+    if (it == edges_.end() || it->second.empty()) {
+      cycle = {state, state};
+      return true;
+    }
+
+    for (auto&& next : it->second) {
+      if (bad.find(next) == bad.end()) {
+        continue;
+      }
+      auto jt = color.find(next);
+      if (jt == color.end()) {
+        if (dfs(next)) {
+          return true;
+        }
+      } else if (jt->second == 1) {
+        auto pos = stackPos[next];
+        cycle.assign(stack.begin() + pos, stack.end());
+        cycle.push_back(next);
+        return true;
+      }
+    }
+
+    color[state] = 2;
+    stackPos.erase(state);
+    stack.pop_back();
+    return false;
+  };
+
+  for (auto&& state : graphStates_) {
+    if (bad.find(state) == bad.end()) {
+      continue;
+    }
+    if (color.find(state) != color.end()) {
+      continue;
+    }
+    if (dfs(state)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void Engine::trace(const State& state) const {
@@ -175,12 +288,17 @@ void Engine::trace(const State& state) const {
   }
 }
 
-const State* Engine::tryEmplaceState(const State& state) {
-  auto [it, inserted] = uniqueStates_.insert(state);
-  if (!inserted) {
-    return nullptr;
+void Engine::traceCycle(const std::vector<const State*>& cycle) const {
+  for (auto&& state : cycle) {
+    VLOG(0) << "Cycle: " << asString(*state);
   }
+}
+
+std::pair<const State*, bool> Engine::tryEmplaceState(const State& state) {
+  auto [it, inserted] = uniqueStates_.insert(state);
   const State* stored = &*it;
-  processed_.emplace(stored, from_);
-  return stored;
+  if (inserted) {
+    processed_.emplace(stored, from_);
+  }
+  return {stored, inserted};
 }

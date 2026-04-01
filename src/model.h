@@ -1,6 +1,8 @@
 #pragma once
 
-#include "boolean.h"
+#include <optional>
+
+#include "liveness.h"
 #include "object.h"
 
 struct IModel : IObject {
@@ -14,6 +16,8 @@ struct IModel : IObject {
   virtual std::optional<Boolean> ensure() { return {}; }
   // Stops on that state.
   virtual std::optional<Boolean> stop() { return {}; }
+  // Liveness obligations.
+  virtual std::optional<LivenessBoolean> liveness() { return {}; }
 };
 
 using Model = std::unique_ptr<IModel>;
