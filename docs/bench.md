@@ -258,9 +258,9 @@ median `per_iter_us` was recorded.
 
 | Benchmark | Iterations | Checksum | Median `per_iter_us` |
 | --- | ---: | ---: | ---: |
-| `liveness_eventually_ring_4096` | 200 | 1638600 | 541.046 |
-| `liveness_wf_cycle_1024` | 25 | 76875 | 45002.913 |
-| `liveness_sf_cycle_1024` | 25 | 76875 | 45215.127 |
+| `liveness_eventually_ring_4096` | 200 | 1638600 | 525.637 |
+| `liveness_wf_cycle_1024` | 25 | 76875 | 43668.700 |
+| `liveness_sf_cycle_1024` | 25 | 76875 | 43630.902 |
 
 ### Liveness Notes
 
@@ -269,6 +269,9 @@ median `per_iter_us` was recorded.
 - The fairness benchmarks are much more expensive because each fairness clause
   still matches a large action formula against every admitted node and
   reconstructs matching targets from the graph.
+- The latest fairness numbers are slightly better because the cache build no
+  longer constructs per-node hash sets for outgoing membership and dedup; it
+  now uses reusable dense stamp arrays during target reconstruction.
 - These numbers justify the next optimization step already noted in
   [`plan/liveness.md`](/Users/gridem/Documents/repo/tlapp2/plan/liveness.md):
   compact per-obligation bitsets and, longer term, sharing action-hit

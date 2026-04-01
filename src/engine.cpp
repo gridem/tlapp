@@ -275,6 +275,12 @@ Engine::ActionCache Engine::computeActionCache(
   ActionCache cache;
   cache.enabled.resize(graphStates_.size());
   cache.targets.resize(graphStates_.size());
+  // Reuse dense stamp arrays instead of rebuilding per-node hash sets for
+  // outgoing membership and target deduplication.
+  std::vector<size_t> outgoingMarks(graphStates_.size());
+  std::vector<size_t> seenMarks(graphStates_.size());
+  size_t outgoingStamp = 1;
+  size_t seenStamp = 1;
 
   for (size_t i = 0; i < graphStates_.size(); ++i) {
     auto&& outgoing = graph.outgoing[i];
@@ -282,8 +288,12 @@ Engine::ActionCache Engine::computeActionCache(
       continue;
     }
 
-    std::unordered_set<NodeId> outgoingSet{outgoing.begin(), outgoing.end()};
-    std::unordered_set<NodeId> seen;
+    for (auto&& target : outgoing) {
+      outgoingMarks[target] = outgoingStamp;
+    }
+
+    auto& targets = cache.targets[i];
+    targets.reserve(outgoing.size());
 
     ctx_.setState(LogicState::Next);
     ctx_.setAddAllowed(false);
@@ -293,7 +303,8 @@ Engine::ActionCache Engine::computeActionCache(
 
     auto bound = action(ctx_);
     std::visit(
-        [this, &cache, &graph, &outgoingSet, &seen, i] lam_arg(v) {
+        [this, &graph, &outgoingMarks, &seenMarks, outgoingStamp, seenStamp,
+         &targets] lam_arg(v) {
           if_eq(v, bool) {
             if (v) {
               throw EngineBooleanError(
@@ -309,9 +320,10 @@ Engine::ActionCache Engine::computeActionCache(
                 if (jt != uniqueStates_.end()) {
                   auto kt = graph.stateIds.find(&*jt);
                   if (kt != graph.stateIds.end() &&
-                      outgoingSet.find(kt->second) != outgoingSet.end() &&
-                      seen.insert(kt->second).second) {
-                    cache.targets[i].push_back(kt->second);
+                      outgoingMarks[kt->second] == outgoingStamp &&
+                      seenMarks[kt->second] != seenStamp) {
+                    seenMarks[kt->second] = seenStamp;
+                    targets.push_back(kt->second);
                   }
                 }
               }
@@ -321,7 +333,16 @@ Engine::ActionCache Engine::computeActionCache(
         },
         bound);
 
-    cache.enabled[i] = cache.targets[i].empty() ? 0 : 1;
+    cache.enabled[i] = targets.empty() ? 0 : 1;
+
+    ++outgoingStamp;
+    ++seenStamp;
+    if (outgoingStamp == 0 || seenStamp == 0) {
+      std::fill(outgoingMarks.begin(), outgoingMarks.end(), 0);
+      std::fill(seenMarks.begin(), seenMarks.end(), 0);
+      outgoingStamp = 1;
+      seenStamp = 1;
+    }
   }
 
   return cache;
