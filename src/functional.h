@@ -41,7 +41,7 @@ fun(lamPredicateToExpressionPredicate, predicate) {
 */
 
 fun(filterOp, ctx, setExpr, elem, predicateExpr) {
-  auto set = extract(fwd(ctx, setExpr));
+  auto&& set = extract(fwd(ctx, setExpr));
 
   std::decay_t<decltype(set)> result;
   auto inserter = std::inserter(result, result.end());

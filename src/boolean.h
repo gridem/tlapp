@@ -516,17 +516,24 @@ fun(appendBranch, l, r) {
   l.insert(l.end(), r.begin(), r.end());
 }
 
+fun(appendLogic, l, r) {
+  if (r.size() == 1) {
+    l.push_back(r[0]);
+  } else {
+    l.insert(l.end(), r.begin(), r.end());
+  }
+}
+
 fun(concatVectors, l, r) {
   using namespace std;
   if_is(l, rvalue_reference_v) {
-    l.reserve(l.size() + r.size());
-    l.insert(l.end(), r.begin(), r.end());
+    appendLogic(l, r);
     return fwd(l);
   }
   else {
     auto v = l;
     v.reserve(v.size() + r.size());
-    v.insert(v.end(), r.begin(), r.end());
+    appendLogic(v, r);
     return v;
   }
 }

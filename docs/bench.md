@@ -168,27 +168,53 @@ The same benchmark commands were rerun 5 times on 2026-04-01 and the median
   plain predicate evaluation, so the next gains there should come from the
   planned quantifier fast path rather than more boolean-branch tuning.
 
-## Baseline vs Latest
+## Quantifier And OR Tuning Results
 
-This table compares the original closure-based baseline directly against the
-latest Phase 2 branch-tuned implementation.
+The next round of work applied the planned low-risk quantifier improvements and
+one targeted `||` builder cleanup:
 
-| Benchmark | Original baseline `per_iter_us` | Latest `per_iter_us` | Delta `us` | Delta `%` |
+- `quantifierOp(...)` and `filterOp(...)` now bind the extracted set as a
+  reference instead of copying the whole container per evaluation.
+- `forall` / `exists` now use a direct bool loop when the predicate result type
+  is plain `bool`.
+- Assignment-producing quantifiers now combine `LogicResult` directly instead of
+  routing every element through the generic `orOp` / `andOp` reducer.
+- `concatVectors(...)` now appends a single-branch `LogicResult` with
+  `push_back(...)` instead of exact-reserve plus `insert(...)` on every step of
+  a wide left-deep `||` chain.
+
+The same benchmark commands were rerun 5 times on 2026-04-01 and the median
+`per_iter_us` was recorded again.
+
+| Benchmark | Previous latest `per_iter_us` | Quantifier and OR tuning `per_iter_us` | Delta `us` | Delta `%` |
 | --- | ---: | ---: | ---: | ---: |
-| `boolean_or_assign_64` | 4.469 | 5.470 | +1.001 | +22.4 |
-| `boolean_and_cross_16x16x16` | 272.536 | 70.107 | -202.429 | -74.3 |
-| `quant_forall_late_fail_4096` | 2.832 | 2.447 | -0.385 | -13.6 |
-| `quant_exists_early_hit_4096` | 0.337 | 0.362 | +0.025 | +7.4 |
-| `quant_exists_late_hit_4096` | 2.531 | 2.493 | -0.038 | -1.5 |
-| `quant_exists_assign_16` | 1.169 | 1.407 | +0.238 | +20.4 |
+| `boolean_or_assign_64` | 5.470 | 5.168 | -0.302 | -5.5 |
+| `boolean_and_cross_16x16x16` | 70.107 | 69.263 | -0.844 | -1.2 |
+| `quant_forall_late_fail_4096` | 2.447 | 2.209 | -0.238 | -9.7 |
+| `quant_exists_early_hit_4096` | 0.362 | 0.005 | -0.357 | -98.6 |
+| `quant_exists_late_hit_4096` | 2.493 | 2.432 | -0.061 | -2.4 |
+| `quant_exists_assign_16` | 1.407 | 0.829 | -0.578 | -41.1 |
 
-## Summary
+## Quantifier And OR Tuning Notes
 
-- The latest explicit-branch implementation is a large win for branch
-  cross-product construction and a modest win for late-fail / late-hit
-  quantifier scans.
-- The remaining regressions are concentrated in wide assignment-producing `||`
-  chains and assignment-producing quantifiers.
-- That suggests the next optimization pass should focus on `LogicResult` growth
-  along `||` chains and on a pure-bool quantifier fast path, not another major
-  redesign of branch storage.
+- The container-copy removal and bool fast path are both low-risk changes that
+  produced clear wins on the quantifier benchmarks.
+- `quant_exists_assign_16` is now faster than the original baseline, which
+  confirms that the direct branch-combining path is better than routing the
+  quantifier through generic boolean reduction.
+- `boolean_or_assign_64` improved again, but it is still a bit slower than the
+  original closure-based baseline.
+- `quant_exists_early_hit_4096` is now so cheap that the benchmark is
+  compiler-sensitive. The current number should be read as “effectively near
+  zero” rather than as a precise stable microsecond cost.
+
+## Baseline vs Current
+
+| Benchmark | Original baseline `per_iter_us` | Current `per_iter_us` | Delta `us` | Delta `%` |
+| --- | ---: | ---: | ---: | ---: |
+| `boolean_or_assign_64` | 4.469 | 5.168 | +0.699 | +15.6 |
+| `boolean_and_cross_16x16x16` | 272.536 | 69.263 | -203.273 | -74.6 |
+| `quant_forall_late_fail_4096` | 2.832 | 2.209 | -0.623 | -22.0 |
+| `quant_exists_early_hit_4096` | 0.337 | 0.005 | -0.332 | -98.5 |
+| `quant_exists_late_hit_4096` | 2.531 | 2.432 | -0.099 | -3.9 |
+| `quant_exists_assign_16` | 1.169 | 0.829 | -0.340 | -29.1 |

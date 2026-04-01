@@ -4,69 +4,98 @@
 
 namespace detail {
 
-fun(earlyTerminationCheck, result, termination) {
-  if_eq(result, bool) {
-    if (result == termination) {
-      // Early termination without iterating through all items.
-      return true;
-    }
-  }
-  else if_eq(result, BooleanResult) {
-    if (auto bPtr = std::get_if<bool>(&result)) {
-      if (*bPtr == termination) {
-        // Early termination without iterating through all items for
-        // BooleanResult.
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// Generic quantifier operation.
-// It seems complex, but the sequence is simple:
-//    1. Check on empty set. Do early return if it's empty.
-//    2. Iterate through set values.
-//    3. During iteration we need to setup element since we have complex
-//       shared_ptr passing lam_arg through the pointer: *elem = *begin.
-//    4. Iteration is manual since we need to assign the type and do
-//       optimization for the first element. If it's LogicResult, a raw bool
-//       is not acceptable here.
-//    5. Do early termination if we know the final result without checking the
-//       rest.
-//    6. Apply quantifier operation (|| or &&) iteratively.
-// Manual first-element handling avoids collapsing a LogicResult into bool.
-fun(quantifierOp, onEmpty, termination, op, ctx, setExpr, elem, predicateExpr) {
-  auto set = extract(fwd(ctx, setExpr));
-
-  using ResultType =
-      BinaryBooleanResultType<bool, ExpressionType<T_predicateExpr>>;
+fun(quantifierBoolOp, onEmpty, termination, ctx, setExpr, elem, predicateExpr) {
+  bool resultOnEmpty = onEmpty;
+  bool resultOnTermination = termination;
+  auto&& set = extract(fwd(ctx, setExpr));
 
   if (set.empty()) {
-    return ResultType{onEmpty};
+    return resultOnEmpty;
   }
-  auto it = std::begin(set);
-  auto end = std::end(set);
-  *elem = &*it;
-  auto result = extract(fwd(ctx, predicateExpr));
-  for (++it; it != end; ++it) {
-    if (earlyTerminationCheck(result, termination)) {
-      return ResultType{termination};
+  for (auto&& e : set) {
+    *elem = &e;
+    auto result = extract(fwd(ctx, predicateExpr));
+    if (result == resultOnTermination) {
+      return resultOnTermination;
     }
-    *elem = &*it;
-    result = op(std::move(result), extract(fwd(ctx, predicateExpr)));
   }
-  return ResultType{result};
+  return !resultOnTermination;
 }
 
-funs(forallOp, v) {
-  return quantifierOp(true /* onEmpty */, false /* termination */,
-                      as_lam(andOp), fwd(v)...);
+fun(existsBooleanOp, ctx, setExpr, elem, predicateExpr) {
+  auto&& set = extract(fwd(ctx, setExpr));
+  if (set.empty()) {
+    return BooleanResult{false};
+  }
+
+  LogicResult ors;
+  if constexpr (requires { set.size(); }) {
+    ors.reserve(set.size());
+  }
+  for (auto&& e : set) {
+    *elem = &e;
+    auto result = extract(fwd(ctx, predicateExpr));
+    if (auto bPtr = std::get_if<bool>(&result)) {
+      if (*bPtr) {
+        return BooleanResult{true};
+      }
+      continue;
+    }
+    auto&& logic = std::get<LogicResult>(result);
+    appendLogic(ors, logic);
+  }
+  if (ors.empty()) {
+    return BooleanResult{false};
+  }
+  return BooleanResult{std::move(ors)};
 }
 
-funs(existsOp, v) {
-  return quantifierOp(false /* onEmpty */, true /* termination */, as_lam(orOp),
-                      fwd(v)...);
+fun(forallBooleanOp, ctx, setExpr, elem, predicateExpr) {
+  auto&& set = extract(fwd(ctx, setExpr));
+  if (set.empty()) {
+    return BooleanResult{true};
+  }
+
+  LogicResult ands;
+  bool hasLogic = false;
+  for (auto&& e : set) {
+    *elem = &e;
+    auto result = extract(fwd(ctx, predicateExpr));
+    if (auto bPtr = std::get_if<bool>(&result)) {
+      if (!*bPtr) {
+        return BooleanResult{false};
+      }
+      continue;
+    }
+    if (!hasLogic) {
+      ands = std::move(std::get<LogicResult>(result));
+      hasLogic = true;
+    } else {
+      ands = mulVectors(std::move(ands), std::get<LogicResult>(result));
+    }
+  }
+  if (hasLogic) {
+    return BooleanResult{std::move(ands)};
+  }
+  return BooleanResult{true};
+}
+
+fun(forallOp, ctx, setExpr, elem, predicateExpr) {
+  if constexpr (is_eq<ExpressionType<T_predicateExpr>, bool>) {
+    return quantifierBoolOp(true /* onEmpty */, false /* termination */,
+                            fwd(ctx, setExpr, elem, predicateExpr));
+  } else {
+    return forallBooleanOp(fwd(ctx, setExpr, elem, predicateExpr));
+  }
+}
+
+fun(existsOp, ctx, setExpr, elem, predicateExpr) {
+  if constexpr (is_eq<ExpressionType<T_predicateExpr>, bool>) {
+    return quantifierBoolOp(false /* onEmpty */, true /* termination */,
+                            fwd(ctx, setExpr, elem, predicateExpr));
+  } else {
+    return existsBooleanOp(fwd(ctx, setExpr, elem, predicateExpr));
+  }
 }
 
 // quantifierOp is operation for quantifier.
