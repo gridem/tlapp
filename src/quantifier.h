@@ -41,8 +41,7 @@ fun(existsBooleanOp, ctx, setExpr, elem, predicateExpr) {
       }
       continue;
     }
-    auto&& logic = std::get<LogicResult>(result);
-    appendLogic(ors, logic);
+    appendLogic(ors, std::get<LogicResult>(std::move(result)));
   }
   if (ors.empty()) {
     return BooleanResult{false};

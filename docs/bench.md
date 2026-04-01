@@ -182,18 +182,20 @@ one targeted `||` builder cleanup:
 - `concatVectors(...)` now appends a single-branch `LogicResult` with
   `push_back(...)` instead of exact-reserve plus `insert(...)` on every step of
   a wide left-deep `||` chain.
+- When the appended `LogicResult` is a temporary, the append path now moves its
+  `BranchResult`s instead of copying them.
 
 The same benchmark commands were rerun 5 times on 2026-04-01 and the median
 `per_iter_us` was recorded again.
 
 | Benchmark | Previous latest `per_iter_us` | Quantifier and OR tuning `per_iter_us` | Delta `us` | Delta `%` |
 | --- | ---: | ---: | ---: | ---: |
-| `boolean_or_assign_64` | 5.470 | 5.168 | -0.302 | -5.5 |
-| `boolean_and_cross_16x16x16` | 70.107 | 69.263 | -0.844 | -1.2 |
-| `quant_forall_late_fail_4096` | 2.447 | 2.209 | -0.238 | -9.7 |
+| `boolean_or_assign_64` | 5.470 | 5.099 | -0.371 | -6.8 |
+| `boolean_and_cross_16x16x16` | 70.107 | 66.736 | -3.371 | -4.8 |
+| `quant_forall_late_fail_4096` | 2.447 | 2.184 | -0.263 | -10.7 |
 | `quant_exists_early_hit_4096` | 0.362 | 0.005 | -0.357 | -98.6 |
-| `quant_exists_late_hit_4096` | 2.493 | 2.432 | -0.061 | -2.4 |
-| `quant_exists_assign_16` | 1.407 | 0.829 | -0.578 | -41.1 |
+| `quant_exists_late_hit_4096` | 2.493 | 2.143 | -0.350 | -14.0 |
+| `quant_exists_assign_16` | 1.407 | 0.822 | -0.585 | -41.6 |
 
 ## Quantifier And OR Tuning Notes
 
@@ -202,8 +204,8 @@ The same benchmark commands were rerun 5 times on 2026-04-01 and the median
 - `quant_exists_assign_16` is now faster than the original baseline, which
   confirms that the direct branch-combining path is better than routing the
   quantifier through generic boolean reduction.
-- `boolean_or_assign_64` improved again, but it is still a bit slower than the
-  original closure-based baseline.
+- `boolean_or_assign_64` improved again and is now much closer to the original
+  closure-based baseline, but it is still a bit slower.
 - `quant_exists_early_hit_4096` is now so cheap that the benchmark is
   compiler-sensitive. The current number should be read as “effectively near
   zero” rather than as a precise stable microsecond cost.
@@ -212,9 +214,9 @@ The same benchmark commands were rerun 5 times on 2026-04-01 and the median
 
 | Benchmark | Original baseline `per_iter_us` | Current `per_iter_us` | Delta `us` | Delta `%` |
 | --- | ---: | ---: | ---: | ---: |
-| `boolean_or_assign_64` | 4.469 | 5.168 | +0.699 | +15.6 |
-| `boolean_and_cross_16x16x16` | 272.536 | 69.263 | -203.273 | -74.6 |
-| `quant_forall_late_fail_4096` | 2.832 | 2.209 | -0.623 | -22.0 |
+| `boolean_or_assign_64` | 4.469 | 5.099 | +0.630 | +14.1 |
+| `boolean_and_cross_16x16x16` | 272.536 | 66.736 | -205.800 | -75.5 |
+| `quant_forall_late_fail_4096` | 2.832 | 2.184 | -0.648 | -22.9 |
 | `quant_exists_early_hit_4096` | 0.337 | 0.005 | -0.332 | -98.5 |
-| `quant_exists_late_hit_4096` | 2.531 | 2.432 | -0.099 | -3.9 |
-| `quant_exists_assign_16` | 1.169 | 0.829 | -0.340 | -29.1 |
+| `quant_exists_late_hit_4096` | 2.531 | 2.143 | -0.388 | -15.3 |
+| `quant_exists_assign_16` | 1.169 | 0.822 | -0.347 | -29.7 |

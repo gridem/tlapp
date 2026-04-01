@@ -517,10 +517,19 @@ fun(appendBranch, l, r) {
 }
 
 fun(appendLogic, l, r) {
-  if (r.size() == 1) {
-    l.push_back(r[0]);
+  using namespace std;
+  if_is(r, rvalue_reference_v) {
+    if (r.size() == 1) {
+      l.push_back(std::move(r[0]));
+    } else {
+      l.insert(l.end(), make_move_iterator(r.begin()), make_move_iterator(r.end()));
+    }
   } else {
-    l.insert(l.end(), r.begin(), r.end());
+    if (r.size() == 1) {
+      l.push_back(r[0]);
+    } else {
+      l.insert(l.end(), r.begin(), r.end());
+    }
   }
 }
 
