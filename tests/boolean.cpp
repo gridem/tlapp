@@ -178,7 +178,7 @@ TEST(Boolean, OpOr) {
     auto&& ors = std::get<LogicResult>(res);
 
     ASSERT_EQ(2, ors.size());
-    ASSERT_EQ(1, ors[0].size());
+    ASSERT_EQ(2, ors[0].size());
     ASSERT_EQ(1, ors[1].size());
 
     {
@@ -198,7 +198,7 @@ TEST(Boolean, OpOr) {
     auto&& ors = std::get<LogicResult>(res);
 
     ASSERT_EQ(1, ors.size());
-    ASSERT_EQ(1, ors[0].size());
+    ASSERT_EQ(2, ors[0].size());
   }
 
   {
