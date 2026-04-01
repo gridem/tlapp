@@ -105,7 +105,20 @@ On top of that there is new C++ template technique that is **tagged template exp
 
 ### Logic
 
-A lot of work and complexity was done to improve boolean representation and logic, especially in the area of quantifiers. It uses a mix of static and dynamic typing and is even pretty complex for me. I don't know how to simplify it further, but for efficiency I would like to keep it in that way. Anyway, there is a lot of room for improvements.
+A lot of work and complexity was done to improve boolean representation and
+logic, especially in the area of quantifiers. The external DSL stayed the same,
+but the internal model was recently simplified around explicit branch data and
+role-specific binding:
+
+1. `Boolean` expressions can now be bound into explicit roles such as
+   `PredicateMode`, `InitMode`, and `NextMode`.
+2. Branch-producing logic is represented as explicit ordered branch data rather
+   than nested `std::function` chains.
+3. Quantifiers reuse generated predicate expressions, borrow their input sets,
+   and use a direct bool fast path when possible.
+
+This keeps the model code declarative while making the runtime easier to reason
+about and substantially faster on heavy boolean and quantifier workloads.
 
 ### Variadics and Forwarding
 
@@ -161,10 +174,23 @@ The main approach is the following:
 
 1. User defines a model by specifying `init` and `next` methods.
 1. User instantiates engine and creates the model instance inside.
-2. The methods `init` and `next` return `Boolean` types that contains boolean expression and logic.
-3. The engine first registers the variables by using `init` expression. This expression contains a set of variables that is lazily registers and initializes a state.
-4. `Boolean` logic contains not just a single state, but a set of states that is unique property of temporal logic. For now you don't need to understand how and why, just remember that any `Boolean` represents a set of outcomes that engine tries to evaluate and iterate through state-by-state.
-5. `next` method allows to generate new states based on a current state allowing temporal logic to go through all possible combinations and allowed states according to user logic. In order to generate `next` state engine must load the current state. The main idea here is that logic can be transformed into state machine and outcome of that state machine is not just a single state, but a set of possible states that may happen.
+2. The methods `init` and `next` return `Boolean` expressions that describe
+   predicates and transition logic.
+3. Before execution the engine binds those expressions into an explicit role:
+   init transition, next transition, or pure predicate
+   (`skip` / `ensure` / `stop`).
+4. The engine first registers the variables by using `init` expression. This
+   expression contains a set of variables that lazily register and initialize a
+   state.
+5. `Boolean` logic contains not just a single state, but a set of possible
+   branches. For now you don't need to understand how and why, just remember
+   that any `Boolean` may represent a set of outcomes that engine tries to
+   evaluate and iterate through state-by-state.
+6. `next` method allows to generate new states based on a current state
+   allowing temporal logic to go through all possible combinations and allowed
+   states according to user logic. The main idea here is that logic can be
+   transformed into state machine and outcome of that state machine is not just
+   a single state, but a set of possible states that may happen.
 
 The power of temporal logic is that you use the checks in order to specify all possible outcomes that system may have. Those behaviors could be good scenarios according to expectations, and also some corner cases and error scenarios that is also possible. Iterating through all possible combinations allows the algorithm to check the invariants regardless of "good" or "bad" conditions. This is an essential core of verification algorithms.
 
@@ -189,6 +215,18 @@ There are several important operations:
 1. `vars` and `nexts`: stores all states of variables as a current state and next state. The state is a vector of `Value`s.
 1. Register: registers new variable (see variable description below). It creates new value for both `vars` and `nexts`.
 
+### Binding Modes
+
+One of the recent internal type-model changes is that the same DSL expression
+can be bound into different execution roles before evaluation:
+
+1. `bind(expr, PredicateMode{})` is used for pure checks and must produce a
+   plain `bool`.
+2. `bind(expr, InitMode{})` preserves init-state assignment semantics.
+3. `bind(expr, NextMode{})` preserves next-state transition semantics.
+
+This keeps the DSL stable while making the engine semantics more explicit.
+
 ### Variables
 
 Variables are tagged expressions that allows to extract the state from the context using a reference. When variable is registered it stores the reference to the state - descriptor. Descriptor specifies the position (index) in a state (where state is a vector of values). Thus, variable is just a reference to a position inside a context.
@@ -209,30 +247,42 @@ Given `Var<int> x{"x"}`. Here we consider that we use `init()` method implementa
 | `x == 2` | It seems that it's a comparison of `x` with `2`, but it's not. It evaluates to a state assignment: after execution the engine will assign `x` to `2` here. |
 | `x == 2 \|\| x == 3` | The outcome of it from engine point of view will be 2 states: with `x = 2` and `x = 3`. |
 
-The last example seems nontrivial and requires additional explanation. The boolean logic may contain not just an outcome which is `true` or `false`, but also a set of outcomes and a set of possible states for a state machine.
+The last example seems nontrivial and requires additional explanation. The
+boolean logic may contain not just an outcome which is `true` or `false`, but
+also a set of outcomes and a set of possible states for a state machine.
 
-In the example above there will be 2 initial states with `x = 2` and `x = 3`. From the implementation perspective the boolean is represented as a `std::variant` of 2 types:
+In the example above there will be 2 initial states with `x = 2` and `x = 3`.
+From the implementation perspective the boolean is represented as a
+`std::variant` of 2 types:
 
-1. `bool` type. It evaluates to a corresponding `true` or `false`. There are shortcuts for logical "and" and "or" operations similar to C++ shortcuts.
-2. `LogicResult` type. This type is more complex and it's a vector of `AssignResult` which may create and assign new state for the engine.
+1. `bool` type. It evaluates to a corresponding `true` or `false`. There are
+   shortcuts for logical "and" and "or" operations similar to C++ shortcuts.
+2. `LogicResult` type. This is a vector of `BranchResult`, where each branch is
+   an ordered conjunction of checks and assignments that may create a new state
+   for the engine.
 
-In the example above it creates a vector of 2 assigns with `x = 2` and `x = 3` that engine later interprets as 2 separated initial states.
+So in the example above the normalized result contains 2 branches, one for
+`x = 2` and one for `x = 3`, that engine later interprets as 2 separated
+initial states.
 
 ### Boolean Operators
 
-The implementation normalizes booleans in expressions. Normalized expression is either `true`/`false` or a vector of `AssignResult` which evalulates later into boolean and assigns the variables to a values.
+The implementation normalizes booleans in expressions. Normalized expression is
+either `true` / `false` or `LogicResult`, where `LogicResult` is a vector of
+ordered branches.
 
 Operator "or" does the following:
 
 1. If the first argument is `true` -> all the expression is `true`.
 2. If the first argument is `false` -> result is second expression.
-3. If both are a vector of assignments, thus it merges assignments just adding the vector into the vector.
+3. If both are `LogicResult`, it merges them by concatenating their branches.
 
 Operator "and" is more complex:
 
 1. If the first argument is `true` -> result is second expression.
 2. If the first argument is `false` -> all the expression is `false`.
-3. If both are a vector of assignments, thus it iterates through all possible combinations to normalize it to the form of vector of assignments.
+3. If both are `LogicResult`, it iterates through all possible combinations to
+   normalize them into a new vector of branches.
 
 It's easier to understand this based on example. Given `Var<int> x{"x"}` and `Var<int> y{"y"}`. Here we consider that we use `init()` method implementation:
 
@@ -265,6 +315,15 @@ auto e1 = $A(i, vec) { return i > 1; };
 auto e2 = $E(i, vec) { return i > 1; };
 // e2 equivalent to 1 > 1 || 2 > 1 which is true.
 ```
+
+Implementation note:
+
+1. The predicate lambda is converted into an expression once and then reused
+   across element iteration.
+2. Pure predicate quantifiers use a direct bool loop with short-circuiting.
+3. Assignment-producing quantifiers still produce `LogicResult` branches and
+   combine them with the same boolean branch machinery.
+4. `filter` uses the same element-binding pattern as quantifiers.
 
 ### Iterations
 
@@ -300,8 +359,11 @@ So we could have additional engine behavior to modify the logic:
 
 - **Init coverage:** every variable must be assigned in the first init branch;
   otherwise initialization fails (e.g., `VarInitError`/`VarValidationError`).
+- **Binding roles:** engine evaluates `init` in `InitMode`, `next` in
+  `NextMode`, and `skip` / `ensure` / `stop` in `PredicateMode`.
 - **Check mode:** `skip/ensure/stop` are evaluated in check mode, so `==` is a
-  pure comparison (no assignment side effects).
+  pure comparison (no assignment side effects), and branch-producing results
+  are rejected there.
 - **Quantifiers on empty sets:** `forall` returns `true`, `exists` returns
   `false`.
 - **Trace output:** traces are produced when stopping or on invariant failure,
@@ -318,6 +380,23 @@ GLOG_logtostderr=1 ./build/samples/die_hard
 
 You can also use glog flags (e.g. `--logtostderr=1`) if you prefer runtime
 arguments.
+
+### Performance Notes
+
+Recent optimization work focused on keeping the DSL stable while improving the
+internals behind `Boolean`, quantifiers, and branch normalization. The current
+implementation keeps explicit branch data, borrows quantified containers, and
+special-cases pure predicate quantifiers.
+
+The main benchmark summary so far is:
+
+1. heavy branch cross-products are much faster than the original baseline
+2. assignment-producing quantifiers are faster than the original baseline
+3. wide `||` chains are much closer to baseline than before, but still leave
+   some room for improvement
+
+Detailed numbers and scenarios are recorded in
+[`docs/bench.md`](docs/bench.md).
 
 ## Implementation Details
 
