@@ -81,6 +81,54 @@ struct EventuallyDeadlockFailModel : IModel {
   Var<int> x{"x"};
 };
 
+struct EventuallyAfterGoodPrefixPassModel : IModel {
+  Boolean init() override { return x == 0; }
+  Boolean next() override {
+    return x == 0 && x++ == 1 || x == 1 && x++ == 2 || x == 2 && x++ == 2;
+  }
+  std::optional<LivenessBoolean> liveness() override {
+    return eventually(x == 1);
+  }
+
+  Var<int> x{"x"};
+};
+
+struct MultipleEventuallyPassModel : IModel {
+  Boolean init() override { return x == 0; }
+  Boolean next() override {
+    return x == 0 && x++ == 1 || x == 1 && x++ == 2 || x == 2 && x++ == 2;
+  }
+  std::optional<LivenessBoolean> liveness() override {
+    return eventually(x == 1) && eventually(x == 2);
+  }
+
+  Var<int> x{"x"};
+};
+
+struct MultipleEventuallyFailModel : IModel {
+  Boolean init() override { return x == 0; }
+  Boolean next() override {
+    return x == 0 && x++ == 1 || x == 1 && x++ == 2 || x == 2 && x++ == 2;
+  }
+  std::optional<LivenessBoolean> liveness() override {
+    return eventually(x == 1) && eventually(x == 3);
+  }
+
+  Var<int> x{"x"};
+};
+
+struct EventuallyMixedInitialFailModel : IModel {
+  Boolean init() override { return x == 0 || x == 1; }
+  Boolean next() override {
+    return x == 0 && x++ == 0 || x == 1 && x++ == 2 || x == 2 && x++ == 2;
+  }
+  std::optional<LivenessBoolean> liveness() override {
+    return eventually(x == 1);
+  }
+
+  Var<int> x{"x"};
+};
+
 struct LivenessWithStopModel : IModel {
   Boolean init() override { return x == 0; }
   Boolean next() override { return x++ == x; }
@@ -147,6 +195,26 @@ TEST_F(EngineFixture, EventuallyFailsOnReachableCycle) {
 
 TEST_F(EngineFixture, EventuallyFailsOnDeadlockByStuttering) {
   e.createModel<EventuallyDeadlockFailModel>();
+  ASSERT_THROW(e.run(), LivenessError);
+}
+
+TEST_F(EngineFixture, EventuallyPassesAfterGoodPrefixBeforeBadCycle) {
+  e.createModel<EventuallyAfterGoodPrefixPassModel>();
+  ASSERT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, MultipleEventuallyClausesPass) {
+  e.createModel<MultipleEventuallyPassModel>();
+  ASSERT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, MultipleEventuallyClausesFailWhenOneIsMissing) {
+  e.createModel<MultipleEventuallyFailModel>();
+  ASSERT_THROW(e.run(), LivenessError);
+}
+
+TEST_F(EngineFixture, EventuallyFailsWhenSomeInitialStateCanStayBadForever) {
+  e.createModel<EventuallyMixedInitialFailModel>();
   ASSERT_THROW(e.run(), LivenessError);
 }
 

@@ -258,22 +258,23 @@ median `per_iter_us` was recorded.
 
 | Benchmark | Iterations | Checksum | Median `per_iter_us` |
 | --- | ---: | ---: | ---: |
-| `liveness_eventually_ring_4096` | 200 | 1638600 | 525.637 |
-| `liveness_wf_cycle_1024` | 25 | 76875 | 43668.700 |
-| `liveness_sf_cycle_1024` | 25 | 76875 | 43630.902 |
+| `liveness_eventually_ring_4096` | 200 | 1638600 | 574.156 |
+| `liveness_wf_cycle_1024` | 25 | 76875 | 44375.570 |
+| `liveness_sf_cycle_1024` | 25 | 76875 | 44592.718 |
 
 ### Liveness Notes
 
 - The eventuality benchmark is comparatively cheap because it only needs one
-  cached predicate bit per node plus SCC inspection.
+  cached predicate bit per node plus bad-subgraph cycle detection.
 - The fairness benchmarks are much more expensive because each fairness clause
   still matches a large action formula against every admitted node and
   reconstructs matching targets from the graph.
-- The latest fairness numbers are slightly better because the cache build no
-  longer constructs per-node hash sets for outgoing membership and dedup; it
-  now uses reusable dense stamp arrays during target reconstruction.
+- The current fairness implementation now uses bitset-style SCC summaries, but
+  these single-clause benchmarks do not benefit much from that change because
+  the dominant cost is still building the per-clause action caches.
+- The latest cache-build path still avoids per-node hash sets by using reusable
+  dense stamp arrays during target reconstruction.
 - These numbers justify the next optimization step already noted in
   [`plan/liveness.md`](/Users/gridem/Documents/repo/tlapp2/plan/liveness.md):
-  compact per-obligation bitsets and, longer term, sharing action-hit
-  information directly from exploration instead of recomputing it during the
-  liveness pass.
+  sharing action-hit information directly from exploration instead of
+  recomputing it during the liveness pass.

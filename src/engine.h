@@ -106,18 +106,11 @@ struct Engine {
   bool extractCycleFromScc(const std::vector<NodeId>& scc, const GraphInfo& graph,
                            std::vector<const State*>& cycle) const;
 
-  // Checks if there is an infinite SCC where the predicate is false
-  // everywhere.
+  // Checks if there is a cycle (or deadlock-stutter) in the subgraph where
+  // the predicate is false.
   bool findEventuallyCounterexample(const PredicateCache& predicate,
-                                    const SccInfo& sccs,
                                     const GraphInfo& graph,
                                     std::vector<const State*>& cycle) const;
-
-  // Checks whether the fairness obligation is violated by some SCC.
-  bool findFairnessCounterexample(const ActionCache& action, bool strong,
-                                  const SccInfo& sccs,
-                                  const GraphInfo& graph,
-                                  std::vector<const State*>& cycle) const;
 
   // Show trace of the current state.
   void trace(const State& state) const;

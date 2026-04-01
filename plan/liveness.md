@@ -43,7 +43,7 @@ Current limitations:
 
 - graph storage is still pointer-based; liveness builds transient node ids for SCC and cache analysis
 - obligation caches are computed per clause and are not shared with `next()` expansion or reused across identical clauses
-- SCC summaries and bitset caches are not implemented yet
+- fairness now uses bitset-style SCC summaries, but `<>(P)` still uses a dedicated bad-subgraph search because an all-bad reachable SCC is not sufficient to characterize eventuality failure
 
 ## Existing Groundwork
 
@@ -222,7 +222,7 @@ The current branch now does this by:
 - building transient node ids for the admitted graph after exploration
 - caching each `<>(P)` predicate once per admitted node
 - caching each fairness obligation once per admitted node plus its matching admitted targets
-- reusing those caches across all SCC checks for that obligation
+- aggregating fairness enabled/taken results with bitsets across SCCs
 
 ### Phase 3
 
@@ -236,10 +236,10 @@ An SCC is a liveness counterexample if:
 
 If such an SCC exists, produce a liveness failure.
 
-The current branch already uses SCC-based checking for `<>(P)` too:
+The current branch currently splits this in two:
 
-- an eventuality fails iff some infinite SCC consists entirely of states where `!P`
-- singleton deadlock SCCs count as infinite because they model stuttering
+- `WF(A)` / `SF(A)` use SCC-based summaries
+- `<>(P)` still searches the bad-state subgraph directly, which is necessary because a bad SCC reached only after a good prefix is not a counterexample to eventuality
 
 ### Counterexample form
 
@@ -508,7 +508,7 @@ The preferred direction is:
 
 This keeps the graph algorithm linear after the predicate cache is built.
 
-The current branch now implements steps 1-3 with per-obligation vectors. The remaining optimization is step 4.
+The current branch now implements all four steps for fairness. The dominant remaining cost is still building the per-obligation action caches.
 
 ## Memory Tradeoffs
 

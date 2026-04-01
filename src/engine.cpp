@@ -7,6 +7,14 @@
 
 namespace {
 
+using BitWord = uint64_t;
+
+struct BitLayout {
+  size_t count = 0;
+  size_t words = 0;
+  BitWord tailMask = 0;
+};
+
 std::optional<BoundPredicate<Boolean>> bindPredicate(
     std::optional<Boolean> e) {
   if (!e) {
@@ -21,6 +29,49 @@ bool holds(const std::optional<BoundPredicate<Boolean>>& e, Context& ctx) {
 
 bool notHolds(const std::optional<BoundPredicate<Boolean>>& e, Context& ctx) {
   return e ? !(*e)(ctx) : false;
+}
+
+BitLayout makeBitLayout(size_t count) {
+  auto words = (count + 63) / 64;
+  auto tailBits = count % 64;
+  auto tailMask =
+      words == 0 ? 0 : (tailBits == 0 ? ~BitWord{0} : ((BitWord{1} << tailBits) - 1));
+  return {count, words, tailMask};
+}
+
+std::vector<BitWord> makeBitRows(size_t rows, const BitLayout& layout) {
+  return std::vector<BitWord>(rows * layout.words);
+}
+
+BitWord* rowBits(std::vector<BitWord>& bits, const BitLayout& layout, size_t row) {
+  return bits.data() + row * layout.words;
+}
+
+const BitWord* rowBits(const std::vector<BitWord>& bits, const BitLayout& layout,
+                       size_t row) {
+  return bits.data() + row * layout.words;
+}
+
+void setBit(std::vector<BitWord>& bits, const BitLayout& layout, size_t row,
+            size_t bit) {
+  rowBits(bits, layout, row)[bit / 64] |= BitWord{1} << (bit % 64);
+}
+
+void fillFullBits(std::vector<BitWord>& bits, const BitLayout& layout) {
+  if (layout.words == 0) {
+    return;
+  }
+  std::fill(bits.begin(), bits.end(), ~BitWord{0});
+  bits.back() &= layout.tailMask;
+}
+
+bool anyBits(const std::vector<BitWord>& bits) {
+  for (auto&& word : bits) {
+    if (word != 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace
@@ -111,11 +162,13 @@ void Engine::checkLiveness() {
 
   auto graph = buildGraphInfo();
   auto sccs = computeSccs(graph);
+  auto weakLayout = makeBitLayout(liveness_->weakFairness.size());
+  auto strongLayout = makeBitLayout(liveness_->strongFairness.size());
 
   for (auto&& predicate : liveness_->eventually) {
     auto cache = computePredicateCache(predicate);
     std::vector<const State*> cycle;
-    if (!findEventuallyCounterexample(cache, sccs, graph, cycle)) {
+    if (!findEventuallyCounterexample(cache, graph, cycle)) {
       continue;
     }
     LOG(ERROR) << "Liveness eventually condition violated";
@@ -126,32 +179,116 @@ void Engine::checkLiveness() {
     throw LivenessError("Eventually condition violated");
   }
 
-  for (auto&& action : liveness_->weakFairness) {
-    auto cache = computeActionCache(action, graph);
-    std::vector<const State*> cycle;
-    if (!findFairnessCounterexample(cache, false, sccs, graph, cycle)) {
-      continue;
+  auto weakEnabled = makeBitRows(graphStates_.size(), weakLayout);
+  auto weakTaken = makeBitRows(sccs.components.size(), weakLayout);
+  for (size_t i = 0; i < liveness_->weakFairness.size(); ++i) {
+    auto cache = computeActionCache(liveness_->weakFairness[i], graph);
+    for (size_t node = 0; node < cache.enabled.size(); ++node) {
+      if (cache.enabled[node]) {
+        setBit(weakEnabled, weakLayout, node, i);
+      }
+      auto component = sccs.componentOf[node];
+      for (auto&& target : cache.targets[node]) {
+        if (sccs.componentOf[target] == component) {
+          setBit(weakTaken, weakLayout, component, i);
+          break;
+        }
+      }
     }
-    LOG(ERROR) << "Liveness weak fairness condition violated";
-    if (!cycle.empty()) {
-      trace(*cycle.front());
-      traceCycle(cycle);
-    }
-    throw LivenessError("Weak fairness condition violated");
   }
 
-  for (auto&& action : liveness_->strongFairness) {
-    auto cache = computeActionCache(action, graph);
-    std::vector<const State*> cycle;
-    if (!findFairnessCounterexample(cache, true, sccs, graph, cycle)) {
-      continue;
+  auto strongEnabled = makeBitRows(graphStates_.size(), strongLayout);
+  auto strongTaken = makeBitRows(sccs.components.size(), strongLayout);
+  for (size_t i = 0; i < liveness_->strongFairness.size(); ++i) {
+    auto cache = computeActionCache(liveness_->strongFairness[i], graph);
+    for (size_t node = 0; node < cache.enabled.size(); ++node) {
+      if (cache.enabled[node]) {
+        setBit(strongEnabled, strongLayout, node, i);
+      }
+      auto component = sccs.componentOf[node];
+      for (auto&& target : cache.targets[node]) {
+        if (sccs.componentOf[target] == component) {
+          setBit(strongTaken, strongLayout, component, i);
+          break;
+        }
+      }
     }
-    LOG(ERROR) << "Liveness strong fairness condition violated";
-    if (!cycle.empty()) {
-      trace(*cycle.front());
-      traceCycle(cycle);
+  }
+
+  if (weakLayout.words != 0) {
+    std::vector<BitWord> enabledAll(weakLayout.words);
+    std::vector<BitWord> violated(weakLayout.words);
+    for (size_t i = 0; i < sccs.components.size(); ++i) {
+      if (!sccs.infinite[i]) {
+        continue;
+      }
+
+      fillFullBits(enabledAll, weakLayout);
+      for (auto&& node : sccs.components[i]) {
+        auto nodeEnabled = rowBits(weakEnabled, weakLayout, node);
+        for (size_t word = 0; word < weakLayout.words; ++word) {
+          enabledAll[word] &= nodeEnabled[word];
+        }
+      }
+
+      auto takenBits = rowBits(weakTaken, weakLayout, i);
+      for (size_t word = 0; word < weakLayout.words; ++word) {
+        violated[word] = enabledAll[word] & ~takenBits[word];
+      }
+      violated.back() &= weakLayout.tailMask;
+      if (!anyBits(violated)) {
+        continue;
+      }
+
+      std::vector<const State*> cycle;
+      if (!extractCycleFromScc(sccs.components[i], graph, cycle)) {
+        throw EngineError("Invalid infinite SCC without cycle");
+      }
+      LOG(ERROR) << "Liveness weak fairness condition violated";
+      if (!cycle.empty()) {
+        trace(*cycle.front());
+        traceCycle(cycle);
+      }
+      throw LivenessError("Weak fairness condition violated");
     }
-    throw LivenessError("Strong fairness condition violated");
+  }
+
+  if (strongLayout.words != 0) {
+    std::vector<BitWord> enabledAny(strongLayout.words);
+    std::vector<BitWord> violated(strongLayout.words);
+    for (size_t i = 0; i < sccs.components.size(); ++i) {
+      if (!sccs.infinite[i]) {
+        continue;
+      }
+
+      std::fill(enabledAny.begin(), enabledAny.end(), 0);
+      for (auto&& node : sccs.components[i]) {
+        auto nodeEnabled = rowBits(strongEnabled, strongLayout, node);
+        for (size_t word = 0; word < strongLayout.words; ++word) {
+          enabledAny[word] |= nodeEnabled[word];
+        }
+      }
+
+      auto takenBits = rowBits(strongTaken, strongLayout, i);
+      for (size_t word = 0; word < strongLayout.words; ++word) {
+        violated[word] = enabledAny[word] & ~takenBits[word];
+      }
+      violated.back() &= strongLayout.tailMask;
+      if (!anyBits(violated)) {
+        continue;
+      }
+
+      std::vector<const State*> cycle;
+      if (!extractCycleFromScc(sccs.components[i], graph, cycle)) {
+        throw EngineError("Invalid infinite SCC without cycle");
+      }
+      LOG(ERROR) << "Liveness strong fairness condition violated";
+      if (!cycle.empty()) {
+        trace(*cycle.front());
+        traceCycle(cycle);
+      }
+      throw LivenessError("Strong fairness condition violated");
+    }
   }
 }
 
@@ -493,70 +630,62 @@ bool Engine::extractCycleFromScc(const std::vector<NodeId>& scc,
 }
 
 bool Engine::findEventuallyCounterexample(const PredicateCache& predicate,
-                                          const SccInfo& sccs,
                                           const GraphInfo& graph,
                                           std::vector<const State*>& cycle) const {
-  for (size_t i = 0; i < sccs.components.size(); ++i) {
-    if (!sccs.infinite[i]) {
-      continue;
-    }
+  std::vector<uint8_t> color(graphStates_.size());
+  std::vector<size_t> stackPos(graphStates_.size());
+  std::vector<NodeId> stack;
 
-    bool allBad = true;
-    for (auto&& node : sccs.components[i]) {
-      if (predicate.holds[node]) {
-        allBad = false;
-        break;
-      }
-    }
+  std::function<bool(NodeId)> dfs = [&](NodeId state) {
+    color[state] = 1;
+    stackPos[state] = stack.size();
+    stack.push_back(state);
 
-    if (!allBad) {
-      continue;
-    }
-
-    if (extractCycleFromScc(sccs.components[i], graph, cycle)) {
+    auto&& outgoing = graph.outgoing[state];
+    if (outgoing.empty()) {
+      cycle = {graphStates_[state], graphStates_[state]};
       return true;
     }
-    throw EngineError("Invalid infinite SCC without cycle");
-  }
-  return false;
-}
 
-bool Engine::findFairnessCounterexample(
-    const ActionCache& action, bool strong, const SccInfo& sccs,
-    const GraphInfo& graph, std::vector<const State*>& cycle) const {
-  for (size_t i = 0; i < sccs.components.size(); ++i) {
-    if (!sccs.infinite[i]) {
-      continue;
-    }
-
-    bool anyEnabled = false;
-    bool allEnabled = true;
-    bool anyTaken = false;
-
-    for (auto&& state : sccs.components[i]) {
-      auto enabled = action.enabled[state] != 0;
-      anyEnabled = anyEnabled || enabled;
-      allEnabled = allEnabled && enabled;
-
-      if (!anyTaken) {
-        for (auto&& target : action.targets[state]) {
-          if (sccs.componentOf[target] == i) {
-            anyTaken = true;
-            break;
-          }
+    for (auto&& next : outgoing) {
+      if (predicate.holds[next]) {
+        continue;
+      }
+      if (color[next] == 0) {
+        if (dfs(next)) {
+          return true;
         }
+      } else if (color[next] == 1) {
+        auto pos = stackPos[next];
+        cycle.clear();
+        cycle.reserve(stack.size() - pos + 1);
+        for (auto it = stack.begin() + pos; it != stack.end(); ++it) {
+          cycle.push_back(graphStates_[*it]);
+        }
+        cycle.push_back(graphStates_[next]);
+        return true;
       }
     }
 
-    auto violated = strong ? (anyEnabled && !anyTaken) : (allEnabled && !anyTaken);
-    if (!violated) {
+    color[state] = 2;
+    stack.pop_back();
+    return false;
+  };
+
+  for (NodeId state = 0; state < graphStates_.size(); ++state) {
+    if (predicate.holds[state] || color[state] != 0) {
       continue;
     }
-
-    if (extractCycleFromScc(sccs.components[i], graph, cycle)) {
+    auto it = processed_.find(graphStates_[state]);
+    if (it == processed_.end()) {
+      throw EngineError("Invalid trace root for liveness graph");
+    }
+    if (it->second != nullptr) {
+      continue;
+    }
+    if (dfs(state)) {
       return true;
     }
-    throw EngineError("Invalid infinite SCC without cycle");
   }
   return false;
 }
