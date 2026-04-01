@@ -17,6 +17,34 @@ The first supported fragment should be conjunctions of:
 
 This is intentionally smaller than full temporal logic. It is enough to make progress on practical properties such as consensus progress under fairness assumptions.
 
+## Current Branch Status
+
+The current branch now implements:
+
+- `LivenessBoolean`
+- `IModel::liveness()`
+- `wf(Boolean)`
+- `sf(Boolean)`
+- `eventually(Boolean)`
+- retained admitted-state graph edges in the engine
+- `<>(P)` checking
+- `WF(A)` checking
+- `SF(A)` checking
+
+Current semantic choices:
+
+- deadlocks are treated as stuttering for `<>(P)`
+- `stop()` is rejected when liveness is enabled
+- fairness is checked against the explored admitted graph, not against raw generated branches that are not present in the graph
+- an action is considered enabled at a state only if it matches at least one admitted outgoing edge from that state
+- an action is considered taken in a cycle only if one of its matching outgoing edges stays inside the violating SCC
+
+Current limitations:
+
+- graph storage is still pointer-based; liveness builds transient node ids for SCC and cache analysis
+- obligation caches are computed per clause and are not shared with `next()` expansion or reused across identical clauses
+- SCC summaries and bitset caches are not implemented yet
+
 ## Existing Groundwork
 
 The current branch already introduced mode-specific binding in `src/evaluate.h`:
@@ -189,6 +217,13 @@ Evaluate liveness obligations on the graph:
 
 These checks should reuse the bound modes rather than manually rebinding formulas at each check site.
 
+The current branch now does this by:
+
+- building transient node ids for the admitted graph after exploration
+- caching each `<>(P)` predicate once per admitted node
+- caching each fairness obligation once per admitted node plus its matching admitted targets
+- reusing those caches across all SCC checks for that obligation
+
 ### Phase 3
 
 Search for reachable SCCs that violate the liveness obligations.
@@ -201,13 +236,10 @@ An SCC is a liveness counterexample if:
 
 If such an SCC exists, produce a liveness failure.
 
-For the first `<>(P)`-only milestone, a simpler equivalent check is acceptable:
+The current branch already uses SCC-based checking for `<>(P)` too:
 
-- build the subgraph induced by states where `!P`
-- fail if that bad-state subgraph contains a directed cycle
-- also fail on reachable deadlock `!P` states if deadlocks are treated as stuttering
-
-This keeps the first implementation simple while still matching the intended eventuality semantics. Full SCC-based generalized checking becomes necessary once fairness support is added.
+- an eventuality fails iff some infinite SCC consists entirely of states where `!P`
+- singleton deadlock SCCs count as infinite because they model stuttering
 
 ### Counterexample form
 
@@ -471,10 +503,12 @@ The preferred direction is:
 
 1. evaluate fairness formulas in check mode only
 2. cache enabledness per node once
-3. cache action-hit per edge once
+3. cache action-hit information per obligation once
 4. aggregate obligation results with bitsets during SCC processing
 
 This keeps the graph algorithm linear after the predicate cache is built.
+
+The current branch now implements steps 1-3 with per-obligation vectors. The remaining optimization is step 4.
 
 ## Memory Tradeoffs
 
@@ -509,7 +543,8 @@ Accept:
 - simple vectors of `uint8_t`
 - separate evaluation of liveness obligations
 - pointer-based adjacency
-- cycle detection for `<>(P)` before full fairness support
+- transient node ids during liveness analysis
+- per-obligation node/target caches instead of per-SCC re-evaluation
 
 This keeps the implementation understandable and correct.
 
