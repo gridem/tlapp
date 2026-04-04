@@ -305,8 +305,8 @@ So the last "and" operation creates all possible variants across all "or" condit
 
 There are 2 possible quantifiers:
 
-1. Forall (TLA+: \A, TLA++: $A). It's equivalent to apply "and" operation for a set of expressions.
-2. Exists (TLA+: \E, TLA++: $E). It's equivalent to apply "or" operation for a set of expressions.
+1. Forall (TLA+: `\A`, TLA++: `$A`). It's equivalent to apply "and" operation for a set of expressions.
+2. Exists (TLA+: `\E`, TLA++: `$E`). It's equivalent to apply "or" operation for a set of expressions.
 
 Example:
 
