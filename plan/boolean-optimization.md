@@ -625,7 +625,7 @@ same workload every time, not to keep changing the benchmark.
 
 Add a dedicated benchmark sample, for example:
 
-- `samples/boolean_perf.cpp`
+- `benchmarks/boolean_perf.cpp`
 
 The sample should build one expression that is intentionally hard for the
 current boolean implementation:
@@ -686,14 +686,14 @@ the following approaches:
 If `hyperfine` is available:
 
 ```sh
-hyperfine --warmup 3 './build/samples/boolean_perf'
+hyperfine --warmup 3 './build/benchmarks/boolean_perf'
 ```
 
 Portable fallback on macOS:
 
 ```sh
 for i in $(seq 1 10); do
-  /usr/bin/time -l ./build/samples/boolean_perf >/dev/null
+  /usr/bin/time -l ./build/benchmarks/boolean_perf >/dev/null
 done
 ```
 
@@ -746,7 +746,7 @@ should remain the canonical before/after test.
 
 Recommended dedicated quantifier benchmark:
 
-- `samples/quantifier_perf.cpp`
+- `benchmarks/quantifier_perf.cpp`
 
 Suggested quantifier workload:
 
@@ -798,14 +798,14 @@ Example execution:
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build --target quantifier_perf
-hyperfine --warmup 3 './build/samples/quantifier_perf'
+hyperfine --warmup 3 './build/benchmarks/quantifier_perf'
 ```
 
 Portable fallback:
 
 ```sh
 for i in $(seq 1 10); do
-  /usr/bin/time -l ./build/samples/quantifier_perf >/dev/null
+  /usr/bin/time -l ./build/benchmarks/quantifier_perf >/dev/null
 done
 ```
 

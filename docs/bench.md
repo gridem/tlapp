@@ -13,7 +13,7 @@ the measured results after each major refactor phase.
 
 ## Build
 
-The benchmarks are built as normal `samples/` executables.
+The benchmarks are built as dedicated `benchmarks/` executables.
 
 Commands used for this baseline:
 
@@ -26,8 +26,8 @@ cmake --build build/rel --target boolean_perf quantifier_perf
 Run commands:
 
 ```sh
-./build/rel/samples/boolean_perf --gtest_brief=1
-./build/rel/samples/quantifier_perf --gtest_brief=1
+./build/rel/benchmarks/boolean_perf --gtest_brief=1
+./build/rel/benchmarks/quantifier_perf --gtest_brief=1
 ```
 
 For the table below, each benchmark executable was run 5 times and the median
@@ -224,7 +224,7 @@ The same benchmark commands were rerun 5 times on 2026-04-01 and the median
 ## Liveness Benchmarks
 
 The liveness benchmarks live in
-[`samples/liveness_perf.cpp`](/Users/gridem/Documents/repo/tlapp2/samples/liveness_perf.cpp).
+[`benchmarks/liveness_perf.cpp`](/Users/gridem/Documents/repo/tlapp2/benchmarks/liveness_perf.cpp).
 
 Unlike the boolean and quantifier microbenchmarks, these scenarios:
 
@@ -240,7 +240,7 @@ exploration.
 cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DGTest_DIR=/opt/homebrew/opt/googletest/lib/cmake/GTest
 cmake --build build/rel --target liveness_perf
-GLOG_minloglevel=1 ./build/rel/samples/liveness_perf --gtest_brief=1
+GLOG_minloglevel=1 ./build/rel/benchmarks/liveness_perf --gtest_brief=1
 ```
 
 For the table below, the executable was run 5 times on 2026-04-01 and the

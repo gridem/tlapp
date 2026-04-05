@@ -72,5 +72,6 @@ if(GTEST_INCLUDE_DIRS)
 endif()
 
 add_subdirectory(samples)
+add_subdirectory(benchmarks)
 
 #gtest_add_tests(TARGET ${PROJECT_NAME}_tests)
