@@ -8,6 +8,7 @@
 - `src/`: main library headers and a few `.cpp` translation units (e.g. `context.cpp`, `engine.cpp`, `value.cpp`).
 - `tests/`: GoogleTest-based unit tests (each `.cpp` is built into `tlapp2_tests`).
 - `samples/`: small example programs; each `*.cpp` builds into a standalone executable.
+- `benchmarks/`: GoogleTest-based benchmark executables plus shared benchmark helpers.
 - `scripts/`: perf helpers that assume a local `.build/RelWithDebInfo` layout.
 - `build/`: build artifacts are present in-repo; avoid editing these by hand.
 
@@ -21,9 +22,20 @@
 - For performance work and benchmarks, prefer a separate optimized build:
   - `cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo`
   - `cmake --build build/rel`
+  - Benchmark binaries are emitted under `build/rel/benchmarks/` (for example `boolean_perf`, `quantifier_perf`, `liveness_perf`, `engine_perf`)
+  - Example benchmark runs:
+    - `./build/rel/benchmarks/boolean_perf --gtest_brief=1`
+    - `./build/rel/benchmarks/quantifier_perf --gtest_brief=1`
+  - Use `RelWithDebInfo` for any performance measurement or benchmark comparison. Do not use Debug timings as benchmark results.
 - If an activated Conda environment causes CMake to pick the wrong GTest package, pass `GTest_DIR` explicitly in the configure command instead of changing `CMakeLists.txt`. On this machine, the Homebrew config path is:
   - `-DGTest_DIR=/opt/homebrew/opt/googletest/lib/cmake/GTest`
 - Sample binaries are emitted under the chosen build directory's `samples/` subdirectory.
+- Benchmark binaries are emitted under the chosen build directory's `benchmarks/` subdirectory.
+
+## Commits
+- Follow the recent history style for commit messages: use a bracketed type prefix such as `[feat]`, `[fix]`, `[md]`, `[docs]`, or `[tests]`.
+- When useful, add a short scope after the prefix, for example `[feat] Benchmarks: ...` or `[md] README: ...`.
+- Prefer imperative commit subjects and align wording with the existing history before creating or amending commits.
 
 ## Coding conventions and patterns
 - Indentation is 2 spaces; braces on the same line; keep headers lightweight with `#pragma once`.
@@ -36,4 +48,5 @@
 
 ## Notes
 - `scripts/perf*.sh` assume a specific build output path (`.build/RelWithDebInfo`). Adjust or mirror that layout if you need to use them.
+- When reporting benchmark numbers, build and run from a `RelWithDebInfo` tree and keep the build type consistent across before/after comparisons.
 - Keep environment-specific package paths out of repo CMake files; prefer passing them explicitly at configure time.
