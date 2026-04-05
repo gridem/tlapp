@@ -686,14 +686,14 @@ the following approaches:
 If `hyperfine` is available:
 
 ```sh
-hyperfine --warmup 3 './build/benchmarks/boolean_perf'
+hyperfine --warmup 3 './build/benchmarks/boolean_perf --gtest_brief=1'
 ```
 
 Portable fallback on macOS:
 
 ```sh
 for i in $(seq 1 10); do
-  /usr/bin/time -l ./build/benchmarks/boolean_perf >/dev/null
+  /usr/bin/time -l ./build/benchmarks/boolean_perf --gtest_brief=1 >/dev/null
 done
 ```
 
@@ -798,14 +798,14 @@ Example execution:
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build --target quantifier_perf
-hyperfine --warmup 3 './build/benchmarks/quantifier_perf'
+hyperfine --warmup 3 './build/benchmarks/quantifier_perf --gtest_brief=1'
 ```
 
 Portable fallback:
 
 ```sh
 for i in $(seq 1 10); do
-  /usr/bin/time -l ./build/benchmarks/quantifier_perf >/dev/null
+  /usr/bin/time -l ./build/benchmarks/quantifier_perf --gtest_brief=1 >/dev/null
 done
 ```
 

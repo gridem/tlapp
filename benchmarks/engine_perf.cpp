@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
+#include "bench_util.h"
 #include "engine.h"
 #include "operation.h"
 #include "var.h"
 
-namespace perf_test {
+namespace engine_perf {
+namespace {
 
 struct Model : IModel {
   Boolean init() override { return (x == 1 || x == 10) && (y == 1 || y == 10); }
@@ -18,10 +20,16 @@ struct Model : IModel {
   Var<int> y{"y"};
 };
 
-TEST(PerfTest, Run) {
-  Engine e;
-  e.createModel<Model>();
-  e.run();
+}  // namespace
+
+TEST(EnginePerf, Run) {
+  auto result = runBench("engine_branchy_run", 1, [] {
+    Engine e;
+    e.createModel<Model>();
+    e.run();
+    return benchValue(e.getStats());
+  }, BenchConfig{0});
+  EXPECT_GT(result.checksum, 0ull);
 }
 
-}  // namespace perf_test
+}  // namespace engine_perf

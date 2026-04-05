@@ -23,13 +23,6 @@ std::vector<int> makeSmallRange(int size) {
   return values;
 }
 
-uint64_t branchCount(const BooleanResult& result) {
-  if (auto logic = std::get_if<LogicResult>(&result)) {
-    return logic->size();
-  }
-  return std::get<bool>(result) ? 1 : 0;
-}
-
 }  // namespace
 
 TEST(QuantifierPerf, Run) {
@@ -48,21 +41,17 @@ TEST(QuantifierPerf, Run) {
   Context ctx;
   vec.getRef(ctx) = values;
 
-  auto forallResult = runBench("quant_forall_late_fail_4096", 2000,
-                               [&] { return static_cast<uint64_t>(forallLateFail(ctx)); });
-  EXPECT_EQ(0ull, forallResult.checksum);
+  expectBenchChecksum("quant_forall_late_fail_4096", 2000, 0,
+                      [&] { return forallLateFail(ctx); });
 
-  auto existsEarlyResult = runBench("quant_exists_early_hit_4096", 5000,
-                                    [&] { return static_cast<uint64_t>(existsEarlyHit(ctx)); });
-  EXPECT_EQ(existsEarlyResult.iterations, existsEarlyResult.checksum);
+  expectBenchPerIteration("quant_exists_early_hit_4096", 5000, 1,
+                          [&] { return existsEarlyHit(ctx); });
 
-  auto existsLateResult = runBench("quant_exists_late_hit_4096", 2000,
-                                   [&] { return static_cast<uint64_t>(existsLateHit(ctx)); });
-  EXPECT_EQ(existsLateResult.iterations, existsLateResult.checksum);
+  expectBenchPerIteration("quant_exists_late_hit_4096", 2000, 1,
+                          [&] { return existsLateHit(ctx); });
 
-  auto assignResult = runBench("quant_exists_assign_16", 5000,
-                               [&] { return branchCount(existsAssign(ctx)); });
-  EXPECT_EQ(16ull * assignResult.iterations, assignResult.checksum);
+  expectBenchPerIteration("quant_exists_assign_16", 5000, 16,
+                          [&] { return existsAssign(ctx); });
 }
 
 }  // namespace quantifier_perf

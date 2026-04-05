@@ -13,7 +13,7 @@ the measured results after each major refactor phase.
 
 ## Build
 
-The benchmarks are built as dedicated `benchmarks/` executables.
+The benchmarks are built as separate executables under `benchmarks/`.
 
 Commands used for this baseline:
 

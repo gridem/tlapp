@@ -16,6 +16,8 @@ project(benchmarks)
 
 file(GLOB files CONFIGURE_DEPENDS "*.cpp")
 list(REMOVE_ITEM files "${CMAKE_CURRENT_LIST_DIR}/benchmark_main.cpp")
+
+set(bench_targets)
 foreach(full_file ${files})
     get_filename_component(name ${full_file} NAME_WE)
     add_executable(${name} ${full_file} benchmark_main.cpp)
@@ -23,4 +25,7 @@ foreach(full_file ${files})
     if(GTEST_INCLUDE_DIRS)
         target_include_directories(${name} PRIVATE ${GTEST_INCLUDE_DIRS})
     endif()
+    list(APPEND bench_targets ${name})
 endforeach()
+
+add_custom_target(tlapp2_benchmarks DEPENDS ${bench_targets})

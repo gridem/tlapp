@@ -16,13 +16,6 @@ Boolean makeAssignOr(Var<int>& var, int width) {
   return expr;
 }
 
-uint64_t branchCount(const BooleanResult& result) {
-  if (auto logic = std::get_if<LogicResult>(&result)) {
-    return logic->size();
-  }
-  return std::get<bool>(result) ? 1 : 0;
-}
-
 }  // namespace
 
 TEST(BooleanPerf, Run) {
@@ -36,13 +29,11 @@ TEST(BooleanPerf, Run) {
 
   Context ctx;
 
-  auto orResult = runBench("boolean_or_assign_64", 5000,
-                           [&] { return branchCount(wideOr(ctx)); });
-  EXPECT_EQ(64ull * orResult.iterations, orResult.checksum);
+  expectBenchPerIteration("boolean_or_assign_64", 5000, 64,
+                          [&] { return wideOr(ctx); });
 
-  auto andResult = runBench("boolean_and_cross_16x16x16", 300,
-                            [&] { return branchCount(wideAnd(ctx)); });
-  EXPECT_EQ(4096ull * andResult.iterations, andResult.checksum);
+  expectBenchPerIteration("boolean_and_cross_16x16x16", 300, 4096,
+                          [&] { return wideAnd(ctx); });
 }
 
 }  // namespace boolean_perf
