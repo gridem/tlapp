@@ -12,8 +12,6 @@ namespace hour_clock {
 
 using test::EngineFixture;
 
-int nextHour(int hour) { return hour == 12 ? 1 : hour + 1; }
-
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/SpecifyingSystems/RealTime/HourClock.tla
 struct Model : IModel {
@@ -21,7 +19,10 @@ struct Model : IModel {
     return $E(h, hours) { return hr == h; };
   }
 
-  Boolean next() override { return hr++ == evaluator_fun(nextHour, hr); }
+  Boolean next() override {
+    return (hr != 12 && hr++ == hr + 1) ||
+           (hr == 12 && hr++ == 1);
+  }
 
   std::optional<Boolean> ensure() override { return hr >= 1 && hr <= 12; }
 

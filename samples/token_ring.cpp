@@ -18,8 +18,6 @@ using test::EngineFixture;
 
 using CounterMap = std::map<int, int>;
 
-int incrementMod(int value, int mod) { return (value + 1) % mod; }
-
 bool uniqueToken(const CounterMap& counters, int mod) {
   auto c0 = counters.at(0);
   auto trailing = (c0 + mod - 1) % mod;
@@ -53,7 +51,9 @@ bool uniqueToken(const CounterMap& counters, int mod) {
 struct Model : IModel {
   Boolean createToken() {
     return at(c, 0) == at(c, lastNode) &&
-           mutAt(c, 0, evaluator_fun(incrementMod, at(c, lastNode), modulo));
+           ((at(c, lastNode) == 0 && mutAt(c, 0, 1)) ||
+            (at(c, lastNode) == 1 && mutAt(c, 0, 2)) ||
+            (at(c, lastNode) == 2 && mutAt(c, 0, 0)));
   }
 
   Boolean passToken(auto node) {

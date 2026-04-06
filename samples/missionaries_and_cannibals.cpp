@@ -42,19 +42,6 @@ PeopleChoices powerSet(const People& people) {
   return result;
 }
 
-int otherBank(int bank) { return bank == 0 ? 1 : 0; }
-
-People peopleOnBank(const Banks& banks, int bank) {
-  return bank == 0 ? banks.east : banks.west;
-}
-
-Banks moveAcross(int bank, const People& thisBank, const People& otherBankPeople) {
-  if (bank == 0) {
-    return Banks{thisBank, otherBankPeople};
-  }
-  return Banks{otherBankPeople, thisBank};
-}
-
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla
 struct Model : IModel {
@@ -65,18 +52,21 @@ struct Model : IModel {
   }
 
   Boolean move(auto passengers) {
-    auto currentBank = evaluator_fun(peopleOnBank, whoIsOnBank, bankOfBoat);
-    auto destinationBank = evaluator_fun(otherBank, bankOfBoat);
-    auto destinationPeople =
-        evaluator_fun(peopleOnBank, whoIsOnBank, destinationBank);
-    auto remaining = currentBank $diff passengers;
-    auto arrived = destinationPeople $cup passengers;
+    auto eastBank = get_mem(whoIsOnBank, east);
+    auto westBank = get_mem(whoIsOnBank, west);
+    auto eastRemaining = eastBank $diff passengers;
+    auto westRemaining = westBank $diff passengers;
+    auto eastArrived = eastBank $cup passengers;
+    auto westArrived = westBank $cup passengers;
     auto passengerCount = get_mem(passengers, size());
 
-    return passengerCount >= 1 && passengerCount <= 2 && isSafe(remaining) &&
-           isSafe(arrived) && bankOfBoat++ == destinationBank &&
-           whoIsOnBank++ ==
-               evaluator_fun(moveAcross, bankOfBoat, remaining, arrived);
+    return passengerCount >= 1 && passengerCount <= 2 &&
+           ((bankOfBoat == east && isSafe(eastRemaining) &&
+             isSafe(westArrived) && bankOfBoat++ == west &&
+             whoIsOnBank++ == creator<Banks>(eastRemaining, westArrived)) ||
+            (bankOfBoat == west && isSafe(westRemaining) &&
+             isSafe(eastArrived) && bankOfBoat++ == east &&
+             whoIsOnBank++ == creator<Banks>(eastArrived, westRemaining)));
   }
 
   Boolean typeOk() {
@@ -92,12 +82,14 @@ struct Model : IModel {
   }
 
   Boolean next() override {
-    return $E(passengers,
-              evaluator_fun(powerSet,
-                            evaluator_fun(peopleOnBank, whoIsOnBank,
-                                          bankOfBoat))) {
-      return move(passengers);
-    };
+    return (bankOfBoat == east &&
+            $E(passengers, evaluator_fun(powerSet, get_mem(whoIsOnBank, east))) {
+              return move(passengers);
+            }) ||
+           (bankOfBoat == west &&
+            $E(passengers, evaluator_fun(powerSet, get_mem(whoIsOnBank, west))) {
+              return move(passengers);
+            });
   }
 
   std::optional<Boolean> ensure() override { return typeOk(); }

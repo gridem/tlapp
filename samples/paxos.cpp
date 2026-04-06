@@ -54,15 +54,6 @@ using Quorums = std::set<Quorum>;
 
 using Messages = std::set<Message>;
 
-fun(hasMessageWithBal, msgs, type, bal) {
-  for (auto&& m : msgs) {
-    if (m.type == type && m.bal == bal) {
-      return true;
-    }
-  }
-  return false;
-}
-
 fun(withMessage, msgs, m) {
   Messages result = msgs;
   result.insert(m);
@@ -120,7 +111,9 @@ struct Model : IModel {
   fun(send2b, acc, bal, val) { return sendMessage(M2b, fwd(acc, bal, val)); }
 
   fun(phase1a, b) {
-    return !evaluator_fun(hasMessageWithBal, msgs, M1a, b) && send1a(fwd(b)) &&
+    return !($E(m, msgs) {
+      return get_mem(m, type) == M1a && get_mem(m, bal) == b;
+    }) && send1a(fwd(b)) &&
            unchanged(maxBal, maxVBal, maxVal);
   }
 
@@ -134,7 +127,9 @@ struct Model : IModel {
   }
 
   fun(phase2a, b, v) {
-    return !evaluator_fun(hasMessageWithBal, msgs, M2a, b) &&
+    return !($E(m, msgs) {
+             return get_mem(m, type) == M2a && get_mem(m, bal) == b;
+           }) &&
            evaluator_fun(showsSafeAt, msgs, quorum, b, v) && send2a(b, v) &&
            unchanged(maxVal, maxVBal, maxBal);
   }
