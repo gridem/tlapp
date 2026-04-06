@@ -28,16 +28,15 @@ struct Banks : hashable_tag_type {
   fields(east, west)
 };
 
-PeopleChoices powerSet(const People& people) {
-  PeopleChoices result = {People{}};
-  for (auto&& person : people) {
-    PeopleChoices next = result;
-    for (auto&& subset : result) {
-      auto extended = subset;
-      extended.insert(person);
-      next.insert(std::move(extended));
+PeopleChoices passengerChoices(const People& people) {
+  PeopleChoices result;
+  for (auto&& first : people) {
+    result.insert(People{first});
+    for (auto&& second : people) {
+      if (first < second) {
+        result.insert(People{first, second});
+      }
     }
-    result = std::move(next);
   }
   return result;
 }
@@ -83,12 +82,14 @@ struct Model : IModel {
 
   Boolean next() override {
     return (bankOfBoat == east &&
-            $E(passengers, evaluator_fun(powerSet, get_mem(whoIsOnBank, east))) {
-              return move(passengers);
+            $E(passengers, candidatePassengers) {
+              return passengers $in get_mem(whoIsOnBank, east) &&
+                     move(passengers);
             }) ||
            (bankOfBoat == west &&
-            $E(passengers, evaluator_fun(powerSet, get_mem(whoIsOnBank, west))) {
-              return move(passengers);
+            $E(passengers, candidatePassengers) {
+              return passengers $in get_mem(whoIsOnBank, west) &&
+                     move(passengers);
             });
   }
 
@@ -107,6 +108,7 @@ struct Model : IModel {
   People missionaries = {1, 2, 3};
   People cannibals = {11, 12, 13};
   People allPeople = {1, 2, 3, 11, 12, 13};
+  PeopleChoices candidatePassengers = passengerChoices(allPeople);
 };
 
 TEST_F(EngineFixture, MissionariesAndCannibals) {

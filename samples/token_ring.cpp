@@ -18,34 +18,6 @@ using test::EngineFixture;
 
 using CounterMap = std::map<int, int>;
 
-bool uniqueToken(const CounterMap& counters, int mod) {
-  auto c0 = counters.at(0);
-  auto trailing = (c0 + mod - 1) % mod;
-
-  for (size_t split = 0; split <= counters.size(); ++split) {
-    bool ok = true;
-    for (size_t index = 0; index < split; ++index) {
-      if (counters.at(static_cast<int>(index)) != c0) {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok) {
-      continue;
-    }
-    for (size_t index = split; index < counters.size(); ++index) {
-      if (counters.at(static_cast<int>(index)) != trailing) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/ewd426/TokenRing.tla
 struct Model : IModel {
@@ -77,7 +49,17 @@ struct Model : IModel {
   std::optional<Boolean> ensure() override { return typeOk(); }
 
   std::optional<LivenessBoolean> liveness() override {
-    return wf(next()) && eventually(evaluator_fun(uniqueToken, c, modulo));
+    auto c0 = at(c, 0);
+    auto c1 = at(c, 1);
+    auto c2 = at(c, 2);
+    auto uniqueToken =
+        (c0 == 0 && ((c1 == 2 && c2 == 2) || (c1 == 0 && c2 == 2) ||
+                     (c1 == 0 && c2 == 0))) ||
+        (c0 == 1 && ((c1 == 0 && c2 == 0) || (c1 == 1 && c2 == 0) ||
+                     (c1 == 1 && c2 == 1))) ||
+        (c0 == 2 && ((c1 == 1 && c2 == 1) || (c1 == 2 && c2 == 1) ||
+                     (c1 == 2 && c2 == 2)));
+    return wf(next()) && eventually(uniqueToken);
   }
 
   Var<CounterMap> c{"c"};

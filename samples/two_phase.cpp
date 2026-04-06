@@ -30,16 +30,6 @@ using RmState = std::map<int, int>;
 using RmSet = std::set<int>;
 using StateSet = std::set<int>;
 
-Messages withMessage(Messages messages, const Message& message) {
-  messages.insert(message);
-  return messages;
-}
-
-RmSet withRm(RmSet resourceManagers, int rm) {
-  resourceManagers.insert(rm);
-  return resourceManagers;
-}
-
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/transaction_commit/TwoPhase.tla
 struct Model : IModel {
@@ -52,7 +42,7 @@ struct Model : IModel {
   }
 
   Boolean send(auto message) {
-    return msgs++ == evaluator_fun(withMessage, msgs, message);
+    return msgs++ == (msgs $cup message);
   }
 
   Boolean hasMessage(auto message) { return message $in msgs; }
@@ -60,7 +50,7 @@ struct Model : IModel {
   Boolean tmRcvPrepared(auto rm) {
     return tmState == initState &&
            hasMessage(creator<Message>(preparedType, rm)) &&
-           tmPrepared++ == evaluator_fun(withRm, tmPrepared, rm) &&
+           tmPrepared++ == (tmPrepared $cup rm) &&
            unchanged(rmState, tmState, msgs);
   }
 

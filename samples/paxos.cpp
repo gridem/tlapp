@@ -54,49 +54,12 @@ using Quorums = std::set<Quorum>;
 
 using Messages = std::set<Message>;
 
-fun(withMessage, msgs, m) {
-  Messages result = msgs;
-  result.insert(m);
-  return result;
-}
-
-fun(showsSafeAt, msgs, quorum, bal, val) {
-  for (auto&& q : quorum) {
-    Set responded;
-    bool hasVote = false;
-    bool hasValue = false;
-    int mbal = -1;
-    bool consistent = true;
-
-    for (auto&& m : msgs) {
-      if (m.type != M1b || m.bal != bal || q.find(m.acc) == q.end()) {
-        continue;
-      }
-      responded.insert(m.acc);
-      if (m.mbal < 0) {
-        continue;
-      }
-      if (!hasVote) {
-        hasVote = true;
-        mbal = m.mbal;
-      } else if (m.mbal != mbal) {
-        consistent = false;
-        break;
-      }
-      hasValue = hasValue || m.mval == val;
-    }
-
-    if (consistent && responded == q && (!hasVote || hasValue)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/PaxosHowToWinATuringAward/Paxos.tla
 struct Model : IModel {
-  fun(send, m) { return msgs++ == evaluator_fun(withMessage, msgs, m); }
+  fun(send, m) {
+    return msgs++ == (msgs $cup m);
+  }
 
   funs(sendMessage, args) { return send(creator<Message>(fwd(args)...)); }
 
@@ -109,6 +72,34 @@ struct Model : IModel {
   fun(send2a, bal, val) { return sendMessage(M2a, -1, fwd(bal, val)); }
 
   fun(send2b, acc, bal, val) { return sendMessage(M2b, fwd(acc, bal, val)); }
+
+  fun(showsSafeAt, b, v) {
+    return $E(q, quorum) {
+      return $A(a, q) {
+        return $E(m, msgs) {
+          return get_mem(m, type) == M1b && get_mem(m, bal) == b &&
+                 get_mem(m, acc) == a;
+        };
+      } && $A(m1, msgs) {
+        return !(get_mem(m1, type) == M1b && get_mem(m1, bal) == b &&
+                 get_mem(m1, acc) $in q && get_mem(m1, mbal) >= 0) ||
+               $A(m2, msgs) {
+                 return !(get_mem(m2, type) == M1b && get_mem(m2, bal) == b &&
+                          get_mem(m2, acc) $in q && get_mem(m2, mbal) >= 0) ||
+                        get_mem(m1, mbal) == get_mem(m2, mbal);
+               };
+      } &&
+             ($A(m, msgs) {
+               return !(get_mem(m, type) == M1b && get_mem(m, bal) == b &&
+                        get_mem(m, acc) $in q && get_mem(m, mbal) >= 0);
+             } ||
+              $E(m, msgs) {
+                return get_mem(m, type) == M1b && get_mem(m, bal) == b &&
+                       get_mem(m, acc) $in q && get_mem(m, mbal) >= 0 &&
+                       get_mem(m, mval) == v;
+              });
+    };
+  }
 
   fun(phase1a, b) {
     return !($E(m, msgs) {
@@ -130,7 +121,7 @@ struct Model : IModel {
     return !($E(m, msgs) {
              return get_mem(m, type) == M2a && get_mem(m, bal) == b;
            }) &&
-           evaluator_fun(showsSafeAt, msgs, quorum, b, v) && send2a(b, v) &&
+           showsSafeAt(b, v) && send2a(b, v) &&
            unchanged(maxVal, maxVBal, maxBal);
   }
 
