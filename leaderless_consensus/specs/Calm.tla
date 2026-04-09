@@ -239,6 +239,22 @@ Invariant ==
   /\ CommitWellFormed
   /\ Agreement
 
+CanApplyAny ==
+  \E node \in Nodes :
+    \E msg \in MessageIds :
+      /\ node \in alive
+      /\ msg \notin applied
+      /\ local[node].voted = {}
+      /\ local[node].status # CalmCompleted
+
+Quiescent ==
+  /\ voteMsgs = {}
+  /\ commitMsgs = {}
+  /\ ~CanApplyAny
+
+Termination == <>Quiescent
+
 Spec == Init /\ [][Next]_vars
+LiveSpec == Spec /\ WF_vars(Next)
 
 =============================================================================

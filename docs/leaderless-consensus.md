@@ -63,14 +63,23 @@ The set-based variants (`Sore`, `Calm`, `Flat`, `Most`) check:
 
 That weaker invariant matches the algorithm's progressive prefix-commit design.
 
+## Liveness Checks
+
+`Calm` and `Most` also include a liveness check in both the executable model and
+the TLA+ spec:
+
+- weak fairness on the combined `Next` action
+- eventual quiescence, meaning there are no in-flight vote or commit messages
+  and no further `Apply` action is enabled
+
 ## Verification Result
 
 Executable TLA++ sample on the current branch tip:
 
 - `Sore`: expected to fail; serves as the negative baseline and finds a counterexample
-- `Calm`: holds under the current finite model
+- `Calm`: holds under the current finite model, including the liveness check
 - `Flat`: long-running in the current finite model; no conclusion recorded in this pass
-- `Most`: holds under the current finite model
+- `Most`: holds under the current finite model, including the liveness check
 - `Rush`: no final conclusion recorded on the current branch tip
 
 Current failures in the executable model:
@@ -84,6 +93,7 @@ Open item:
 TLC status:
 
 - TLC verification is a work in progress.
+- `Calm` and `Most` were rerun with the current liveness property and passed.
 
 ## Commands
 

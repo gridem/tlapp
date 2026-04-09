@@ -326,6 +326,21 @@ bool invariant(const MostState& sys) {
   return true;
 }
 
+bool quiescent(const MostState& sys) {
+  if (!sys.voteMsgs.empty() || !sys.commitMsgs.empty()) {
+    return false;
+  }
+
+  for (auto&& node : sys.alive) {
+    if (sys.local.at(node).votes.empty() &&
+        sys.local.at(node).status != kCommitted && sys.applied.size() < 3) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::most::canApply)
 DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::most::apply)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::most::canDeliverVote)
@@ -336,6 +351,7 @@ DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::most::deliverCommit)
 DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::most::canDisconnect)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::most::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::most::invariant)
+DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::most::quiescent)
 
 struct Model : IModel {
   Boolean init() override { return sys == makeState(nodes_); }
@@ -362,6 +378,9 @@ struct Model : IModel {
   }
 
   std::optional<Boolean> ensure() override { return invariantExpr(sys); }
+  std::optional<LivenessBoolean> liveness() override {
+    return wf(next()) && eventually(quiescentExpr(sys));
+  }
 
   Var<MostState> sys{"sys"};
 
@@ -369,7 +388,7 @@ struct Model : IModel {
   CarrySet messageIds_ = {1, 2, 3};
 };
 
-TEST_F(EngineFixture, MostHoldsInvariant) {
+TEST_F(EngineFixture, MostHoldsInvariantAndConverges) {
   e.createModel<Model>();
   EXPECT_NO_THROW(e.run());
 }
