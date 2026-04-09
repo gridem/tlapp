@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include <chrono>
 #include <functional>
 #include <glog/logging.h>
 
@@ -82,7 +83,12 @@ std::string Stats::Init::toString() const {
 }
 
 std::string Stats::Loop::toString() const {
+  auto queued = states >= processed ? states - processed : 0;
+  auto drain = states == 0 ? 0 : processed * 100 / states;
   return "{total states: " + asString(states) +
+         ", processed: " + asString(processed) +
+         ", queued: " + asString(queued) +
+         ", drain: " + asString(drain) + "%" +
          ", transitions: " + asString(transitions) + "}";
 }
 
@@ -132,6 +138,7 @@ void Engine::loopNext() {
   auto next = bind(model_->next(), NextMode{});
   auto&& vars = ctx_.vars();
   auto&& nexts = ctx_.nexts();
+  auto lastLog = std::chrono::steady_clock::time_point{};
 
   ctx_.setState(LogicState::Next);
   ctx_.setAddAllowed(false);
@@ -143,8 +150,13 @@ void Engine::loopNext() {
       vars = *from_;
       VLOG(1) << "Processing state from: " << asString(vars);
       handleResult(next(ctx_), nexts);
+      ++stats_.loop.processed;
       VLOG(1) << "Processing state done";
-      LOG_EVERY_N(INFO, 10000) << "Stats: " << asString(stats_.loop);
+      auto now = std::chrono::steady_clock::now();
+      if (now - lastLog >= std::chrono::seconds(1)) {
+        LOG(INFO) << "Stats: " << asString(stats_.loop);
+        lastLog = now;
+      }
     }
   } catch (EngineStop&) {
     LOG(INFO) << "Engine stopped";

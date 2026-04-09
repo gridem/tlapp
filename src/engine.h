@@ -20,6 +20,7 @@ struct Stats {
   struct Loop {
     size_t states = 0;
     size_t transitions = 0;
+    size_t processed = 0;
     std::string toString() const;
   };
 
