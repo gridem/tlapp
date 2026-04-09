@@ -92,6 +92,33 @@ starting from the initial state. The final state satisfies the stop condition
 (`big' = 4`), so the engine terminates after producing a valid path to a
 4‑gallon result.
 
+## Leaderless Consensus
+
+This repo also contains a larger multi-model example for leaderless consensus
+under `leaderless_consensus/`.
+
+- Executable TLA++ models live in:
+  `leaderless_consensus/sore.cpp`, `leaderless_consensus/calm.cpp`,
+  `leaderless_consensus/flat.cpp`, `leaderless_consensus/most.cpp`, and
+  `leaderless_consensus/rush.cpp`
+- Matching TLA+ specs live in `leaderless_consensus/specs/`
+- The overview, assumptions, and current status are documented in
+  [`docs/leaderless-consensus.md`](docs/leaderless-consensus.md)
+
+The modeled variants are:
+
+1. `Sore`: naive set-based voting baseline
+2. `Calm`: unanimous carry convergence before commit
+3. `Flat`: uniform merge with vote preservation and payload-free commit
+4. `Most`: majority-based carry voting with commit payload propagation
+5. `Rush`: ordered prefix commitment with generation tracking
+
+Build and run the executable sample with:
+
+```sh
+cmake --build build/rel --target leaderless-consensus
+./build/rel/samples/leaderless-consensus --gtest_brief=1
+```
 
 ## Novel Ideas
 
