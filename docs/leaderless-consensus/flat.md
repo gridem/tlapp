@@ -25,7 +25,7 @@ Messages are:
 
 ## Step Rules
 
-1. In the current reduced model, `Apply` is limited to one fixed proposal per
+1. In the current reduced model, `Propose` is limited to one fixed proposal per
    node:
    - node `0` may propose `10`
    - node `1` may propose `11`

@@ -116,7 +116,7 @@ MostVoteResult(state, self, source, carries, incomingNodes) ==
                 sendVote |-> TRUE,
                 sendCommit |-> FALSE]
 
-Apply(node, msg) ==
+Propose(node, msg) ==
   /\ node \in alive
   /\ msg \notin applied
   /\ local[node].votes = {}
@@ -216,7 +216,7 @@ Disconnect(failed) ==
   /\ commitMsgs' = {m \in commitMsgs : m.from # failed /\ m.to # failed}
 
 Next ==
-  \/ \E node \in Nodes : \E msg \in MessageIds : Apply(node, msg)
+  \/ \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
   \/ \E msg \in voteMsgs : DeliverVote(msg)
   \/ \E msg \in commitMsgs : DeliverCommit(msg)
   \/ \E failed \in Nodes : Disconnect(failed)
@@ -263,7 +263,7 @@ Invariant ==
   /\ CommitWellFormed
   /\ Agreement
 
-CanApplyAny ==
+CanProposeAny ==
   \E node \in Nodes :
     \E msg \in MessageIds :
       /\ node \in alive
@@ -274,7 +274,7 @@ CanApplyAny ==
 Quiescent ==
   /\ voteMsgs = {}
   /\ commitMsgs = {}
-  /\ ~CanApplyAny
+  /\ ~CanProposeAny
 
 Termination == <>Quiescent
 

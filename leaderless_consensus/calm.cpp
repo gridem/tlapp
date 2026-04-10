@@ -123,14 +123,14 @@ CalmState processVote(CalmState sys,
   return sys;
 }
 
-bool canApply(const CalmState& sys, NodeId node, MessageId id) {
+bool canPropose(const CalmState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
          !sys.applied.contains(id) &&
          sys.local.at(node).voted.empty() &&
          sys.local.at(node).status != kCompleted;
 }
 
-CalmState apply(CalmState sys, NodeId node, MessageId id) {
+CalmState propose(CalmState sys, NodeId node, MessageId id) {
   sys.applied.insert(id);
   auto nodes = sys.local.at(node).nodes;
   return processVote(std::move(sys), node, node, CarrySet{id}, nodes);
@@ -242,8 +242,8 @@ bool quiescent(const CalmState& sys) {
   return true;
 }
 
-DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::calm::canApply)
-DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::calm::apply)
+DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::calm::canPropose)
+DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::calm::propose)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::calm::canDeliverVote)
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::calm::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::calm::canDeliverCommit)
@@ -261,7 +261,7 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
+        return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, voteMsgs)) {

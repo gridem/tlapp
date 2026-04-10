@@ -73,7 +73,7 @@ the TLA+ spec:
 
 - weak fairness on the combined `Next` action
 - eventual quiescence, meaning there are no in-flight vote or commit messages
-  and no further `Apply` action is enabled
+  and no further `Propose` action is enabled
 
 ## Verification Result
 

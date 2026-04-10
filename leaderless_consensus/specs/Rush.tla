@@ -231,7 +231,7 @@ MergeResult(state, self, incoming) ==
             THEN iter.committed
             ELSE state.committed]
 
-Apply(node, msg) ==
+Propose(node, msg) ==
   /\ node \in alive
   /\ msg \notin applied
   /\ local[node] = InitLocal[node]
@@ -261,7 +261,7 @@ DeliverState(msg) ==
        /\ stateMsgs' = BroadcastState(stateMsgs \ {msg}, msg.to, out.core, alive)
 
 Next ==
-  \/ \E node \in Nodes : \E msg \in MessageIds : Apply(node, msg)
+  \/ \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
   \/ \E msg \in stateMsgs : DeliverState(msg)
 
 CoreWellFormed(core) ==
@@ -304,7 +304,7 @@ Invariant ==
   /\ MessageWellFormed
   /\ PrefixAgreement
 
-CanApplyAny ==
+CanProposeAny ==
   \E node \in Nodes :
     \E msg \in MessageIds :
       /\ node \in alive
@@ -313,7 +313,7 @@ CanApplyAny ==
 
 Quiescent ==
   /\ stateMsgs = {}
-  /\ ~CanApplyAny
+  /\ ~CanProposeAny
 
 Termination == <>Quiescent
 

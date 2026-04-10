@@ -262,13 +262,13 @@ MergeResult mergeState(const RushNodeState& state,
   return {true, newCore, committed};
 }
 
-bool canApply(const RushState& sys, NodeId node, MessageId id) {
+bool canPropose(const RushState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
          !sys.applied.contains(id) &&
          sys.local.at(node) == RushNodeState{makeEmptyCore(sys.local.size()), {}};
 }
 
-RushState apply(RushState sys, NodeId node, MessageId id) {
+RushState propose(RushState sys, NodeId node, MessageId id) {
   sys.applied.insert(id);
   auto incoming = makeEmptyCore(sys.local.size());
   incoming.carries.insert(id);
@@ -362,7 +362,7 @@ bool invariant(const RushState& sys) {
   return true;
 }
 
-bool canApplyAny(const RushState& sys) {
+bool canProposeAny(const RushState& sys) {
   if (sys.applied.size() >= sys.local.size()) {
     return false;
   }
@@ -378,11 +378,11 @@ bool canApplyAny(const RushState& sys) {
 }
 
 bool quiescent(const RushState& sys) {
-  return sys.stateMsgs.empty() && !canApplyAny(sys);
+  return sys.stateMsgs.empty() && !canProposeAny(sys);
 }
 
-DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::rush::canApply)
-DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::rush::apply)
+DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::rush::canPropose)
+DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::rush::propose)
 DEFINE_ALGORITHM(canDeliverStateExpr, ::leaderless_consensus::rush::canDeliverState)
 DEFINE_ALGORITHM(deliverStateExpr, ::leaderless_consensus::rush::deliverState)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::rush::invariant)
@@ -396,7 +396,7 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
+        return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, stateMsgs)) {

@@ -25,7 +25,7 @@ Messages are:
 
 ## Step Rules
 
-1. `Apply(node, id)` is allowed only while that node is still in the exact
+1. `Propose(node, id)` is allowed only while that node is still in the exact
    initial local state.
 2. Applying a proposal creates an incoming core with that one new carry and
    merges it into the receiver's local core.
@@ -70,4 +70,4 @@ must not branch.
 
 The current executable model also carries a liveness check: under weak fairness
 of `Next`, it must eventually reach a quiescent state with no pending
-state-message traffic and no further `Apply` still enabled.
+state-message traffic and no further `Propose` still enabled.

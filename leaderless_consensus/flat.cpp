@@ -117,7 +117,7 @@ FlatState processVote(FlatState sys,
   return sys;
 }
 
-bool canApply(const FlatState& sys, NodeId node, MessageId id) {
+bool canPropose(const FlatState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
          !sys.applied.contains(id) &&
          id == node + 10 &&
@@ -125,7 +125,7 @@ bool canApply(const FlatState& sys, NodeId node, MessageId id) {
          sys.local.at(node).status != kCommitted;
 }
 
-FlatState apply(FlatState sys, NodeId node, MessageId id) {
+FlatState propose(FlatState sys, NodeId node, MessageId id) {
   sys.applied.insert(id);
   auto nodes = sys.local.at(node).nodes;
   return processVote(std::move(sys), node, node, CarrySet{id}, nodes, {});
@@ -219,8 +219,8 @@ bool invariant(const FlatState& sys) {
   return true;
 }
 
-DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::flat::canApply)
-DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::flat::apply)
+DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::flat::canPropose)
+DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::flat::propose)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::flat::canDeliverVote)
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::flat::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::flat::canDeliverCommit)
@@ -237,7 +237,7 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
+        return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, voteMsgs)) {

@@ -26,7 +26,7 @@ Messages are:
 
 ## Step Rules
 
-1. `Apply(node, id)` inserts `id` into global `applied` and feeds it through
+1. `Propose(node, id)` inserts `id` into global `applied` and feeds it through
    `processVote` as a self-vote.
 2. `processVote` first rejects input from a source that is no longer in the
    local node view.
@@ -55,4 +55,4 @@ Safety requires all live completed nodes to have the same committed set.
 
 The current model also checks liveness: under weak fairness of `Next`, the
 system must eventually become quiescent, meaning no vote or commit messages
-remain and no fresh `Apply` is still enabled.
+remain and no fresh `Propose` is still enabled.

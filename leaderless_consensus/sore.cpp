@@ -116,14 +116,14 @@ VoteResult processVote(const SoreNodeState& state,
   return {local != state, false, false, {}, local};
 }
 
-bool canApply(const SoreState& sys, NodeId node, MessageId id) {
+bool canPropose(const SoreState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
          !sys.applied.contains(id) &&
          sys.local.at(node).voted.empty() &&
          sys.local.at(node).status != kCompleted;
 }
 
-SoreState apply(SoreState sys, NodeId node, MessageId id) {
+SoreState propose(SoreState sys, NodeId node, MessageId id) {
   sys.applied.insert(id);
   auto nodes = sys.local.at(node).nodes;
   auto out = processVote(sys.local.at(node), node, node, CarrySet{id}, nodes);
@@ -260,8 +260,8 @@ bool invariant(const SoreState& sys) {
   return true;
 }
 
-DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::sore::canApply)
-DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::sore::apply)
+DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::sore::canPropose)
+DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::sore::propose)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::sore::canDeliverVote)
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::sore::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::sore::canDeliverCommit)
@@ -278,7 +278,7 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
+        return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, voteMsgs)) {

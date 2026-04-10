@@ -26,7 +26,7 @@ Messages are:
 
 ## Step Rules
 
-1. `Apply(node, id)` inserts `id` into global `applied` and processes it as a
+1. `Propose(node, id)` inserts `id` into global `applied` and processes it as a
    self-vote.
 2. `processVote` intersects memberships, unions carries, and records the
    aggregate round vote set in `votes`.

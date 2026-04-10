@@ -173,14 +173,14 @@ VoteResult processVote(const MostNodeState& state,
   return {local != state, true, false, local};
 }
 
-bool canApply(const MostState& sys, NodeId node, MessageId id) {
+bool canPropose(const MostState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
          !sys.applied.contains(id) &&
          sys.local.at(node).votes.empty() &&
          sys.local.at(node).status != kCommitted;
 }
 
-MostState apply(MostState sys, NodeId node, MessageId id) {
+MostState propose(MostState sys, NodeId node, MessageId id) {
   sys.applied.insert(id);
   auto nodes = sys.local.at(node).nodes;
   auto out = processVote(sys.local.at(node), node, node, CarrySet{id}, nodes);
@@ -348,8 +348,8 @@ bool quiescent(const MostState& sys) {
   return true;
 }
 
-DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::most::canApply)
-DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::most::apply)
+DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::most::canPropose)
+DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::most::propose)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::most::canDeliverVote)
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::most::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::most::canDeliverCommit)
@@ -367,7 +367,7 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
+        return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, voteMsgs)) {
