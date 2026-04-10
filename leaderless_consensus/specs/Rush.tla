@@ -14,25 +14,20 @@ NoDuplicates(seq) ==
 MessageSeqs ==
   {seq \in AllMessageSeqs : NoDuplicates(seq)}
 
-PromiseSeqs == AllMessageSeqs
-
-MaxGeneration == 4
+MaxGeneration == 2 * Cardinality(MessageIds) + 1
 
 Majority == Cardinality(Nodes) \div 2 + 1
 
 GenerationState ==
   [messages : MessageSeqs, generation : 0..MaxGeneration]
 
-PromiseKey ==
-  [prefix : PromiseSeqs, support : SUBSET Nodes]
-
-PromiseMap ==
-  [PromiseKey -> SUBSET Nodes]
+PromiseState ==
+  [prefix : MessageSeqs, votes : SUBSET Nodes]
 
 CoreState ==
   [carries : SUBSET MessageIds,
    nodesMessages : [Nodes -> GenerationState],
-   promises : PromiseMap]
+   promises : SUBSET PromiseState]
 
 NodeState ==
   [core : CoreState, committed : MessageSeqs]
@@ -44,7 +39,7 @@ VARIABLES alive, applied, local, stateMsgs
 
 vars == <<alive, applied, local, stateMsgs>>
 
-InitPromises == [key \in PromiseKey |-> {}]
+InitPromises == {}
 
 EmptyNodesMessages ==
   [n \in Nodes |-> [messages |-> <<>>, generation |-> 0]]
@@ -71,15 +66,16 @@ IsPrefix(left, right) ==
 Comparable(left, right) ==
   IsPrefix(left, right) \/ IsPrefix(right, left)
 
+RECURSIVE SortedSeqFromSet(_)
+
 MinSet(set) ==
   CHOOSE item \in set : \A other \in set : item <= other
 
 SortedSeqFromSet(set) ==
   IF set = {}
   THEN <<>>
-  ELSE IF Cardinality(set) = 1
-       THEN <<CHOOSE item \in set : TRUE>>
-       ELSE <<MinSet(set), CHOOSE item \in set : item # MinSet(set)>>
+  ELSE LET item == MinSet(set)
+       IN <<item>> \o SortedSeqFromSet(set \ {item})
 
 NewCarrySeq(oldCarries, incomingCarries) ==
   SortedSeqFromSet(incomingCarries \ oldCarries)
@@ -87,29 +83,64 @@ NewCarrySeq(oldCarries, incomingCarries) ==
 SortFrom(seq, idx) ==
   IF idx >= Len(seq)
   THEN seq
-  ELSE IF seq[idx] <= seq[idx + 1]
-       THEN seq
-       ELSE [i \in DOMAIN seq |->
-               IF i = idx
-               THEN seq[idx + 1]
-               ELSE IF i = idx + 1
-                    THEN seq[idx]
-                    ELSE seq[i]]
+  ELSE IF idx = 1
+       THEN SortedSeqFromSet(SeqElems(seq))
+       ELSE SubSeq(seq, 1, idx - 1) \o
+            SortedSeqFromSet(SeqElems(SubSeq(seq, idx, Len(seq))))
 
 BroadcastState(queue, from, core, aliveSet) ==
-  queue \cup {[from |-> from, to |-> to, core |-> core] :
-                to \in (aliveSet \ {from})}
+  {m \in queue : ~(m.from = from /\ m.to \in (aliveSet \ {from}))} \cup
+  {[from |-> from, to |-> to, core |-> core] :
+     to \in (aliveSet \ {from})}
+
+RECURSIVE SeqLess(_, _)
+
+SeqLess(left, right) ==
+  IF Len(left) = 0
+  THEN Len(right) # 0
+  ELSE IF Len(right) = 0
+       THEN FALSE
+       ELSE IF Head(left) < Head(right)
+            THEN TRUE
+            ELSE IF Head(left) > Head(right)
+                 THEN FALSE
+                 ELSE SeqLess(Tail(left), Tail(right))
 
 MergeNodesMessages(current, incoming) ==
   [n \in Nodes |->
-     IF incoming[n].generation > current[n].generation
+     IF incoming[n].generation > current[n].generation \/
+        /\ incoming[n].generation = current[n].generation
+        /\ SeqLess(current[n].messages, incoming[n].messages)
      THEN incoming[n]
      ELSE current[n]]
 
-MergePromises(left, right) ==
-  [key \in PromiseKey |-> left[key] \cup right[key]]
+MatchingPromises(promises, prefix) ==
+  {p \in promises : p.prefix = prefix}
 
-BaseCore(core, self, incoming) ==
+PromiseVotesFor(promises, prefix) ==
+  UNION {p.votes : p \in MatchingPromises(promises, prefix)}
+
+PutPromiseVotes(promises, prefix, votes) ==
+  LET retained == {p \in promises : p.prefix # prefix}
+  IN IF votes = {}
+     THEN retained
+     ELSE retained \cup {[prefix |-> prefix, votes |-> votes]}
+
+NormalizePromises(promises, nodesMessages, carries, committed) ==
+  {p \in PromiseState :
+     LET support == PrefixSupport(nodesMessages, p.prefix)
+         votes == PromiseVotesFor(promises, p.prefix) \cap support
+     IN /\ SeqElems(p.prefix) \subseteq carries
+        /\ ~IsPrefix(p.prefix, committed)
+        /\ votes # {}
+        /\ p.votes = votes}
+
+BumpGeneration(generation, steps) ==
+  IF generation + steps < MaxGeneration
+  THEN generation + steps
+  ELSE MaxGeneration
+
+BaseCore(core, self, incoming, committed) ==
   LET mergedNodes == MergeNodesMessages(core.nodesMessages, incoming.nodesMessages)
       newIds == NewCarrySeq(core.carries, incoming.carries)
       self0 == mergedNodes[self]
@@ -118,12 +149,14 @@ BaseCore(core, self, incoming) ==
         THEN self0
         ELSE [self0 EXCEPT
                 !.messages = @ \o newIds,
-                !.generation =
-                  IF @ < MaxGeneration THEN @ + 1 ELSE MaxGeneration]
+                !.generation = BumpGeneration(@, Len(newIds))]
+      carries1 == core.carries \cup incoming.carries
+      nodes1 == [mergedNodes EXCEPT ![self] = self1]
   IN
-    [carries |-> core.carries \cup incoming.carries,
-     nodesMessages |-> [mergedNodes EXCEPT ![self] = self1],
-     promises |-> MergePromises(core.promises, incoming.promises)]
+    [carries |-> carries1,
+     nodesMessages |-> nodes1,
+     promises |-> NormalizePromises(core.promises \cup incoming.promises,
+                                    nodes1, carries1, committed)]
 
 MajorityIds(nodesMessages, idx) ==
   {id \in MessageIds :
@@ -136,9 +169,9 @@ PrefixSupport(nodesMessages, prefix) ==
      /\ Len(nodesMessages[n].messages) >= Len(prefix)
      /\ prefix = SubSeq(nodesMessages[n].messages, 1, Len(prefix))}
 
-RECURSIVE Iterate(_, _, _, _, _, _, _, _)
+RECURSIVE Iterate(_, _, _, _, _, _)
 
-Iterate(core, oldPromises, incomingPromises, self, idx, sorted, prefix, committed) ==
+Iterate(core, self, idx, sorted, prefix, committed) ==
   IF idx > Cardinality(core.carries)
   THEN [core |-> core, committed |-> committed]
   ELSE
@@ -149,19 +182,22 @@ Iterate(core, oldPromises, incomingPromises, self, idx, sorted, prefix, committe
         LET id == CHOOSE item \in ids : TRUE
             prefix1 == Append(prefix, id)
             support1 == PrefixSupport(core.nodesMessages, prefix1)
-            key1 == [prefix |-> prefix1, support |-> support1]
             votes0 ==
-              core.promises[key1] \cup
+              PromiseVotesFor(core.promises, prefix1) \cup
               (IF self \in support1 THEN {self} ELSE {})
-            votes == votes0 \cap support1
-            core1 == [core EXCEPT !.promises[key1] = votes]
+            votes1 == votes0 \cap support1
             committed1 ==
               IF /\ Cardinality(support1) >= Majority
-                 /\ Cardinality(votes) >= Majority
+                 /\ Cardinality(votes1) >= Majority
               THEN prefix1
               ELSE committed
-        IN Iterate(core1, oldPromises, incomingPromises, self, idx + 1, sorted,
-                   prefix1, committed1)
+            promises1 == PutPromiseVotes(core.promises, prefix1, votes1)
+            core1 ==
+              [core EXCEPT
+                 !.promises =
+                   NormalizePromises(promises1, core.nodesMessages,
+                                     core.carries, committed1)]
+        IN Iterate(core1, self, idx + 1, sorted, prefix1, committed1)
       ELSE IF ~sorted
            THEN
              LET sortedMsgs == SortFrom(core.nodesMessages[self].messages, idx)
@@ -171,17 +207,18 @@ Iterate(core, oldPromises, incomingPromises, self, idx, sorted, prefix, committe
                    ELSE [core EXCEPT
                            !.nodesMessages[self].messages = sortedMsgs,
                            !.nodesMessages[self].generation =
-                             IF @ < MaxGeneration THEN @ + 1 ELSE MaxGeneration]
-             IN Iterate(core1, oldPromises, incomingPromises, self, idx, TRUE,
-                        prefix, committed)
+                             BumpGeneration(@, 1),
+                           !.promises =
+                             NormalizePromises(@, [core.nodesMessages EXCEPT ![self].messages = sortedMsgs],
+                                               core.carries, committed)]
+             IN Iterate(core1, self, idx, TRUE, prefix, committed)
            ELSE [core |-> core, committed |-> committed]
 
 MergeResult(state, self, incoming) ==
-  LET base == BaseCore(state.core, self, incoming)
+  LET base == BaseCore(state.core, self, incoming, state.committed)
       iter ==
-        Iterate(base, state.core.promises, incoming.promises, self,
-                Len(state.committed) + 1, FALSE, state.committed,
-                state.committed)
+        Iterate(base, self, Len(state.committed) + 1, FALSE,
+                state.committed, state.committed)
   IN
     IF iter.core = state.core
     THEN [changed |-> FALSE,
@@ -223,17 +260,9 @@ DeliverState(msg) ==
                                               committed |-> out.committed]]
        /\ stateMsgs' = BroadcastState(stateMsgs \ {msg}, msg.to, out.core, alive)
 
-Disconnect(failed) ==
-  /\ failed \in alive
-  /\ alive' = alive \ {failed}
-  /\ applied' = applied
-  /\ local' = local
-  /\ stateMsgs' = {m \in stateMsgs : m.from # failed /\ m.to # failed}
-
 Next ==
   \/ \E node \in Nodes : \E msg \in MessageIds : Apply(node, msg)
   \/ \E msg \in stateMsgs : DeliverState(msg)
-  \/ \E failed \in Nodes : Disconnect(failed)
 
 CoreWellFormed(core) ==
   /\ core \in CoreState
@@ -241,12 +270,9 @@ CoreWellFormed(core) ==
   /\ \A n \in Nodes :
        /\ SeqElems(core.nodesMessages[n].messages) \subseteq applied
        /\ NoDuplicates(core.nodesMessages[n].messages)
-  /\ \A key \in PromiseKey :
-       IF core.promises[key] = {}
-       THEN TRUE
-       ELSE /\ SeqElems(key.prefix) \subseteq applied
-            /\ key.support \subseteq Nodes
-            /\ core.promises[key] \subseteq key.support
+  /\ \A promise \in core.promises :
+       /\ SeqElems(promise.prefix) \subseteq applied
+       /\ promise.votes \subseteq PrefixSupport(core.nodesMessages, promise.prefix)
 
 TypeOK ==
   /\ alive \subseteq Nodes
