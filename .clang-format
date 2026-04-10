@@ -1,0 +1,26 @@
+BasedOnStyle: Chromium
+
+IndentWidth: 2
+ContinuationIndentWidth: 4
+ColumnLimit: 80
+
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+DerivePointerAlignment: false
+
+NamespaceIndentation: None
+AlignAfterOpenBracket: DontAlign
+SortIncludes: false
+
+AllowShortFunctionsOnASingleLine: All
+AllowShortBlocksOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+
+SpaceBeforeParens: ControlStatementsExceptControlMacros
+
+IfMacros:
+  - if_as
+  - if_is
+  - if_eq

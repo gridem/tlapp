@@ -25,6 +25,9 @@ target_link_libraries(leaderless-consensus tlapp2 ${TLAPP2_GTEST})
 if(GTEST_INCLUDE_DIRS)
     target_include_directories(leaderless-consensus PRIVATE ${GTEST_INCLUDE_DIRS})
 endif()
+if(TLAPP2_FORMAT_BEFORE_BUILD AND TARGET format)
+    add_dependencies(leaderless-consensus format)
+endif()
 
 # Keep the runnable binary with the other examples.
 set_target_properties(leaderless-consensus PROPERTIES

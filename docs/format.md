@@ -1,12 +1,10 @@
 # Format Considerations
 
-This file records the current formatting considerations inferred from the
-existing codebase.
+This file records the rationale behind the checked-in
+[`../.clang-format`](../.clang-format) file and the formatting constraints
+inferred from the existing codebase.
 
-There is no authoritative formatter config in the repository yet, and
-`clang-format` was not available in the local shell when these notes were
-written. The guidance below is therefore based on the current code shape in
-files such as:
+The configuration is based on the current code shape in files such as:
 
 - `src/boolean.h`
 - `src/evaluate.h`
@@ -19,8 +17,8 @@ files such as:
 The closest built-in `clang-format` preset appears to be `Chromium`, with a
 small set of overrides for this repository.
 
-This should be treated as a starting point for local validation, not as a
-blanket instruction to reformat the whole tree.
+The checked-in config should still be treated as something to validate on a
+small slice before wide reformatting.
 
 ## Why `Chromium`
 
@@ -39,7 +37,7 @@ stock `Chromium`.
 
 The current codebase strongly suggests these adjustments:
 
-- indent namespace contents
+- keep namespace contents unindented to match the current repository style
 - keep short functions and small blocks on one line when natural
 - treat `if_as`, `if_is`, and `if_eq` as control-flow macros
 - avoid automatic include sorting
@@ -60,14 +58,16 @@ PointerAlignment: Left
 ReferenceAlignment: Pointer
 DerivePointerAlignment: false
 
-NamespaceIndentation: All
+NamespaceIndentation: None
 AlignAfterOpenBracket: DontAlign
 SortIncludes: false
 
 AllowShortFunctionsOnASingleLine: All
-AllowShortBlocksOnASingleLine: Always
-AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortBlocksOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
 AllowShortLambdasOnASingleLine: All
+
+SpaceBeforeParens: ControlStatementsExceptControlMacros
 
 IfMacros:
   - if_as
@@ -77,7 +77,7 @@ IfMacros:
 
 ## Validation Advice
 
-If a repo-wide formatter config is introduced, validate it first on:
+If the formatter config is changed, validate it first on:
 
 - `src/boolean.h`
 - `src/evaluate.h`
@@ -91,13 +91,32 @@ These files are the most sensitive because they combine:
 - custom control-flow macros
 - line wrapping that can become noisy under the wrong preset
 
+## Usage
+
+The repository now provides a `format` build target when `clang-format` is
+available:
+
+```sh
+cmake --build build/debug --target format
+```
+
+There is also an opt-in CMake flag:
+
+```sh
+-DTLAPP2_FORMAT_BEFORE_BUILD=ON
+```
+
+That flag is intentionally off by default. Automatically rewriting source files
+during ordinary builds is usually a bad default because it makes builds mutate
+the worktree and can hide unrelated formatting churn.
+
 ## Practical Guidance
 
-Until a checked-in formatter config exists:
-
 - use the existing code nearby as the primary formatting reference
-- prefer small manual adjustments over wide reformatting
-- validate any proposed `.clang-format` on a small file set before touching the
-  rest of the tree
+- prefer small manual adjustments or explicit `format` runs over hidden
+  build-time rewrites
+- validate any proposed `.clang-format` change on a small file set before
+  touching the rest of the tree
 - avoid large formatting-only diffs in macro-heavy headers
-- treat this file as a starting point, not a strict guarantee of exact output
+- treat this file as a rationale note, not as a substitute for the checked-in
+  config

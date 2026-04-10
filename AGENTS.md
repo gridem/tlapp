@@ -17,10 +17,18 @@
 ## Build and test
 - Requires CMake, a C++20 compiler, GoogleTest, and glog (see `CMakeLists.txt`).
 - Prefer Ninja builds.
+- A repo-root `.clang-format` is checked in. Prefer the explicit `format`
+  target over ad hoc formatter settings.
+- If you modify any `*.h` or `*.cpp` file under `src/`, `tests/`, `samples/`,
+  `benchmarks/`, or `leaderless_consensus/`, run
+  `cmake --build <build-dir> --target format` before any build, test, or
+  benchmark command.
 - For normal development and test runs, prefer a Debug build:
   - `cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug`
   - `cmake --build build/debug --target tlapp2_tests`
   - `./build/debug/tlapp2_tests` (CTest discovery is not enabled by default)
+- To apply the checked-in formatter explicitly:
+  - `cmake --build build/debug --target format`
 - For performance work and benchmarks, prefer a separate optimized build:
   - `cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo`
   - `cmake --build build/rel`
@@ -31,6 +39,9 @@
   - Use `RelWithDebInfo` for any performance measurement or benchmark comparison. Do not use Debug timings as benchmark results.
 - If an activated Conda environment causes CMake to pick the wrong GTest package, pass `GTest_DIR` explicitly in the configure command instead of changing `CMakeLists.txt`, for example:
   - `-DGTest_DIR=<path-to-GTest-config>`
+- `TLAPP2_FORMAT_BEFORE_BUILD=ON` exists as an opt-in workflow, but keep it
+  off by default. Automatically rewriting sources during ordinary builds is
+  usually not desirable.
 - Sample binaries are emitted under the chosen build directory's `samples/` subdirectory.
 - Benchmark binaries are emitted under the chosen build directory's `benchmarks/` subdirectory.
 

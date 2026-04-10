@@ -19,6 +19,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(TLAPP2_FORMAT_BEFORE_BUILD
+       "Run clang-format on project sources before building targets"
+       OFF)
+
 find_package(glog REQUIRED)
 find_package(GTest REQUIRED)
 
@@ -54,6 +58,38 @@ file(GLOB_RECURSE PRJ_TESTS
     "tests/*"
 )
 
+file(GLOB_RECURSE TLAPP2_FORMAT_FILES
+    CONFIGURE_DEPENDS
+    "src/*.h"
+    "src/*.cpp"
+    "tests/*.h"
+    "tests/*.cpp"
+    "samples/*.h"
+    "samples/*.cpp"
+    "benchmarks/*.h"
+    "benchmarks/*.cpp"
+    "leaderless_consensus/*.h"
+    "leaderless_consensus/*.cpp"
+)
+list(REMOVE_DUPLICATES TLAPP2_FORMAT_FILES)
+
+find_program(TLAPP2_CLANG_FORMAT_EXE
+    NAMES clang-format
+    HINTS /Library/Developer/CommandLineTools/usr/bin)
+
+if(TLAPP2_CLANG_FORMAT_EXE)
+    add_custom_target(format
+        COMMAND ${TLAPP2_CLANG_FORMAT_EXE} -i --style=file ${TLAPP2_FORMAT_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Formatting project sources with clang-format"
+        VERBATIM)
+elseif(TLAPP2_FORMAT_BEFORE_BUILD)
+    message(FATAL_ERROR
+        "TLAPP2_FORMAT_BEFORE_BUILD=ON requires clang-format, but it was not found")
+else()
+    message(STATUS "clang-format not found; the 'format' target is unavailable")
+endif()
+
 enable_testing()
 
 add_library(${PROJECT_NAME} ${PRJ_SRC})
@@ -61,6 +97,9 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} glog::glog)
+if(TLAPP2_FORMAT_BEFORE_BUILD AND TARGET format)
+    add_dependencies(${PROJECT_NAME} format)
+endif()
 
 # add_executable(${PROJECT_NAME}_app ${PRJ_APP})
 
@@ -69,6 +108,9 @@ target_link_libraries(${PROJECT_NAME}_tests
     ${PROJECT_NAME} ${TLAPP2_GTEST})
 if(GTEST_INCLUDE_DIRS)
     target_include_directories(${PROJECT_NAME}_tests PRIVATE ${GTEST_INCLUDE_DIRS})
+endif()
+if(TLAPP2_FORMAT_BEFORE_BUILD AND TARGET format)
+    add_dependencies(${PROJECT_NAME}_tests format)
 endif()
 
 add_subdirectory(samples)
