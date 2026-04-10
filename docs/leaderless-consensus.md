@@ -18,6 +18,9 @@ The source material discusses five variants:
 
 All five are now modeled in this repo.
 
+Detailed per-algorithm notes live under
+[`docs/leaderless-consensus/`](leaderless-consensus/README.md).
+
 ## Files
 
 - `leaderless_consensus/common.h`: shared TLA++ helper types and utilities
@@ -44,7 +47,7 @@ The executable and TLC models use small finite abstractions:
 - In `Rush`, the analogous rule is stricter: a proposal may be applied only while the node is still in its initial local state.
 - Broadcast sends to the other live nodes only.
 - The set-based variants model disconnect as an immediate local state update on survivors.
-- `Rush` keeps the original "no disconnect handler" behavior and only drops in-flight traffic for failed nodes.
+- `Rush` currently omits disconnect transitions while the ordering model is being reduced.
 
 ## Safety Checks
 
@@ -80,7 +83,7 @@ Executable TLA++ sample on the current branch tip:
 - `Calm`: holds under the current finite model, including the liveness check
 - `Flat`: long-running in the current finite model; no conclusion recorded in this pass
 - `Most`: holds under the current finite model, including the liveness check
-- `Rush`: no final conclusion recorded on the current branch tip
+- `Rush`: recent executable exploration completes on the current reduced model
 
 Current failures in the executable model:
 
@@ -94,6 +97,7 @@ TLC status:
 
 - TLC verification is a work in progress.
 - `Calm` and `Most` were rerun with the current liveness property and passed.
+- `Rush` was rerun in the executable model after the state-space reductions and now completes in about one minute on a recent run.
 
 ## Commands
 
