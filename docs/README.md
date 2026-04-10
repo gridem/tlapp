@@ -19,6 +19,7 @@ Planning documents now live under [`plans/`](plans/):
 - [`plans/boolean-optimization.md`](plans/boolean-optimization.md)
 - [`plans/liveness.md`](plans/liveness.md)
 - [`plans/partial-order-reduction.md`](plans/partial-order-reduction.md)
+- [`plans/rush-state-space.md`](plans/rush-state-space.md)
 
 ## Scope Recommendation
 
