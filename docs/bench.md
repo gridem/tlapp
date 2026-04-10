@@ -19,7 +19,7 @@ Commands used for this baseline:
 
 ```sh
 cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DGTest_DIR=/opt/homebrew/opt/googletest/lib/cmake/GTest
+  -DGTest_DIR=<path-to-GTest-config>
 cmake --build build/rel --target boolean_perf quantifier_perf
 ```
 
@@ -71,7 +71,7 @@ For the table below, each benchmark executable was run 5 times and the median
 ## Phase 2 Results
 
 Phase 2 replaced closure-based branch composition with explicit branch data in
-[`boolean.h`](/Users/gridem/.codex/worktrees/4565/tlapp2/src/boolean.h). The
+[`src/boolean.h`](../src/boolean.h). The
 same benchmark commands were rerun 5 times on 2026-03-31 and the median
 `per_iter_us` was recorded again.
 
@@ -101,7 +101,7 @@ same benchmark commands were rerun 5 times on 2026-03-31 and the median
 
 After the first Phase 2 landing, the branch-op storage was simplified again to
 remove the virtual base class in
-[`boolean.h`](/Users/gridem/.codex/worktrees/4565/tlapp2/src/boolean.h). The
+[`src/boolean.h`](../src/boolean.h). The
 current code stores shared immutable op payloads plus a typed apply function.
 The same benchmark commands were rerun 5 times on 2026-03-31 and the median
 `per_iter_us` was recorded again.
@@ -224,7 +224,7 @@ The same benchmark commands were rerun 5 times on 2026-04-01 and the median
 ## Liveness Benchmarks
 
 The liveness benchmarks live in
-[`benchmarks/liveness_perf.cpp`](/Users/gridem/Documents/repo/tlapp2/benchmarks/liveness_perf.cpp).
+[`benchmarks/liveness_perf.cpp`](../benchmarks/liveness_perf.cpp).
 
 Unlike the boolean and quantifier microbenchmarks, these scenarios:
 
@@ -238,7 +238,7 @@ exploration.
 
 ```sh
 cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DGTest_DIR=/opt/homebrew/opt/googletest/lib/cmake/GTest
+  -DGTest_DIR=<path-to-GTest-config>
 cmake --build build/rel --target liveness_perf
 GLOG_minloglevel=1 ./build/rel/benchmarks/liveness_perf --gtest_brief=1
 ```
@@ -275,6 +275,6 @@ median `per_iter_us` was recorded.
 - The latest cache-build path still avoids per-node hash sets by using reusable
   dense stamp arrays during target reconstruction.
 - These numbers justify the next optimization step already noted in
-  [`plan/liveness.md`](/Users/gridem/Documents/repo/tlapp2/plan/liveness.md):
+  [`plans/liveness.md`](plans/liveness.md):
   sharing action-hit information directly from exploration instead of
   recomputing it during the liveness pass.

@@ -6,6 +6,9 @@ The main idea is to use the power of C++ templates and enable using C++ for TLA+
 
 The author's aim was to fully understand how TLA+ works and show that C++ is able to follow the same approach and may use the expressiveness of the language.
 
+Longer-form notes, benchmarks, and design plans live under
+[`docs/`](docs/README.md).
+
 ## Quick Example
 
 Let's see how TLA+ can be represented in TLA++.
