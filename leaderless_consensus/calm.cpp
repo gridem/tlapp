@@ -274,7 +274,7 @@ struct Model : IModel {
   Var<CalmState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  CarrySet messageIds_ = {1, 2, 3};
+  CarrySet messageIds_ = {10, 11, 12};
 };
 
 TEST_F(EngineFixture, CalmHoldsInvariantAndConverges) {

@@ -109,7 +109,7 @@ FlatVoteResult(state, self, source, carries, incomingNodes, incomingVotes) ==
 Apply(node, msg) ==
   /\ node \in alive
   /\ msg \notin applied
-  /\ msg = node + 1
+  /\ msg = node + 10
   /\ local[node].votes = {}
   /\ local[node].status # FlatCommitted
   /\ LET out ==

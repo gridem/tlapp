@@ -103,7 +103,7 @@ FlatState processVote(FlatState sys, NodeId node, NodeId source,
 
 bool canApply(const FlatState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) && !sys.applied.contains(id) &&
-         id == node + 1 &&
+         id == node + 10 &&
          sys.local.at(node).votes.empty() &&
          sys.local.at(node).status != kCommitted;
 }
@@ -246,7 +246,7 @@ struct Model : IModel {
   Var<FlatState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  CarrySet messageIds_ = {1, 2, 3};
+  CarrySet messageIds_ = {10, 11, 12};
 };
 
 TEST_F(EngineFixture, DISABLED_FlatExploration) {

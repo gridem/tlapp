@@ -36,10 +36,10 @@ All five are now modeled in this repo.
 
 The executable and TLC models use small finite abstractions:
 
-- `MessageIds = {1, 2, 3}` in every module.
+- `MessageIds = {10, 11, 12}` in every module.
 - Every variant uses `Nodes = {0, 1, 2}`.
 - In `Sore`, `Calm`, `Most`, and `Rush`, a pristine node may originate any not-yet-applied proposal id.
-- In `Flat`, proposal generation is reduced to one fixed proposal per node: `0 -> 1`, `1 -> 2`, `2 -> 3`.
+- In `Flat`, proposal generation is reduced to one fixed proposal per node: `0 -> 10`, `1 -> 11`, `2 -> 12`.
 - A proposal may be applied only before any vote has been delivered to that node.
 - In `Rush`, the analogous rule is stricter: a proposal may be applied only while the node is still in its initial local state.
 - Broadcast sends to the other live nodes only.
