@@ -175,7 +175,9 @@ TEST(Quantifier, ForallAssignmentPredicateKeepsSingleConjunction) {
 TEST(Quantifier, ForallMacro) {
   Var<std::vector<int>> vec{"vec"};
   Var<int> x{"x"};
-  auto e = $A(i, vec) { return i != x; };
+  auto e = $A(i, vec) {
+    return i != x;
+  };
 
   Context ctx;
 
@@ -198,7 +200,9 @@ TEST(Quantifier, ForallMacro) {
 
 TEST(Quantifier, ForallMacroRVal) {
   Var<int> x{"x"};
-  auto e = $A(i, (std::vector<int>{1, 2})) { return i != x; };
+  auto e = $A(i, (std::vector<int>{1, 2})) {
+    return i != x;
+  };
 
   Context ctx;
 
@@ -216,7 +220,9 @@ TEST(Quantifier, ExistsMacro) {
   Var<std::vector<int>> vec{"vec"};
   Var<int> x{"x"};
 
-  auto e = $E(i, vec) { return i == x; };
+  auto e = $E(i, vec) {
+    return i == x;
+  };
 
   Context ctx;
   ctx.setCheck(true);

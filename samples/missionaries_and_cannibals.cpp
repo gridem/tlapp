@@ -58,11 +58,16 @@ struct Model : IModel {
     auto westArrived = westBank $cup passengers;
     auto passengerCount = get_mem(passengers, size());
 
-    return passengerCount >= 1 && passengerCount <= 2 &&
-           ((bankOfBoat == east && isSafe(eastRemaining) && isSafe(westArrived) &&
+    return passengerCount >= 1 &&
+           passengerCount <= 2 &&
+           ((bankOfBoat == east &&
+                isSafe(eastRemaining) &&
+                isSafe(westArrived) &&
                 bankOfBoat++ == west &&
                 whoIsOnBank++ == creator<Banks>(eastRemaining, westArrived)) ||
-               (bankOfBoat == west && isSafe(westRemaining) && isSafe(eastArrived) &&
+               (bankOfBoat == west &&
+                   isSafe(westRemaining) &&
+                   isSafe(eastArrived) &&
                    bankOfBoat++ == east &&
                    whoIsOnBank++ == creator<Banks>(eastArrived, westRemaining)));
   }
@@ -70,8 +75,11 @@ struct Model : IModel {
   Boolean typeOk() {
     auto eastBank = get_mem(whoIsOnBank, east);
     auto westBank = get_mem(whoIsOnBank, west);
-    return (bankOfBoat $in riverBanks) && isSafe(eastBank) && isSafe(westBank) &&
-           (eastBank $cap westBank) == People{} && (eastBank $cup westBank) == allPeople;
+    return (bankOfBoat $in riverBanks) &&
+           isSafe(eastBank) &&
+           isSafe(westBank) &&
+           (eastBank $cap westBank) == People{} &&
+           (eastBank $cup westBank) == allPeople;
   }
 
   Boolean init() override {
@@ -86,7 +94,9 @@ struct Model : IModel {
     });
   }
 
-  std::optional<Boolean> ensure() override { return typeOk(); }
+  std::optional<Boolean> ensure() override {
+    return typeOk();
+  }
 
   std::optional<Boolean> stop() override {
     return get_mem(whoIsOnBank, east) == People{};

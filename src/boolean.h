@@ -15,7 +15,9 @@ tname(T_expr) struct CheckBranchOp {
 
   tname(T) explicit CheckBranchOp(T&& expr) : expr_{detail::prepare(fwd(expr))} {}
 
-  bool apply(Context& ctx) const { return detail::extract(ctx, expr_); }
+  bool apply(Context& ctx) const {
+    return detail::extract(ctx, expr_);
+  }
 
  private:
   expr_type expr_;
@@ -24,7 +26,9 @@ tname(T_expr) struct CheckBranchOp {
 tname(T_l, T_r) struct AssignBranchOp {
   tname(T1, T2) AssignBranchOp(T1&& l, T2&& r) : l_{fwd(l)}, r_{fwd(r)} {}
 
-  bool apply(Context& ctx) const { return l_.assignTo(ctx, r_); }
+  bool apply(Context& ctx) const {
+    return l_.assignTo(ctx, r_);
+  }
 
  private:
   std::decay_t<T_l> l_;
@@ -38,6 +42,7 @@ struct BranchOp {
   using Copy = void (*)(const BranchOp& src, BranchOp& dst);
   using Move = void (*)(BranchOp& src, BranchOp& dst);
   using Destroy = void (*)(BranchOp& op);
+
   struct Ops {
     Apply apply;
     Copy copy;
@@ -48,8 +53,14 @@ struct BranchOp {
   static constexpr size_t kInlineSize = sizeof(void*) * 4;
 
   BranchOp() = default;
-  BranchOp(const BranchOp& other) { other.copyTo(*this); }
-  BranchOp(BranchOp&& other) { other.moveTo(*this); }
+
+  BranchOp(const BranchOp& other) {
+    other.copyTo(*this);
+  }
+
+  BranchOp(BranchOp&& other) {
+    other.moveTo(*this);
+  }
 
   BranchOp& operator=(const BranchOp& other) {
     if (&other == this) {
@@ -69,7 +80,9 @@ struct BranchOp {
     return *this;
   }
 
-  ~BranchOp() { reset(); }
+  ~BranchOp() {
+    reset();
+  }
 
   template <typename T_op,
       std::enable_if_t<!std::is_same_v<std::decay_t<T_op>, BranchOp>, int> = 0>
@@ -77,7 +90,9 @@ struct BranchOp {
     emplace<std::decay_t<T_op>>(fwd(op));
   }
 
-  bool apply(Context& ctx) const { return ops_->apply(ctx, get()); }
+  bool apply(Context& ctx) const {
+    return ops_->apply(ctx, get());
+  }
 
  private:
   template <typename T>
@@ -147,7 +162,9 @@ struct BranchOp {
     return ptr_ == nullptr ? static_cast<const void*>(&storage_) : ptr_;
   }
 
-  void* getMutable() { return ptr_ == nullptr ? static_cast<void*>(&storage_) : ptr_; }
+  void* getMutable() {
+    return ptr_ == nullptr ? static_cast<void*>(&storage_) : ptr_;
+  }
 
   void copyTo(BranchOp& dst) const {
     if (ops_ != nullptr) {
@@ -182,11 +199,17 @@ struct BranchResult {
 
   BranchResult() = default;
 
-  BranchResult(std::initializer_list<BranchOp> ops) { append(ops.begin(), ops.end()); }
+  BranchResult(std::initializer_list<BranchOp> ops) {
+    append(ops.begin(), ops.end());
+  }
 
-  BranchResult(const BranchResult& other) { append(other.begin(), other.end()); }
+  BranchResult(const BranchResult& other) {
+    append(other.begin(), other.end());
+  }
 
-  BranchResult(BranchResult&& other) noexcept { moveFrom(std::move(other)); }
+  BranchResult(BranchResult&& other) noexcept {
+    moveFrom(std::move(other));
+  }
 
   BranchResult& operator=(const BranchResult& other) {
     if (&other == this) {
@@ -206,7 +229,9 @@ struct BranchResult {
     return *this;
   }
 
-  ~BranchResult() { reset(); }
+  ~BranchResult() {
+    reset();
+  }
 
   tname(T_expr) static BranchResult fromCheck(T_expr&& expr) {
     return BranchResult{BranchOp{detail::CheckBranchOp<T_expr>{fwd(expr)}}};
@@ -217,7 +242,9 @@ struct BranchResult {
         detail::AssignBranchOp<std::decay_t<T_l>, std::decay_t<T_r>>{fwd(l, r)}}};
   }
 
-  size_t size() const { return size_; }
+  size_t size() const {
+    return size_;
+  }
 
   void reserve(size_t size) {
     if (size > capacity_) {
@@ -225,13 +252,29 @@ struct BranchResult {
     }
   }
 
-  iterator begin() { return data(); }
-  iterator end() { return data() + size_; }
-  const_iterator begin() const { return data(); }
-  const_iterator end() const { return data() + size_; }
+  iterator begin() {
+    return data();
+  }
 
-  BranchOp& operator[](size_t i) { return data()[i]; }
-  const BranchOp& operator[](size_t i) const { return data()[i]; }
+  iterator end() {
+    return data() + size_;
+  }
+
+  const_iterator begin() const {
+    return data();
+  }
+
+  const_iterator end() const {
+    return data() + size_;
+  }
+
+  BranchOp& operator[](size_t i) {
+    return data()[i];
+  }
+
+  const BranchOp& operator[](size_t i) const {
+    return data()[i];
+  }
 
   template <typename T_iter>
   void insert(iterator pos, T_iter first, T_iter last) {
@@ -261,7 +304,9 @@ struct BranchResult {
     return heap_ != nullptr ? heap_ : reinterpret_cast<const BranchOp*>(storage_);
   }
 
-  bool isInline() const { return heap_ == nullptr; }
+  bool isInline() const {
+    return heap_ == nullptr;
+  }
 
   template <typename T_iter>
   void append(T_iter first, T_iter last) {
@@ -371,7 +416,9 @@ struct LogicResult : std::vector<BranchResult> {
 struct BooleanResult : std::variant<bool, LogicResult> {
   using std::variant<bool, LogicResult>::variant;
 
-  tname(B) static BooleanResult fromRaw(B&& b) { return LogicResult::fromRaw(fwd(b)); }
+  tname(B) static BooleanResult fromRaw(B&& b) {
+    return LogicResult::fromRaw(fwd(b));
+  }
 
   // Should be used for testing purposes only because it represents a set of
   // possible combinations.
@@ -394,7 +441,9 @@ namespace detail {
 
 template <>
 struct PredicateResult<bool> {
-  static bool apply(bool result) { return result; }
+  static bool apply(bool result) {
+    return result;
+  }
 };
 
 template <>
@@ -580,8 +629,13 @@ fun(andImpl, l, r) {
   }
 }
 
-fun(orOp, l, r) { return binaryBooleanOp(as_lam(orImpl), fwd(l, r)); }
-fun(andOp, l, r) { return binaryBooleanOp(as_lam(andImpl), fwd(l, r)); }
+fun(orOp, l, r) {
+  return binaryBooleanOp(as_lam(orImpl), fwd(l, r));
+}
+
+fun(andOp, l, r) {
+  return binaryBooleanOp(as_lam(andImpl), fwd(l, r));
+}
 
 }  // namespace detail
 
@@ -589,7 +643,9 @@ inline bool operator!(const LogicResult&) {
   throw ExpressionError("Negative operation cannot be applied to logic result");
 }
 
-inline bool operator!(const BooleanResult& b) { return std::visit(lam_in(v, !v), b); }
+inline bool operator!(const BooleanResult& b) {
+  return std::visit(lam_in(v, !v), b);
+}
 
 fun_if(operator==, is_any_of(is_expression, T_l, T_r), l, r) {
   if_is(l, assignment) {

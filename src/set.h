@@ -46,7 +46,9 @@ fun(wrapBoolSetStdOp, f, ll, rr) {
 }  // namespace detail
 
 #define DEFINE_SET_WRAP(D_name, D_stdName, D_wrap) \
-  fun(D_name, l, r) { return D_wrap(as_lam(D_stdName), fwd(l, r)); }
+  fun(D_name, l, r) {                              \
+    return D_wrap(as_lam(D_stdName), fwd(l, r));   \
+  }
 
 DEFINE_SET_WRAP(merge, std::set_union, detail::wrapSetStdOp)
 DEFINE_SET_WRAP(difference, std::set_difference, detail::wrapSetStdOp)
@@ -55,4 +57,6 @@ DEFINE_SET_WRAP(intersection, std::set_intersection, detail::wrapSetStdOp)
 DEFINE_SET_WRAP(includes, std::includes, detail::wrapBoolSetStdOp)
 
 // Swap parameters
-fun(inSet, l, r) { return includes(fwd(r, l)); }
+fun(inSet, l, r) {
+  return includes(fwd(r, l));
+}

@@ -10,7 +10,9 @@
 #define get_mem(D_e, D_mem) evaluate(lam_in(e, e.D_mem), fwd(D_e))
 
 // Extract value from index-based containers. E.g. vectors or maps.
-fun(at, e, i) { return evaluator(fwd(e).at(fwd(i)), e, i); }
+fun(at, e, i) {
+  return evaluator(fwd(e).at(fwd(i)), e, i);
+}
 
 // Assigns new value for index-based containers. E.g. vectors or maps.
 // at(map, index, value) -> map[index] = value
@@ -25,9 +27,13 @@ fun(at, var, index, newValue) {
 }
 
 // Mutates the variable to new value using `get`.
-fun(mut, var, f) { return var++ == evaluate(fwd(f), var); }
+fun(mut, var, f) {
+  return var++ == evaluate(fwd(f), var);
+}
 
-fun(mutAt, var, index, newValue) { return var++ == at(var, fwd(index, newValue)); }
+fun(mutAt, var, index, newValue) {
+  return var++ == at(var, fwd(index, newValue));
+}
 
 // Creates an instance of type T with parameters.
 // Example: creator<T>(a, b)

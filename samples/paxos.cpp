@@ -56,19 +56,29 @@ using Messages = std::set<Message>;
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/PaxosHowToWinATuringAward/Paxos.tla
 struct Model : IModel {
-  fun(send, m) { return msgs++ == (msgs $cup m); }
+  fun(send, m) {
+    return msgs++ == (msgs $cup m);
+  }
 
-  funs(sendMessage, args) { return send(creator<Message>(fwd(args)...)); }
+  funs(sendMessage, args) {
+    return send(creator<Message>(fwd(args)...));
+  }
 
-  fun(send1a, bal) { return sendMessage(M1a, -1, fwd(bal)); }
+  fun(send1a, bal) {
+    return sendMessage(M1a, -1, fwd(bal));
+  }
 
   fun(send1b, acc, bal, mbal, mval) {
     return sendMessage(M1b, fwd(acc, bal), -1, fwd(mbal, mval));
   }
 
-  fun(send2a, bal, val) { return sendMessage(M2a, -1, fwd(bal, val)); }
+  fun(send2a, bal, val) {
+    return sendMessage(M2a, -1, fwd(bal, val));
+  }
 
-  fun(send2b, acc, bal, val) { return sendMessage(M2b, fwd(acc, bal, val)); }
+  fun(send2b, acc, bal, val) {
+    return sendMessage(M2b, fwd(acc, bal, val));
+  }
 
   // clang-format off
   fun(showsSafeAt, b, v) {
@@ -133,6 +143,7 @@ struct Model : IModel {
              send2b(a, get_mem(m, bal), get_mem(m, val));
     };
   }
+
   // clang-format on
 
   Map createMap(int v) {
@@ -144,15 +155,21 @@ struct Model : IModel {
   }
 
   Boolean init() override {
-    return maxBal == createMap(-1) && maxVBal == createMap(-1) &&
-           maxVal == createMap(-1) && msgs == Messages{};
+    return maxBal == createMap(-1) &&
+           maxVBal == createMap(-1) &&
+           maxVal == createMap(-1) &&
+           msgs == Messages{};
   }
 
   Boolean next() override {
     return $E(b, ballot) {
-      return phase1a(b) || $E(v, value) { return phase2a(b, v); };
+      return phase1a(b) || $E(v, value) {
+        return phase2a(b, v);
+      };
     }
-    || $E(a, acceptor) { return phase1b(a) || phase2b(a); };
+    || $E(a, acceptor) {
+      return phase1b(a) || phase2b(a);
+    };
   }
 
   std::optional<Boolean> ensure() override {
@@ -162,6 +179,7 @@ struct Model : IModel {
 return get_mem(m, type) == M1b;
 }*/;
   }
+
   /*
 Inv ==
  /\ TypeOK

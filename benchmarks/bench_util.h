@@ -24,7 +24,9 @@ struct BenchResult {
   double perIterUs = 0.0;
 };
 
-inline uint64_t benchValue(bool value) { return value ? 1ull : 0ull; }
+inline uint64_t benchValue(bool value) {
+  return value ? 1ull : 0ull;
+}
 
 inline uint64_t benchValue(const BooleanResult& result) {
   if (auto logic = std::get_if<LogicResult>(&result)) {

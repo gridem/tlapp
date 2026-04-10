@@ -130,7 +130,9 @@ namespace detail {
 tname(T, F) struct MacroBlock : F {
   tname(T1, F1) MacroBlock(T1&& t, F1&& f) : F{fwd(f)}, t_{fwd(t)} {}
 
-  fun(operator^, f) { return F::operator()(std::move(t_), fwd(f)); }
+  fun(operator^, f) {
+    return F::operator()(std::move(t_), fwd(f));
+  }
 
  private:
   T t_;

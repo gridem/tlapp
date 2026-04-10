@@ -83,12 +83,23 @@ std::string Stats::Init::toString() const {
 std::string Stats::Loop::toString() const {
   auto queued = states >= processed ? states - processed : 0;
   auto drain = states == 0 ? 0 : processed * 100 / states;
-  return "{total states: " + asString(states) + ", processed: " + asString(processed) +
-         ", queued: " + asString(queued) + ", drain: " + asString(drain) + "%" +
-         ", transitions: " + asString(transitions) + "}";
+  return "{total states: " +
+         asString(states) +
+         ", processed: " +
+         asString(processed) +
+         ", queued: " +
+         asString(queued) +
+         ", drain: " +
+         asString(drain) +
+         "%" +
+         ", transitions: " +
+         asString(transitions) +
+         "}";
 }
 
-void Engine::setModel(Model&& model) { model_ = std::move(model); }
+void Engine::setModel(Model&& model) {
+  model_ = std::move(model);
+}
 
 void Engine::run() {
   init();
@@ -161,7 +172,9 @@ void Engine::loopNext() {
   LOG(INFO) << "Loop next done: " << asString(stats_.loop);
 }
 
-const Stats& Engine::getStats() const { return stats_; }
+const Stats& Engine::getStats() const {
+  return stats_;
+}
 
 void Engine::checkLiveness() {
   if (!liveness_) {

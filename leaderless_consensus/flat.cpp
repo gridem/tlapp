@@ -99,7 +99,8 @@ FlatState processVote(FlatState sys,
   }
   newVotes = setIntersection(newVotes, newNodes);
 
-  if (newNodes == previous.nodes && newCarries == previous.carries &&
+  if (newNodes == previous.nodes &&
+      newCarries == previous.carries &&
       newVotes == previous.votes) {
     return sys;
   }
@@ -117,8 +118,11 @@ FlatState processVote(FlatState sys,
 }
 
 bool canApply(const FlatState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) && !sys.applied.contains(id) && id == node + 10 &&
-         sys.local.at(node).votes.empty() && sys.local.at(node).status != kCommitted;
+  return sys.alive.contains(node) &&
+         !sys.applied.contains(id) &&
+         id == node + 10 &&
+         sys.local.at(node).votes.empty() &&
+         sys.local.at(node).status != kCommitted;
 }
 
 FlatState apply(FlatState sys, NodeId node, MessageId id) {
@@ -226,7 +230,9 @@ DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::flat::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::flat::invariant)
 
 struct Model : IModel {
-  Boolean init() override { return sys == makeState(nodes_); }
+  Boolean init() override {
+    return sys == makeState(nodes_);
+  }
 
   Boolean next() override {
     return $E(node, nodes_) {
@@ -245,7 +251,9 @@ struct Model : IModel {
     };
   }
 
-  std::optional<Boolean> ensure() override { return invariantExpr(sys); }
+  std::optional<Boolean> ensure() override {
+    return invariantExpr(sys);
+  }
 
   Var<FlatState> sys{"sys"};
 

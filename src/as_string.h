@@ -8,7 +8,9 @@
 
 #include "macro.h"
 
-tname(T) std::string asString(const T& t) { return t.toString(); }
+tname(T) std::string asString(const T& t) {
+  return t.toString();
+}
 
 // String/char functions.
 std::string asString(char c);
@@ -18,8 +20,10 @@ const std::string& asString(bool w);
 
 std::string asString(const std::string& t);
 
-#define AS_STR(D_type) \
-  inline std::string asString(D_type v) { return std::to_string(v); }
+#define AS_STR(D_type)                    \
+  inline std::string asString(D_type v) { \
+    return std::to_string(v);             \
+  }
 
 #define INT_AS_STR(D_bits) \
   AS_STR(int##D_bits##_t)  \
@@ -91,7 +95,9 @@ SINGLE_AS_STRING(std::unique_ptr)
 SINGLE_AS_STRING(std::shared_ptr)
 SINGLE_AS_STRING(std::optional)
 
-tname(T) std::string asStringQuote(const T& t) { return '"' + asString(t) + '"'; }
+tname(T) std::string asStringQuote(const T& t) {
+  return '"' + asString(t) + '"';
+}
 
 tname(T, ... V) std::string asString(const T& t, V&&... v) {
   return asString(t) + asString(fwd(v)...);

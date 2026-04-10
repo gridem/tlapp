@@ -51,9 +51,17 @@ struct EventuallyRingModel : IModel {
         nextExpr_{makeRingStep(node, size_)},
         livenessExpr_{eventually(node == goal_)} {}
 
-  Boolean init() override { return node == 0; }
-  Boolean next() override { return nextExpr_; }
-  std::optional<LivenessBoolean> liveness() override { return livenessExpr_; }
+  Boolean init() override {
+    return node == 0;
+  }
+
+  Boolean next() override {
+    return nextExpr_;
+  }
+
+  std::optional<LivenessBoolean> liveness() override {
+    return livenessExpr_;
+  }
 
   Var<int> node{"node"};
   int size_;
@@ -70,8 +78,13 @@ struct FairnessCycleBase : IModel {
         sinkExpr_{makeSinkStep(node, done)},
         nextExpr_{cycleExpr_ || exitExpr_ || sinkExpr_} {}
 
-  Boolean init() override { return node == 0 && done == 0; }
-  Boolean next() override { return nextExpr_; }
+  Boolean init() override {
+    return node == 0 && done == 0;
+  }
+
+  Boolean next() override {
+    return nextExpr_;
+  }
 
   Var<int> node{"node"};
   Var<int> done{"done"};
@@ -86,7 +99,9 @@ struct WeakFairnessCycleModel : FairnessCycleBase {
   explicit WeakFairnessCycleModel(int size)
       : FairnessCycleBase(size), livenessExpr_{wf(cycleExpr_)} {}
 
-  std::optional<LivenessBoolean> liveness() override { return livenessExpr_; }
+  std::optional<LivenessBoolean> liveness() override {
+    return livenessExpr_;
+  }
 
   std::optional<LivenessBoolean> livenessExpr_;
 };
@@ -95,7 +110,9 @@ struct StrongFairnessCycleModel : FairnessCycleBase {
   explicit StrongFairnessCycleModel(int size)
       : FairnessCycleBase(size), livenessExpr_{sf(cycleExpr_)} {}
 
-  std::optional<LivenessBoolean> liveness() override { return livenessExpr_; }
+  std::optional<LivenessBoolean> liveness() override {
+    return livenessExpr_;
+  }
 
   std::optional<LivenessBoolean> livenessExpr_;
 };

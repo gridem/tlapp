@@ -31,11 +31,15 @@ struct Model : IModel {
   }
 
   Boolean canCommit() {
-    return $A(rm, resourceManagers) { return at(rmState, rm) $in commitStates; };
+    return $A(rm, resourceManagers) {
+      return at(rmState, rm) $in commitStates;
+    };
   }
 
   Boolean notCommitted() {
-    return $A(rm, resourceManagers) { return at(rmState, rm) != committed; };
+    return $A(rm, resourceManagers) {
+      return at(rmState, rm) != committed;
+    };
   }
 
   Boolean prepare(auto rm) {
@@ -43,14 +47,18 @@ struct Model : IModel {
   }
 
   Boolean decide(auto rm) {
-    return (at(rmState, rm) == prepared && canCommit() &&
+    return (at(rmState, rm) == prepared &&
+               canCommit() &&
                mutAt(rmState, rm, committed)) ||
-           (at(rmState, rm) $in undecidedStates && notCommitted() &&
+           (at(rmState, rm) $in undecidedStates &&
+               notCommitted() &&
                mutAt(rmState, rm, aborted));
   }
 
   Boolean typeOk() {
-    return $A(rm, resourceManagers) { return at(rmState, rm) $in rmStates; };
+    return $A(rm, resourceManagers) {
+      return at(rmState, rm) $in rmStates;
+    };
   }
 
   Boolean consistent() {
@@ -61,13 +69,19 @@ struct Model : IModel {
     };
   }
 
-  Boolean init() override { return rmState == makeStateMap(working); }
-
-  Boolean next() override {
-    return $E(rm, resourceManagers) { return prepare(rm) || decide(rm); };
+  Boolean init() override {
+    return rmState == makeStateMap(working);
   }
 
-  std::optional<Boolean> ensure() override { return typeOk() && consistent(); }
+  Boolean next() override {
+    return $E(rm, resourceManagers) {
+      return prepare(rm) || decide(rm);
+    };
+  }
+
+  std::optional<Boolean> ensure() override {
+    return typeOk() && consistent();
+  }
 
   Var<RmState> rmState{"rmState"};
 

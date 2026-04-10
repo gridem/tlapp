@@ -16,7 +16,10 @@ bool Descriptor::isAdded() const {
   return index >= 0;
 }
 
-std::string Descriptor::toString() const { return asStringQuote(name); }
+std::string Descriptor::toString() const {
+  return asStringQuote(name);
+}
+
 std::string Descriptor::toStringNext() const {
   return asStringQuote(asString(name, "++"));
 }

@@ -46,6 +46,8 @@ TEST(Macro, Funs) {
 
 #define MY_TEST_MACRO(X) macro_index_0 X macro_concat(macro_index_1 X, _);
 
-TEST(Macro, ArgIndex) { TestStr("(int a_;)", STRINGIZE((MY_TEST_MACRO((int, a))))); }
+TEST(Macro, ArgIndex) {
+  TestStr("(int a_;)", STRINGIZE((MY_TEST_MACRO((int, a)))));
+}
 
 }  // namespace test

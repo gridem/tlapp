@@ -16,14 +16,18 @@ using test::EngineFixture;
 // https://github.com/tlaplus/Examples/blob/master/specifications/SpecifyingSystems/RealTime/HourClock.tla
 struct Model : IModel {
   Boolean init() override {
-    return $E(h, hours) { return hr == h; };
+    return $E(h, hours) {
+      return hr == h;
+    };
   }
 
   Boolean next() override {
     return (hr != 12 && hr++ == hr + 1) || (hr == 12 && hr++ == 1);
   }
 
-  std::optional<Boolean> ensure() override { return hr >= 1 && hr <= 12; }
+  std::optional<Boolean> ensure() override {
+    return hr >= 1 && hr <= 12;
+  }
 
   Var<int> hr{"hr"};
   std::set<int> hours = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};

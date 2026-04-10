@@ -117,8 +117,10 @@ VoteResult processVote(const SoreNodeState& state,
 }
 
 bool canApply(const SoreState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) && !sys.applied.contains(id) &&
-         sys.local.at(node).voted.empty() && sys.local.at(node).status != kCompleted;
+  return sys.alive.contains(node) &&
+         !sys.applied.contains(id) &&
+         sys.local.at(node).voted.empty() &&
+         sys.local.at(node).status != kCompleted;
 }
 
 SoreState apply(SoreState sys, NodeId node, MessageId id) {
@@ -269,7 +271,9 @@ DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::sore::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::sore::invariant)
 
 struct Model : IModel {
-  Boolean init() override { return sys == makeState(nodes_); }
+  Boolean init() override {
+    return sys == makeState(nodes_);
+  }
 
   Boolean next() override {
     return $E(node, nodes_) {
@@ -288,7 +292,9 @@ struct Model : IModel {
     };
   }
 
-  std::optional<Boolean> ensure() override { return invariantExpr(sys); }
+  std::optional<Boolean> ensure() override {
+    return invariantExpr(sys);
+  }
 
   Var<SoreState> sys{"sys"};
 

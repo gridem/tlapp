@@ -174,8 +174,10 @@ VoteResult processVote(const MostNodeState& state,
 }
 
 bool canApply(const MostState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) && !sys.applied.contains(id) &&
-         sys.local.at(node).votes.empty() && sys.local.at(node).status != kCommitted;
+  return sys.alive.contains(node) &&
+         !sys.applied.contains(id) &&
+         sys.local.at(node).votes.empty() &&
+         sys.local.at(node).status != kCommitted;
 }
 
 MostState apply(MostState sys, NodeId node, MessageId id) {
@@ -218,7 +220,8 @@ MostState deliverVote(MostState sys, const MostVoteMsg& msg) {
 }
 
 bool canDeliverCommit(const MostState& sys, const MostCommitMsg& msg) {
-  return sys.alive.contains(msg.to) && sys.local.at(msg.to).status != kCommitted &&
+  return sys.alive.contains(msg.to) &&
+         sys.local.at(msg.to).status != kCommitted &&
          sys.local.at(msg.to).carries == msg.commit;
 }
 
@@ -335,7 +338,8 @@ bool quiescent(const MostState& sys) {
   }
 
   for (auto&& node : sys.alive) {
-    if (sys.local.at(node).votes.empty() && sys.local.at(node).status != kCommitted &&
+    if (sys.local.at(node).votes.empty() &&
+        sys.local.at(node).status != kCommitted &&
         sys.applied.size() < 3) {
       return false;
     }
@@ -356,7 +360,9 @@ DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::most::invariant)
 DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::most::quiescent)
 
 struct Model : IModel {
-  Boolean init() override { return sys == makeState(nodes_); }
+  Boolean init() override {
+    return sys == makeState(nodes_);
+  }
 
   Boolean next() override {
     return $E(node, nodes_) {
@@ -375,7 +381,10 @@ struct Model : IModel {
     };
   }
 
-  std::optional<Boolean> ensure() override { return invariantExpr(sys); }
+  std::optional<Boolean> ensure() override {
+    return invariantExpr(sys);
+  }
+
   std::optional<LivenessBoolean> liveness() override {
     return wf(next()) && eventually(quiescentExpr(sys));
   }

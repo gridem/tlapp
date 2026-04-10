@@ -28,30 +28,36 @@
 */
 
 // Sample: fields(a, b, c)
-#define fields(...)                                                             \
-  fun(fieldIterator, i) const { i macro_iterate(FOR_field_enum, __VA_ARGS__); } \
-                                                                                \
-  tname(T) bool operator<(const T& o) const noexcept {                          \
-    macro_iterate(FOR_field_less, __VA_ARGS__) return false;                    \
-  }                                                                             \
-                                                                                \
-  tname(T) bool operator==(const T& o) const noexcept {                         \
-    return macro_iterate_delim(FOR_field_eq, macro_and, __VA_ARGS__);           \
-  }                                                                             \
-                                                                                \
-  size_t toHash() const { return iteratorResult(HashFieldIterator{}, *this); }  \
-                                                                                \
-  std::string toString() const {                                                \
-    return "{" + iteratorResult(StringFieldIterator{}, *this) + "}";            \
-  }                                                                             \
-                                                                                \
+#define fields(...)                                                   \
+  fun(fieldIterator, i) const {                                       \
+    i macro_iterate(FOR_field_enum, __VA_ARGS__);                     \
+  }                                                                   \
+                                                                      \
+  tname(T) bool operator<(const T& o) const noexcept {                \
+    macro_iterate(FOR_field_less, __VA_ARGS__) return false;          \
+  }                                                                   \
+                                                                      \
+  tname(T) bool operator==(const T& o) const noexcept {               \
+    return macro_iterate_delim(FOR_field_eq, macro_and, __VA_ARGS__); \
+  }                                                                   \
+                                                                      \
+  size_t toHash() const {                                             \
+    return iteratorResult(HashFieldIterator{}, *this);                \
+  }                                                                   \
+                                                                      \
+  std::string toString() const {                                      \
+    return "{" + iteratorResult(StringFieldIterator{}, *this) + "}";  \
+  }                                                                   \
+                                                                      \
   // macro_iterate(FOR_field_getter, __VA_ARGS__)
 
 #define FOR_ctor_args(D_typeField) \
   macro_index_0 D_typeField macro_index_1 D_typeField = {}
 
 #define FOR_ctor_init(D_typeField) \
-  macro_index_1 D_typeField { macro_index_1 D_typeField }
+  macro_index_1 D_typeField {      \
+    macro_index_1 D_typeField      \
+  }
 
 #define FOR_struct_fields(D_typeField) \
   macro_index_0 D_typeField macro_index_1 D_typeField;
@@ -77,7 +83,10 @@ struct StringFieldIterator {
     result_ += asString(t);
     return *this;
   }
-  std::string result() && { return std::move(result_); }
+
+  std::string result() && {
+    return std::move(result_);
+  }
 
  private:
   std::string result_;
@@ -89,7 +98,10 @@ struct HashFieldIterator {
     result_ ^= std::hash<std::decay_t<T_t>>{}(t);
     return *this;
   }
-  size_t result() const { return result_; }
+
+  size_t result() const {
+    return result_;
+  }
 
  private:
   size_t result_ = 0x4badbed;

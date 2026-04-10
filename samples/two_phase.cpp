@@ -41,43 +41,58 @@ struct Model : IModel {
     return result;
   }
 
-  Boolean send(auto message) { return msgs++ == (msgs $cup message); }
+  Boolean send(auto message) {
+    return msgs++ == (msgs $cup message);
+  }
 
-  Boolean hasMessage(auto message) { return message $in msgs; }
+  Boolean hasMessage(auto message) {
+    return message $in msgs;
+  }
 
   Boolean tmRcvPrepared(auto rm) {
-    return tmState == initState && hasMessage(creator<Message>(preparedType, rm)) &&
-           tmPrepared++ == (tmPrepared $cup rm) && unchanged(rmState, tmState, msgs);
+    return tmState == initState &&
+           hasMessage(creator<Message>(preparedType, rm)) &&
+           tmPrepared++ == (tmPrepared $cup rm) &&
+           unchanged(rmState, tmState, msgs);
   }
 
   Boolean tmCommit() {
-    return tmState == initState && tmPrepared == resourceManagers &&
-           tmState++ == committedState && send(Message{commitType}) &&
+    return tmState == initState &&
+           tmPrepared == resourceManagers &&
+           tmState++ == committedState &&
+           send(Message{commitType}) &&
            unchanged(rmState, tmPrepared);
   }
 
   Boolean tmAbort() {
-    return tmState == initState && tmState++ == abortedState &&
-           send(Message{abortType}) && unchanged(rmState, tmPrepared);
+    return tmState == initState &&
+           tmState++ == abortedState &&
+           send(Message{abortType}) &&
+           unchanged(rmState, tmPrepared);
   }
 
   Boolean rmPrepare(auto rm) {
-    return at(rmState, rm) == workingState && mutAt(rmState, rm, preparedState) &&
-           send(creator<Message>(preparedType, rm)) && unchanged(tmState, tmPrepared);
+    return at(rmState, rm) == workingState &&
+           mutAt(rmState, rm, preparedState) &&
+           send(creator<Message>(preparedType, rm)) &&
+           unchanged(tmState, tmPrepared);
   }
 
   Boolean rmChooseToAbort(auto rm) {
-    return at(rmState, rm) == workingState && mutAt(rmState, rm, abortedState) &&
+    return at(rmState, rm) == workingState &&
+           mutAt(rmState, rm, abortedState) &&
            unchanged(tmState, tmPrepared, msgs);
   }
 
   Boolean rmRcvCommitMsg(auto rm) {
-    return hasMessage(Message{commitType}) && mutAt(rmState, rm, committedState) &&
+    return hasMessage(Message{commitType}) &&
+           mutAt(rmState, rm, committedState) &&
            unchanged(tmState, tmPrepared, msgs);
   }
 
   Boolean rmRcvAbortMsg(auto rm) {
-    return hasMessage(Message{abortType}) && mutAt(rmState, rm, abortedState) &&
+    return hasMessage(Message{abortType}) &&
+           mutAt(rmState, rm, abortedState) &&
            unchanged(tmState, tmPrepared, msgs);
   }
 
@@ -90,8 +105,10 @@ struct Model : IModel {
                                                             $in resourceManagers) ||
              ((get_mem(message, type) $in tmMessageTypes) && get_mem(message, rm) == -1);
     };
-    return rmStatesOk && (tmState $in tmStateValues) &&
-           (tmPrepared $in resourceManagers) && messagesOk;
+    return rmStatesOk &&
+           (tmState $in tmStateValues) &&
+           (tmPrepared $in resourceManagers) &&
+           messagesOk;
   }
 
   Boolean consistent() {
@@ -103,18 +120,25 @@ struct Model : IModel {
   }
 
   Boolean init() override {
-    return rmState == makeStateMap(workingState) && tmState == initState &&
-           tmPrepared == RmSet{} && msgs == Messages{};
+    return rmState == makeStateMap(workingState) &&
+           tmState == initState &&
+           tmPrepared == RmSet{} &&
+           msgs == Messages{};
   }
 
   Boolean next() override {
     return tmCommit() || tmAbort() || $E(rm, resourceManagers) {
-      return tmRcvPrepared(rm) || rmPrepare(rm) || rmChooseToAbort(rm) ||
-             rmRcvCommitMsg(rm) || rmRcvAbortMsg(rm);
+      return tmRcvPrepared(rm) ||
+             rmPrepare(rm) ||
+             rmChooseToAbort(rm) ||
+             rmRcvCommitMsg(rm) ||
+             rmRcvAbortMsg(rm);
     };
   }
 
-  std::optional<Boolean> ensure() override { return typeOk() && consistent(); }
+  std::optional<Boolean> ensure() override {
+    return typeOk() && consistent();
+  }
 
   Var<RmState> rmState{"rmState"};
   Var<int> tmState{"tmState"};

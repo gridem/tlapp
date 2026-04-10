@@ -17,8 +17,13 @@ Boolean nonBooleanCheckResult() {
 }  // namespace
 
 struct Model1 : IModel {
-  Boolean init() override { return x == 1 || x == 2; }
-  Boolean next() override { return x++ == 5 - x; }
+  Boolean init() override {
+    return x == 1 || x == 2;
+  }
+
+  Boolean next() override {
+    return x++ == 5 - x;
+  }
 
   Var<int> x{"x"};
 };
@@ -30,8 +35,13 @@ TEST_F(EngineFixture, Model1) {
 }
 
 struct Model2 : IModel {
-  Boolean init() override { return x == 1 || y == 2; }
-  Boolean next() override { return x++ == 5 - x; }
+  Boolean init() override {
+    return x == 1 || y == 2;
+  }
+
+  Boolean next() override {
+    return x++ == 5 - x;
+  }
 
   Var<int> x{"x"};
   Var<int> y{"y"};
@@ -43,8 +53,13 @@ TEST_F(EngineFixture, VarInitFailure) {
 }
 
 struct Model3 : IModel {
-  Boolean init() override { return x == 1 && x == 2; }
-  Boolean next() override { return x++ == 5 - x; }
+  Boolean init() override {
+    return x == 1 && x == 2;
+  }
+
+  Boolean next() override {
+    return x++ == 5 - x;
+  }
 
   Var<int> x{"x"};
 };
@@ -55,8 +70,13 @@ TEST_F(EngineFixture, InitFalse) {
 }
 
 struct Model4 : IModel {
-  Boolean init() override { return x == 1 && x++ == 2; }
-  Boolean next() override { return x++ == 5 - x; }
+  Boolean init() override {
+    return x == 1 && x++ == 2;
+  }
+
+  Boolean next() override {
+    return x++ == 5 - x;
+  }
 
   Var<int> x{"x"};
 };
@@ -67,8 +87,13 @@ TEST_F(EngineFixture, InitNext) {
 }
 
 struct Model5 : IModel {
-  Boolean init() override { return x == 1 && y == 1 || x == 2; }
-  Boolean next() override { return x++ == 5 - x; }
+  Boolean init() override {
+    return x == 1 && y == 1 || x == 2;
+  }
+
+  Boolean next() override {
+    return x++ == 5 - x;
+  }
 
   Var<int> x{"x"};
   Var<int> y{"y"};
@@ -80,8 +105,13 @@ TEST_F(EngineFixture, InitPartial) {
 }
 
 struct Model6 : IModel {
-  Boolean init() override { return x == 1 || x == 2 && y == 1; }
-  Boolean next() override { return x++ == 5 - x; }
+  Boolean init() override {
+    return x == 1 || x == 2 && y == 1;
+  }
+
+  Boolean next() override {
+    return x++ == 5 - x;
+  }
 
   Var<int> x{"x"};
   Var<int> y{"y"};
@@ -93,8 +123,13 @@ TEST_F(EngineFixture, InitPartial2) {
 }
 
 struct Model7 : IModel {
-  Boolean init() override { return x == 2 && y == 1; }
-  Boolean next() override { return x++ == 5 - x; }
+  Boolean init() override {
+    return x == 2 && y == 1;
+  }
+
+  Boolean next() override {
+    return x++ == 5 - x;
+  }
 
   Var<int> x{"x"};
   Var<int> y{"y"};
@@ -108,9 +143,14 @@ TEST_F(EngineFixture, NextPartial) {
 
 struct Model8 : IModel {
   Boolean init() override {
-    return $E(v, vals) { return x == v; };
+    return $E(v, vals) {
+      return x == v;
+    };
   }
-  Boolean next() override { throw 1; }
+
+  Boolean next() override {
+    throw 1;
+  }
 
   Var<int> x{"x"};
   std::set<int> vals = {1, 2};
@@ -123,9 +163,17 @@ TEST_F(EngineFixture, QuantifierExistsMany) {
 }
 
 struct Model9 : IModel {
-  Boolean init() override { return x == 1; }
-  Boolean next() override { return x++ == x + 1; }
-  std::optional<Boolean> skip() override { return nonBooleanCheckResult(); }
+  Boolean init() override {
+    return x == 1;
+  }
+
+  Boolean next() override {
+    return x++ == x + 1;
+  }
+
+  std::optional<Boolean> skip() override {
+    return nonBooleanCheckResult();
+  }
 
   Var<int> x{"x"};
 };
@@ -137,9 +185,17 @@ TEST_F(EngineFixture, SkipRejectsBranchProducingResult) {
 }
 
 struct Model10 : IModel {
-  Boolean init() override { return x == 1; }
-  Boolean next() override { return x++ == x + 1; }
-  std::optional<Boolean> ensure() override { return nonBooleanCheckResult(); }
+  Boolean init() override {
+    return x == 1;
+  }
+
+  Boolean next() override {
+    return x++ == x + 1;
+  }
+
+  std::optional<Boolean> ensure() override {
+    return nonBooleanCheckResult();
+  }
 
   Var<int> x{"x"};
 };
@@ -151,9 +207,17 @@ TEST_F(EngineFixture, EnsureRejectsBranchProducingResult) {
 }
 
 struct Model11 : IModel {
-  Boolean init() override { return x == 1; }
-  Boolean next() override { return x++ == x + 1; }
-  std::optional<Boolean> stop() override { return nonBooleanCheckResult(); }
+  Boolean init() override {
+    return x == 1;
+  }
+
+  Boolean next() override {
+    return x++ == x + 1;
+  }
+
+  std::optional<Boolean> stop() override {
+    return nonBooleanCheckResult();
+  }
 
   Var<int> x{"x"};
 };

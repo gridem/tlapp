@@ -12,11 +12,13 @@ DerivePointerAlignment: false
 NamespaceIndentation: None
 AlignAfterOpenBracket: DontAlign
 SortIncludes: false
+SeparateDefinitionBlocks: Always
 
-AllowShortFunctionsOnASingleLine: All
+AllowShortFunctionsOnASingleLine: Empty
 AllowShortBlocksOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLambdasOnASingleLine: All
+BreakBinaryOperations: RespectPrecedence
 
 SpaceBeforeParens: ControlStatementsExceptControlMacros
 

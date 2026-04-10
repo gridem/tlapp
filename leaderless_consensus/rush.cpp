@@ -70,9 +70,13 @@ RushStateMessages broadcastState(const RushStateMessages& messages,
   return result;
 }
 
-int majority(size_t nodeCount) { return static_cast<int>(nodeCount / 2 + 1); }
+int majority(size_t nodeCount) {
+  return static_cast<int>(nodeCount / 2 + 1);
+}
 
-int maxGeneration(size_t /*itemCount*/) { return 4; }
+int maxGeneration(size_t /*itemCount*/) {
+  return 4;
+}
 
 int nextGeneration(int generation, size_t itemCount) {
   return std::min(generation + 1, maxGeneration(itemCount));
@@ -220,7 +224,8 @@ MergeResult mergeState(const RushNodeState& state,
 }
 
 bool canApply(const RushState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) && !sys.applied.contains(id) &&
+  return sys.alive.contains(node) &&
+         !sys.applied.contains(id) &&
          sys.local.at(node) == RushNodeState{makeEmptyCore(sys.local.size()), {}};
 }
 
@@ -271,14 +276,17 @@ bool coreWellFormed(const RushCoreState& core,
   }
 
   for (auto&& entry : core.nodesMessages) {
-    if (entry.generation < 0 || entry.generation > maxGeneration(nodeCount) ||
-        !itemsAreSubset(entry.messages, applied) || !allUnique(entry.messages)) {
+    if (entry.generation < 0 ||
+        entry.generation > maxGeneration(nodeCount) ||
+        !itemsAreSubset(entry.messages, applied) ||
+        !allUnique(entry.messages)) {
       return false;
     }
   }
 
   for (auto&& promise : core.promises) {
-    if (!itemsAreSubset(promise.prefix, applied) || !allUnique(promise.prefix) ||
+    if (!itemsAreSubset(promise.prefix, applied) ||
+        !allUnique(promise.prefix) ||
         !isSubset(promise.support, allNodes) ||
         !isSubset(promise.votes, promise.support)) {
       return false;
@@ -300,7 +308,8 @@ bool invariant(const RushState& sys) {
 
   for (auto&& [node, state] : sys.local) {
     if (!coreWellFormed(state.core, sys.applied, allNodes, sys.local.size()) ||
-        !itemsAreSubset(state.committed, sys.applied) || !allUnique(state.committed)) {
+        !itemsAreSubset(state.committed, sys.applied) ||
+        !allUnique(state.committed)) {
       return false;
     }
   }
@@ -332,7 +341,9 @@ DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::rush::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::rush::invariant)
 
 struct Model : IModel {
-  Boolean init() override { return sys == makeState(nodes_); }
+  Boolean init() override {
+    return sys == makeState(nodes_);
+  }
 
   Boolean next() override {
     return $E(node, nodes_) {
@@ -348,7 +359,9 @@ struct Model : IModel {
     };
   }
 
-  std::optional<Boolean> ensure() override { return invariantExpr(sys); }
+  std::optional<Boolean> ensure() override {
+    return invariantExpr(sys);
+  }
 
   Var<RushState> sys{"sys"};
 

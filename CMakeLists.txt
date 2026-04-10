@@ -75,7 +75,16 @@ list(REMOVE_DUPLICATES TLAPP2_FORMAT_FILES)
 
 find_program(TLAPP2_CLANG_FORMAT_EXE
     NAMES clang-format
-    HINTS /Library/Developer/CommandLineTools/usr/bin)
+    PATHS
+        /opt/homebrew/bin
+        /usr/local/bin
+        /Library/Developer/CommandLineTools/usr/bin
+    NO_DEFAULT_PATH)
+
+if(NOT TLAPP2_CLANG_FORMAT_EXE)
+    find_program(TLAPP2_CLANG_FORMAT_EXE
+        NAMES clang-format)
+endif()
 
 if(TLAPP2_CLANG_FORMAT_EXE)
     add_custom_target(format

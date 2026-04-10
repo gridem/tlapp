@@ -17,15 +17,25 @@ Value& Value::operator=(const Value& other) {
 
 Value& Value::operator=(Value&& other) = default;
 
-bool Value::operator==(const Value& other) const { return t_->equals(*other.t_); }
+bool Value::operator==(const Value& other) const {
+  return t_->equals(*other.t_);
+}
 
-bool Value::operator!=(const Value& other) const { return !operator==(other); }
+bool Value::operator!=(const Value& other) const {
+  return !operator==(other);
+}
 
-IValue* Value::operator->() { return t_.get(); }
+IValue* Value::operator->() {
+  return t_.get();
+}
 
-const IValue* Value::operator->() const { return t_.get(); }
+const IValue* Value::operator->() const {
+  return t_.get();
+}
 
-std::string Value::toString() const { return asString(t_->name(), "=", *t_); }
+std::string Value::toString() const {
+  return asString(t_->name(), "=", *t_);
+}
 
 void State::clearValues() {
   for (auto&& s : *this) {

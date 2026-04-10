@@ -39,7 +39,9 @@ tname(T) struct TValue : IValue {
     return val_ == static_cast<const TValue&>(other).val_;
   }
 
-  size_t hash() const override { return calcHash(*val_); }
+  size_t hash() const override {
+    return calcHash(*val_);
+  }
 
   std::unique_ptr<IValue> clone() const override {
     return std::make_unique<TValue>(val_, name_);
@@ -49,15 +51,33 @@ tname(T) struct TValue : IValue {
     val_ = static_cast<const TValue&>(other).get();
   }
 
-  const char* name() const override { return name_; }
-  std::string toString() const override { return asString(val_); }
+  const char* name() const override {
+    return name_;
+  }
 
-  void clear() override { val_.reset(); }
-  bool empty() const override { return !val_.has_value(); }
+  std::string toString() const override {
+    return asString(val_);
+  }
 
-  std::optional<T>& getRef() { return val_; }
-  const std::optional<T>& get() const { return val_; }
-  void* newT() const override { return new T{*val_}; }
+  void clear() override {
+    val_.reset();
+  }
+
+  bool empty() const override {
+    return !val_.has_value();
+  }
+
+  std::optional<T>& getRef() {
+    return val_;
+  }
+
+  const std::optional<T>& get() const {
+    return val_;
+  }
+
+  void* newT() const override {
+    return new T{*val_};
+  }
 
  private:
   std::optional<T> val_;
@@ -90,7 +110,9 @@ struct Value {
 
   std::string toString() const;
 
-  tname(T) TValue<T>& as() { return static_cast<TValue<T>&>(*t_); }
+  tname(T) TValue<T>& as() {
+    return static_cast<TValue<T>&>(*t_);
+  }
 
  private:
   tname(T) explicit Value(std::unique_ptr<TValue<T>>&& t) : t_{std::move(t)} {}
@@ -121,7 +143,9 @@ namespace std {
 
 template <>
 struct hash<Value> {
-  size_t operator()(const Value& t) const noexcept { return t->hash(); }
+  size_t operator()(const Value& t) const noexcept {
+    return t->hash();
+  }
 };
 
 template <>

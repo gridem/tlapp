@@ -32,16 +32,24 @@ struct Model : IModel {
   }
 
   Boolean typeOk() {
-    return $A(node, nodes) { return at(c, node) >= 0 && at(c, node) < modulo; };
+    return $A(node, nodes) {
+      return at(c, node) >= 0 && at(c, node) < modulo;
+    };
   }
 
-  Boolean init() override { return c == CounterMap{{0, 0}, {1, 2}, {2, 1}}; }
+  Boolean init() override {
+    return c == CounterMap{{0, 0}, {1, 2}, {2, 1}};
+  }
 
   Boolean next() override {
-    return createToken() || $E(node, nonZeroNodes) { return passToken(node); };
+    return createToken() || $E(node, nonZeroNodes) {
+      return passToken(node);
+    };
   }
 
-  std::optional<Boolean> ensure() override { return typeOk(); }
+  std::optional<Boolean> ensure() override {
+    return typeOk();
+  }
 
   std::optional<LivenessBoolean> liveness() override {
     auto c0 = at(c, 0);

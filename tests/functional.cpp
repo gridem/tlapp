@@ -90,7 +90,9 @@ TEST(Functional, FilterSet) {
 
 TEST(Functional, FilterIf) {
   Var<std::set<int>> v("v");
-  auto e1 = $if(x, v) { return x >= 2; };
+  auto e1 = $if(x, v) {
+    return x >= 2;
+  };
 
   Context ctx;
   v.getRef(ctx) = std::set<int>{1, 2, 3};

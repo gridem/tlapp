@@ -28,12 +28,16 @@ fun(extract, ctx, x) {
 }
 
 // Converts to appropriate type at the end of expression.
-fun(finalize, f) { return fwd(f) & expression_tag; }
+fun(finalize, f) {
+  return fwd(f) & expression_tag;
+}
 
 }  // namespace detail
 
 struct PredicateMode {};
+
 struct InitMode {};
+
 struct NextMode {};
 
 namespace detail {
@@ -43,7 +47,9 @@ struct CheckModeGuard {
     ctx_.setCheck(true);
   }
 
-  ~CheckModeGuard() { ctx_.setCheck(wasCheck_); }
+  ~CheckModeGuard() {
+    ctx_.setCheck(wasCheck_);
+  }
 
  private:
   Context& ctx_;

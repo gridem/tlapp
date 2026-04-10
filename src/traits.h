@@ -14,7 +14,9 @@ tname(L, R) let is_compatible = std::is_same_v<L, R> || std::is_convertible_v<L,
 namespace detail {
 
 tname(...) using to_void = void;
+
 tname(T, = void) struct is_iterable_impl : std::false_type {};
+
 tname(T) struct is_iterable_impl<T,
     to_void<decltype(std::declval<T>().begin()),
         decltype(std::declval<T>().end()),

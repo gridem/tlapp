@@ -35,7 +35,9 @@ TEST(AsString, Tuple) {
   EXPECT_EQ("{1, 2}", asString(std::make_tuple("1", 2)));
 }
 
-TEST(AsString, Pair) { EXPECT_EQ("1: 2", asString(std::make_pair(1, 2))); }
+TEST(AsString, Pair) {
+  EXPECT_EQ("1: 2", asString(std::make_pair(1, 2)));
+}
 
 TEST(AsString, Containers) {
   EXPECT_EQ("[1, 2, 3]", asString(std::vector<int>{1, 2, 3}));
@@ -54,7 +56,9 @@ TEST(AsString, SingleContainers) {
   EXPECT_EQ("<>", asString(std::shared_ptr<int>{}));
 }
 
-TEST(AsString, Concat) { EXPECT_EQ("hello 1", asString("hello ", 1)); }
+TEST(AsString, Concat) {
+  EXPECT_EQ("hello 1", asString("hello ", 1));
+}
 
 }  // namespace as_string
 }  // namespace test

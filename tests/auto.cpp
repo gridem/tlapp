@@ -17,18 +17,22 @@ template <typename T>
 T&& forward1(T&& t) {
   return std::forward<T>(t);
 }
+
 template <typename T>
 decltype(auto) forward2(T&& t) {
   return std::forward<T>(t);
 }
+
 template <typename T>
 auto forward3(T&& t) {
   return std::forward<T>(t);
 }
+
 template <typename T>
 decltype(auto) noforward1(T&& t) {
   return std::decay_t<T>(t);
 }
+
 template <typename T>
 auto noforward2(T&& t) {
   return t;

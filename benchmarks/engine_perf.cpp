@@ -9,7 +9,9 @@ namespace engine_perf {
 namespace {
 
 struct Model : IModel {
-  Boolean init() override { return (x == 1 || x == 10) && (y == 1 || y == 10); }
+  Boolean init() override {
+    return (x == 1 || x == 10) && (y == 1 || y == 10);
+  }
 
   Boolean next() override {
     return (x++ == 1000000 + x / 2 - y * 2 || x++ == x) &&

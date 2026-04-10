@@ -6,11 +6,25 @@ namespace test {
 
 #define fwd true_forward
 
-int deduce(int&) { return 1; }
-int deduce(int&&) { return 2; }
-int deduce(const int&) { return 3; }
-int deduce(const int&&) { return 4; }
-int deduce(...) { return 5; }
+int deduce(int&) {
+  return 1;
+}
+
+int deduce(int&&) {
+  return 2;
+}
+
+int deduce(const int&) {
+  return 3;
+}
+
+int deduce(const int&&) {
+  return 4;
+}
+
+int deduce(...) {
+  return 5;
+}
 
 template <typename T>
 int funDeduce(T&& t) {

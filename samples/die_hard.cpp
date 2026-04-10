@@ -13,7 +13,9 @@ using test::EngineFixture;
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/DieHard/DieHard.tla
 struct Model : IModel {
-  Boolean init() override { return big == 0 && small == 0; }
+  Boolean init() override {
+    return big == 0 && small == 0;
+  }
 
   Boolean next() override {
     auto fillSmallJug = small++ == 3 && big++ == big;
@@ -24,11 +26,17 @@ struct Model : IModel {
     auto smallToBig = big++ == bigNext && small++ == small - (bigNext - big);
     auto smallNext = min(big + small, 3);
     auto bigToSmall = small++ == smallNext && big++ == big - (smallNext - small);
-    return fillSmallJug || fillBigJug || emptySmallJug || emptyBigJug || smallToBig ||
+    return fillSmallJug ||
+           fillBigJug ||
+           emptySmallJug ||
+           emptyBigJug ||
+           smallToBig ||
            bigToSmall;
   }
 
-  std::optional<Boolean> stop() override { return big++ == 4; }
+  std::optional<Boolean> stop() override {
+    return big++ == 4;
+  }
 
   Var<int> big{"big"};
   Var<int> small{"small"};

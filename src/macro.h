@@ -85,7 +85,9 @@
 // Sample: lam_in(a, b, R) =>
 //      [](auto&& a, auto&& b) { return R; }
 #define IMPL_lam_in_1(D_fun, D_ret, ...) \
-  D_fun(__VA_ARGS__) { return D_ret; }
+  D_fun(__VA_ARGS__) {                   \
+    return D_ret;                        \
+  }
 #define IMPL_lam_in_0(...) IMPL_lam_in_1(__VA_ARGS__)
 #define lam_in(...) IMPL_lam_in_0(lam, macro_rotate(__VA_ARGS__))
 

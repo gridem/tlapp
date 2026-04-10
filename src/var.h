@@ -13,7 +13,9 @@ struct Var : assignment_tag_type, expression_tag_type, var_tag_type {
   struct Expression : assignment_tag_type, expression_tag_type {
     explicit Expression(Descriptor* descriptor) : descriptor_{descriptor} {}
 
-    auto& getRef(Context& ctx) const { return ctx.getRef<T, I>(*descriptor_); }
+    auto& getRef(Context& ctx) const {
+      return ctx.getRef<T, I>(*descriptor_);
+    }
 
     tname(U) bool assignTo(Context& ctx, U&& u) const {
       auto&& val = getRef(ctx);
@@ -32,7 +34,9 @@ struct Var : assignment_tag_type, expression_tag_type, var_tag_type {
       return *val;
     }
 
-    static constexpr LogicState getState() { return I; }
+    static constexpr LogicState getState() {
+      return I;
+    }
 
    private:
     Descriptor* descriptor_;
@@ -40,7 +44,9 @@ struct Var : assignment_tag_type, expression_tag_type, var_tag_type {
 
   explicit Var(const char* name) : descriptor_{name} {}
 
-  const T& operator()(Context& ctx) { return toExpression()(ctx); }
+  const T& operator()(Context& ctx) {
+    return toExpression()(ctx);
+  }
 
   std::optional<T>& getRef(Context& ctx) {
     return ctx.getRef<T, LogicState::Init>(descriptor_);
@@ -50,8 +56,13 @@ struct Var : assignment_tag_type, expression_tag_type, var_tag_type {
     return ctx.getRef<T, LogicState::Next>(descriptor_);
   }
 
-  let toExpression() { return toTemporalExpression<LogicState::Init>(); }
-  let operator++(int) { return toTemporalExpression<LogicState::Next>(); }
+  let toExpression() {
+    return toTemporalExpression<LogicState::Init>();
+  }
+
+  let operator++(int) {
+    return toTemporalExpression<LogicState::Next>();
+  }
 
  private:
   template <LogicState I>

@@ -124,8 +124,10 @@ CalmState processVote(CalmState sys,
 }
 
 bool canApply(const CalmState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) && !sys.applied.contains(id) &&
-         sys.local.at(node).voted.empty() && sys.local.at(node).status != kCompleted;
+  return sys.alive.contains(node) &&
+         !sys.applied.contains(id) &&
+         sys.local.at(node).voted.empty() &&
+         sys.local.at(node).status != kCompleted;
 }
 
 CalmState apply(CalmState sys, NodeId node, MessageId id) {
@@ -144,7 +146,8 @@ CalmState deliverVote(CalmState sys, const CalmVoteMsg& msg) {
 }
 
 bool canDeliverCommit(const CalmState& sys, const CalmCommitMsg& msg) {
-  return sys.alive.contains(msg.to) && sys.local.at(msg.to).status != kCompleted &&
+  return sys.alive.contains(msg.to) &&
+         sys.local.at(msg.to).status != kCompleted &&
          sys.local.at(msg.to).carries == msg.commit;
 }
 
@@ -229,7 +232,8 @@ bool quiescent(const CalmState& sys) {
   }
 
   for (auto&& node : sys.alive) {
-    if (sys.local.at(node).voted.empty() && sys.local.at(node).status != kCompleted &&
+    if (sys.local.at(node).voted.empty() &&
+        sys.local.at(node).status != kCompleted &&
         sys.applied.size() < 3) {
       return false;
     }
@@ -250,7 +254,9 @@ DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::calm::invariant)
 DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::calm::quiescent)
 
 struct Model : IModel {
-  Boolean init() override { return sys == makeState(nodes_); }
+  Boolean init() override {
+    return sys == makeState(nodes_);
+  }
 
   Boolean next() override {
     return $E(node, nodes_) {
@@ -269,7 +275,10 @@ struct Model : IModel {
     };
   }
 
-  std::optional<Boolean> ensure() override { return invariantExpr(sys); }
+  std::optional<Boolean> ensure() override {
+    return invariantExpr(sys);
+  }
+
   std::optional<LivenessBoolean> liveness() override {
     return wf(next()) && eventually(quiescentExpr(sys));
   }

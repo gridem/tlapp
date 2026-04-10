@@ -49,10 +49,13 @@ NotSolved == big # 4
 
 ### TLA++
 
-Corresponding code in C++:
+Corresponding code in C++ (excerpt from `samples/die_hard.cpp`):
 
 ```cpp
-  Boolean init() override { return big == 0 && small == 0; }
+struct Model : IModel {
+  Boolean init() override {
+    return big == 0 && small == 0;
+  }
 
   Boolean next() override {
     auto fillSmallJug = small++ == 3 && big++ == big;
@@ -62,16 +65,22 @@ Corresponding code in C++:
     auto bigNext = min(big + small, 5);
     auto smallToBig = big++ == bigNext && small++ == small - (bigNext - big);
     auto smallNext = min(big + small, 3);
-    auto bigToSmall =
-        small++ == smallNext && big++ == big - (smallNext - small);
-    return fillSmallJug || fillBigJug || emptySmallJug || emptyBigJug ||
-           smallToBig || bigToSmall;
+    auto bigToSmall = small++ == smallNext && big++ == big - (smallNext - small);
+    return fillSmallJug ||
+           fillBigJug ||
+           emptySmallJug ||
+           emptyBigJug ||
+           smallToBig ||
+           bigToSmall;
   }
 
-  std::optional<Boolean> stop() override { return big++ == 4; }
+  std::optional<Boolean> stop() override {
+    return big++ == 4;
+  }
 
-  // Note: I think I could be better at formatting,
-  // but I used autoformatting tool, thus it looks a bit messy.
+  Var<int> big{"big"};
+  Var<int> small{"small"};
+};
 ```
 
 You see that there is a clear 1:1 mapping between TLA+ syntax and TLA++ syntax which is C++ with **tagged expressions** technique.

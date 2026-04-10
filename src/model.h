@@ -10,14 +10,26 @@ struct IModel : IObject {
   virtual Boolean init() = 0;
   // Next state.
   virtual Boolean next() = 0;
+
   // Skips that state.
-  virtual std::optional<Boolean> skip() { return {}; }
+  virtual std::optional<Boolean> skip() {
+    return {};
+  }
+
   // Ensures state invariant.
-  virtual std::optional<Boolean> ensure() { return {}; }
+  virtual std::optional<Boolean> ensure() {
+    return {};
+  }
+
   // Stops on that state.
-  virtual std::optional<Boolean> stop() { return {}; }
+  virtual std::optional<Boolean> stop() {
+    return {};
+  }
+
   // Liveness obligations.
-  virtual std::optional<LivenessBoolean> liveness() { return {}; }
+  virtual std::optional<LivenessBoolean> liveness() {
+    return {};
+  }
 };
 
 using Model = std::unique_ptr<IModel>;
