@@ -68,7 +68,7 @@ That weaker invariant matches the algorithm's progressive prefix-commit design.
 
 ## Liveness Checks
 
-`Calm` and `Most` also include a liveness check in both the executable model and
+`Calm`, `Most`, and `Rush` also include a liveness check in both the executable model and
 the TLA+ spec:
 
 - weak fairness on the combined `Next` action
@@ -83,7 +83,7 @@ Executable TLA++ sample on the current branch tip:
 - `Calm`: holds under the current finite model, including the liveness check
 - `Flat`: long-running in the current finite model; no conclusion recorded in this pass
 - `Most`: holds under the current finite model, including the liveness check
-- `Rush`: recent executable exploration completes on the current reduced model
+- `Rush`: holds under the current reduced executable model, including the liveness check
 
 Current failures in the executable model:
 
@@ -97,7 +97,7 @@ TLC status:
 
 - TLC verification is a work in progress.
 - `Calm` and `Most` were rerun with the current liveness property and passed.
-- `Rush` was rerun in the executable model after the state-space reductions and now completes in about one minute on a recent run.
+- `Rush` now also carries the same eventual-quiescence liveness property in the executable model and passed a recent release run in about 74 seconds.
 
 ## Commands
 

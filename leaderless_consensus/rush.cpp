@@ -362,11 +362,31 @@ bool invariant(const RushState& sys) {
   return true;
 }
 
+bool canApplyAny(const RushState& sys) {
+  if (sys.applied.size() >= sys.local.size()) {
+    return false;
+  }
+
+  auto initial = RushNodeState{makeEmptyCore(sys.local.size()), {}};
+  for (auto&& node : sys.alive) {
+    if (sys.local.at(node) == initial) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool quiescent(const RushState& sys) {
+  return sys.stateMsgs.empty() && !canApplyAny(sys);
+}
+
 DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::rush::canApply)
 DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::rush::apply)
 DEFINE_ALGORITHM(canDeliverStateExpr, ::leaderless_consensus::rush::canDeliverState)
 DEFINE_ALGORITHM(deliverStateExpr, ::leaderless_consensus::rush::deliverState)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::rush::invariant)
+DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::rush::quiescent)
 
 struct Model : IModel {
   Boolean init() override {
@@ -388,15 +408,19 @@ struct Model : IModel {
     return invariantExpr(sys);
   }
 
+  std::optional<LivenessBoolean> liveness() override {
+    return wf(next()) && eventually(quiescentExpr(sys));
+  }
+
   Var<RushState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
   CarrySet messageIds_ = {10, 11, 12};
 };
 
-TEST_F(EngineFixture, RushExploration) {
+TEST_F(EngineFixture, RushHoldsInvariantAndConverges) {
   e.createModel<Model>();
-  e.run();
+  EXPECT_NO_THROW(e.run());
 }
 
 }  // namespace leaderless_consensus::rush

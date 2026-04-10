@@ -67,3 +67,7 @@ state churn.
 pair of committed sequences is prefix-comparable. That matches the intended
 progressive-commit structure: later commits may extend earlier ones, but they
 must not branch.
+
+The current executable model also carries a liveness check: under weak fairness
+of `Next`, it must eventually reach a quiescent state with no pending
+state-message traffic and no further `Apply` still enabled.
