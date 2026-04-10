@@ -23,6 +23,15 @@ Messages are:
 
 - `State(from, to, core)`
 
+## Key Terms
+
+- `prefix`: a candidate committed sequence such as `[10]` or `[10, 11]`
+- `support(prefix)`: who currently observes the prefix; the set of nodes whose
+  current message sequence starts with `prefix`
+- `promise.votes(prefix)`: who has explicitly contributed commit evidence for
+  that prefix
+- `committed`: the longest prefix this node has already finalized locally
+
 ## Step Rules
 
 1. `Propose(node, id)` is allowed only while that node is still in the exact
