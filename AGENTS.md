@@ -9,6 +9,8 @@
 - `tests/`: GoogleTest-based unit tests (each `.cpp` is built into `tlapp2_tests`).
 - `samples/`: small example programs; each `*.cpp` builds into a standalone executable.
 - `benchmarks/`: GoogleTest-based benchmark executables plus shared benchmark helpers.
+- `docs/`: long-form project notes and reference material.
+- `docs/plans/`: design and implementation plans.
 - `scripts/`: perf helpers that assume a local `.build/RelWithDebInfo` layout.
 - `build/`: build artifacts are present in-repo; avoid editing these by hand.
 
@@ -27,8 +29,8 @@
     - `./build/rel/benchmarks/boolean_perf --gtest_brief=1`
     - `./build/rel/benchmarks/quantifier_perf --gtest_brief=1`
   - Use `RelWithDebInfo` for any performance measurement or benchmark comparison. Do not use Debug timings as benchmark results.
-- If an activated Conda environment causes CMake to pick the wrong GTest package, pass `GTest_DIR` explicitly in the configure command instead of changing `CMakeLists.txt`. On this machine, the Homebrew config path is:
-  - `-DGTest_DIR=/opt/homebrew/opt/googletest/lib/cmake/GTest`
+- If an activated Conda environment causes CMake to pick the wrong GTest package, pass `GTest_DIR` explicitly in the configure command instead of changing `CMakeLists.txt`, for example:
+  - `-DGTest_DIR=<path-to-GTest-config>`
 - Sample binaries are emitted under the chosen build directory's `samples/` subdirectory.
 - Benchmark binaries are emitted under the chosen build directory's `benchmarks/` subdirectory.
 
@@ -50,3 +52,4 @@
 - `scripts/perf*.sh` assume a specific build output path (`.build/RelWithDebInfo`). Adjust or mirror that layout if you need to use them.
 - When reporting benchmark numbers, build and run from a `RelWithDebInfo` tree and keep the build type consistent across before/after comparisons.
 - Keep environment-specific package paths out of repo CMake files; prefer passing them explicitly at configure time.
+- Keep Markdown links portable. Prefer repo-relative links in `docs/` and avoid absolute filesystem paths in checked-in documentation.
