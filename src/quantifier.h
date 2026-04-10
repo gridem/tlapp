@@ -82,7 +82,7 @@ fun(forallBooleanOp, ctx, setExpr, elem, predicateExpr) {
 fun(forallOp, ctx, setExpr, elem, predicateExpr) {
   if constexpr (is_eq<ExpressionType<T_predicateExpr>, bool>) {
     return quantifierBoolOp(true /* onEmpty */, false /* termination */,
-                            fwd(ctx, setExpr, elem, predicateExpr));
+        fwd(ctx, setExpr, elem, predicateExpr));
   } else {
     return forallBooleanOp(fwd(ctx, setExpr, elem, predicateExpr));
   }
@@ -91,7 +91,7 @@ fun(forallOp, ctx, setExpr, elem, predicateExpr) {
 fun(existsOp, ctx, setExpr, elem, predicateExpr) {
   if constexpr (is_eq<ExpressionType<T_predicateExpr>, bool>) {
     return quantifierBoolOp(false /* onEmpty */, true /* termination */,
-                            fwd(ctx, setExpr, elem, predicateExpr));
+        fwd(ctx, setExpr, elem, predicateExpr));
   } else {
     return existsBooleanOp(fwd(ctx, setExpr, elem, predicateExpr));
   }
@@ -108,12 +108,10 @@ fun(quantifier, quantifierOp, set, predicate) {
   3. Invoke predicate with expression containing shared_ptr instance.
   4. Return expression
   */
-  auto elem =
-      std::make_shared<const typename OperandType<T_set>::value_type*>(nullptr);
+  auto elem = std::make_shared<const typename OperandType<T_set>::value_type*>(nullptr);
   auto predicateExpr =
       predicate(finalize([ptr = elem.get()] lam_arg(ctx) { return **ptr; }));
-  return evaluate_ctx(fwd(quantifierOp, set), std::move(elem),
-                      std::move(predicateExpr));
+  return evaluate_ctx(fwd(quantifierOp, set), std::move(elem), std::move(predicateExpr));
 }
 
 }  // namespace detail

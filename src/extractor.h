@@ -27,9 +27,7 @@ fun(at, var, index, newValue) {
 // Mutates the variable to new value using `get`.
 fun(mut, var, f) { return var++ == evaluate(fwd(f), var); }
 
-fun(mutAt, var, index, newValue) {
-  return var++ == at(var, fwd(index, newValue));
-}
+fun(mutAt, var, index, newValue) { return var++ == at(var, fwd(index, newValue)); }
 
 // Creates an instance of type T with parameters.
 // Example: creator<T>(a, b)

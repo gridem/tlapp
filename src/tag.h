@@ -10,9 +10,7 @@
                                                           \
   tname(T) let is_##D_tag = has_tag<T, D_tag##_tag_type>; \
                                                           \
-  tname(T) let operator&(T&& t, D_tag##_tag_type) {       \
-    return mix(fwd(t), D_tag##_tag);                      \
-  }
+  tname(T) let operator&(T&& t, D_tag##_tag_type) { return mix(fwd(t), D_tag##_tag); }
 
 tname(T, T_tag) let has_tag = std::is_convertible_v<std::decay_t<T>, T_tag>;
 

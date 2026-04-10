@@ -27,8 +27,7 @@ struct Var : assignment_tag_type, expression_tag_type, var_tag_type {
     const T& operator()(Context& ctx) const {
       auto&& val = getRef(ctx);
       if (!val) {
-        throw VarInitError(
-            asString("Variable ", *descriptor_, " must be initialized"));
+        throw VarInitError(asString("Variable ", *descriptor_, " must be initialized"));
       }
       return *val;
     }

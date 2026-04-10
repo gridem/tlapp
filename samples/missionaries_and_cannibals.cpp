@@ -45,9 +45,8 @@ PeopleChoices passengerChoices(const People& people) {
 // https://github.com/tlaplus/Examples/blob/master/specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla
 struct Model : IModel {
   Boolean isSafe(auto people) {
-    return people $in cannibals ||
-           get_mem((people $cap cannibals), size()) <=
-               get_mem((people $cap missionaries), size());
+    return people $in cannibals || get_mem((people $cap cannibals), size()) <=
+                                       get_mem((people $cap missionaries), size());
   }
 
   Boolean move(auto passengers) {
@@ -60,20 +59,19 @@ struct Model : IModel {
     auto passengerCount = get_mem(passengers, size());
 
     return passengerCount >= 1 && passengerCount <= 2 &&
-           ((bankOfBoat == east && isSafe(eastRemaining) &&
-             isSafe(westArrived) && bankOfBoat++ == west &&
-             whoIsOnBank++ == creator<Banks>(eastRemaining, westArrived)) ||
-            (bankOfBoat == west && isSafe(westRemaining) &&
-             isSafe(eastArrived) && bankOfBoat++ == east &&
-             whoIsOnBank++ == creator<Banks>(eastArrived, westRemaining)));
+           ((bankOfBoat == east && isSafe(eastRemaining) && isSafe(westArrived) &&
+                bankOfBoat++ == west &&
+                whoIsOnBank++ == creator<Banks>(eastRemaining, westArrived)) ||
+               (bankOfBoat == west && isSafe(westRemaining) && isSafe(eastArrived) &&
+                   bankOfBoat++ == east &&
+                   whoIsOnBank++ == creator<Banks>(eastArrived, westRemaining)));
   }
 
   Boolean typeOk() {
     auto eastBank = get_mem(whoIsOnBank, east);
     auto westBank = get_mem(whoIsOnBank, west);
     return (bankOfBoat $in riverBanks) && isSafe(eastBank) && isSafe(westBank) &&
-           (eastBank $cap westBank) == People{} &&
-           (eastBank $cup westBank) == allPeople;
+           (eastBank $cap westBank) == People{} && (eastBank $cup westBank) == allPeople;
   }
 
   Boolean init() override {
@@ -81,16 +79,11 @@ struct Model : IModel {
   }
 
   Boolean next() override {
-    return (bankOfBoat == east &&
-            $E(passengers, candidatePassengers) {
-              return passengers $in get_mem(whoIsOnBank, east) &&
-                     move(passengers);
-            }) ||
-           (bankOfBoat == west &&
-            $E(passengers, candidatePassengers) {
-              return passengers $in get_mem(whoIsOnBank, west) &&
-                     move(passengers);
-            });
+    return (bankOfBoat == east && $E(passengers, candidatePassengers) {
+      return passengers $in get_mem(whoIsOnBank, east) && move(passengers);
+    }) || (bankOfBoat == west && $E(passengers, candidatePassengers) {
+      return passengers $in get_mem(whoIsOnBank, west) && move(passengers);
+    });
   }
 
   std::optional<Boolean> ensure() override { return typeOk(); }

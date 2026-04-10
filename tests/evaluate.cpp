@@ -118,9 +118,7 @@ TEST(Evaluate, BindPredicateModePreservesPredicateSemantics) {
 }
 
 TEST(Evaluate, BindPredicateModeDoesNotForceCheckForBoolPredicate) {
-  auto expr = Expression<bool>{[](Context& ctx) {
-    return ctx.isCheck() ? false : true;
-  }};
+  auto expr = Expression<bool>{[](Context& ctx) { return ctx.isCheck() ? false : true; }};
   auto bound = bind(expr, PredicateMode{});
 
   Context ctx;
@@ -129,9 +127,8 @@ TEST(Evaluate, BindPredicateModeDoesNotForceCheckForBoolPredicate) {
 }
 
 TEST(Evaluate, BindPredicateModeRejectsBranchProducingResult) {
-  auto expr = Boolean{[](Context&) {
-    return LogicResult::fromRaw([](Context&) { return true; });
-  }};
+  auto expr = Boolean{
+      [](Context&) { return LogicResult::fromRaw([](Context&) { return true; }); }};
   auto bound = bind(expr, PredicateMode{});
 
   Context ctx;
@@ -159,8 +156,7 @@ TEST(Evaluate, BindInitModePreservesAssignmentSemantics) {
   auto expr = i == 2;
   auto bound = bind(expr, InitMode{});
   static_assert(is_eq<BoundInitAction<decltype(expr)>, decltype(bound)>);
-  static_assert(
-      is_eq<BooleanResult, decltype(bound(std::declval<Context&>()))>);
+  static_assert(is_eq<BooleanResult, decltype(bound(std::declval<Context&>()))>);
 
   Context ctx;
   auto res = bound(ctx);
@@ -177,8 +173,7 @@ TEST(Evaluate, BindNextModePreservesAssignmentSemantics) {
   auto expr = i++ == 3;
   auto bound = bind(expr, NextMode{});
   static_assert(is_eq<BoundNextAction<decltype(expr)>, decltype(bound)>);
-  static_assert(
-      is_eq<BooleanResult, decltype(bound(std::declval<Context&>()))>);
+  static_assert(is_eq<BooleanResult, decltype(bound(std::declval<Context&>()))>);
 
   Context ctx;
   i.getRef(ctx) = 1;

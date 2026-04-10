@@ -41,17 +41,13 @@ struct Model : IModel {
     return result;
   }
 
-  Boolean send(auto message) {
-    return msgs++ == (msgs $cup message);
-  }
+  Boolean send(auto message) { return msgs++ == (msgs $cup message); }
 
   Boolean hasMessage(auto message) { return message $in msgs; }
 
   Boolean tmRcvPrepared(auto rm) {
-    return tmState == initState &&
-           hasMessage(creator<Message>(preparedType, rm)) &&
-           tmPrepared++ == (tmPrepared $cup rm) &&
-           unchanged(rmState, tmState, msgs);
+    return tmState == initState && hasMessage(creator<Message>(preparedType, rm)) &&
+           tmPrepared++ == (tmPrepared $cup rm) && unchanged(rmState, tmState, msgs);
   }
 
   Boolean tmCommit() {
@@ -66,38 +62,33 @@ struct Model : IModel {
   }
 
   Boolean rmPrepare(auto rm) {
-    return at(rmState, rm) == workingState &&
-           mutAt(rmState, rm, preparedState) &&
-           send(creator<Message>(preparedType, rm)) &&
-           unchanged(tmState, tmPrepared);
+    return at(rmState, rm) == workingState && mutAt(rmState, rm, preparedState) &&
+           send(creator<Message>(preparedType, rm)) && unchanged(tmState, tmPrepared);
   }
 
   Boolean rmChooseToAbort(auto rm) {
-    return at(rmState, rm) == workingState &&
-           mutAt(rmState, rm, abortedState) &&
+    return at(rmState, rm) == workingState && mutAt(rmState, rm, abortedState) &&
            unchanged(tmState, tmPrepared, msgs);
   }
 
   Boolean rmRcvCommitMsg(auto rm) {
-    return hasMessage(Message{commitType}) &&
-           mutAt(rmState, rm, committedState) &&
+    return hasMessage(Message{commitType}) && mutAt(rmState, rm, committedState) &&
            unchanged(tmState, tmPrepared, msgs);
   }
 
   Boolean rmRcvAbortMsg(auto rm) {
-    return hasMessage(Message{abortType}) &&
-           mutAt(rmState, rm, abortedState) &&
+    return hasMessage(Message{abortType}) && mutAt(rmState, rm, abortedState) &&
            unchanged(tmState, tmPrepared, msgs);
   }
 
   Boolean typeOk() {
-    auto rmStatesOk =
-        $A(rm, resourceManagers) { return at(rmState, rm) $in rmStateValues; };
+    auto rmStatesOk = $A(rm, resourceManagers) {
+      return at(rmState, rm) $in rmStateValues;
+    };
     auto messagesOk = $A(message, msgs) {
-      return (get_mem(message, type) == preparedType &&
-              get_mem(message, rm) $in resourceManagers) ||
-             ((get_mem(message, type) $in tmMessageTypes) &&
-              get_mem(message, rm) == -1);
+      return (get_mem(message, type) == preparedType && get_mem(message, rm)
+                                                            $in resourceManagers) ||
+             ((get_mem(message, type) $in tmMessageTypes) && get_mem(message, rm) == -1);
     };
     return rmStatesOk && (tmState $in tmStateValues) &&
            (tmPrepared $in resourceManagers) && messagesOk;
@@ -106,8 +97,7 @@ struct Model : IModel {
   Boolean consistent() {
     return $A(rm1, resourceManagers) {
       return $A(rm2, resourceManagers) {
-        return !(at(rmState, rm1) == abortedState &&
-                 at(rmState, rm2) == committedState);
+        return !(at(rmState, rm1) == abortedState && at(rmState, rm2) == committedState);
       };
     };
   }
@@ -118,12 +108,10 @@ struct Model : IModel {
   }
 
   Boolean next() override {
-    return tmCommit() || tmAbort() ||
-           $E(rm, resourceManagers) {
-             return tmRcvPrepared(rm) || rmPrepare(rm) ||
-                    rmChooseToAbort(rm) || rmRcvCommitMsg(rm) ||
-                    rmRcvAbortMsg(rm);
-           };
+    return tmCommit() || tmAbort() || $E(rm, resourceManagers) {
+      return tmRcvPrepared(rm) || rmPrepare(rm) || rmChooseToAbort(rm) ||
+             rmRcvCommitMsg(rm) || rmRcvAbortMsg(rm);
+    };
   }
 
   std::optional<Boolean> ensure() override { return typeOk() && consistent(); }
@@ -142,8 +130,7 @@ struct Model : IModel {
   int preparedType = 10;
   int commitType = 11;
   int abortType = 12;
-  StateSet rmStateValues = {workingState, preparedState, committedState,
-                            abortedState};
+  StateSet rmStateValues = {workingState, preparedState, committedState, abortedState};
   StateSet tmStateValues = {initState, committedState, abortedState};
   StateSet tmMessageTypes = {commitType, abortType};
 };

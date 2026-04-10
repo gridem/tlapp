@@ -7,23 +7,31 @@ constexpr int kMayCommit = 1;
 constexpr int kCannotCommit = 2;
 constexpr int kCompleted = 3;
 
-struct_fields(CalmVoteMsg, (int, from), (int, to), (CarrySet, carries),
-              (NodeSet, nodes));
+struct_fields(CalmVoteMsg, (int, from), (int, to), (CarrySet, carries), (NodeSet, nodes));
 struct_fields(CalmCommitMsg, (int, from), (int, to), (CarrySet, commit));
-struct_fields(CalmNodeState, (int, status), (NodeSet, nodes), (NodeSet, voted),
-              (CarrySet, carries), (CarrySet, committed));
+struct_fields(CalmNodeState,
+    (int, status),
+    (NodeSet, nodes),
+    (NodeSet, voted),
+    (CarrySet, carries),
+    (CarrySet, committed));
 
 using CalmNodes = std::map<NodeId, CalmNodeState>;
 using CalmVoteMessages = std::set<CalmVoteMsg>;
 using CalmCommitMessages = std::set<CalmCommitMsg>;
 
-struct_fields(CalmState, (NodeSet, alive), (CarrySet, applied),
-              (CalmNodes, local), (CalmVoteMessages, voteMsgs),
-              (CalmCommitMessages, commitMsgs));
+struct_fields(CalmState,
+    (NodeSet, alive),
+    (CarrySet, applied),
+    (CalmNodes, local),
+    (CalmVoteMessages, voteMsgs),
+    (CalmCommitMessages, commitMsgs));
 
 CalmVoteMessages broadcastVote(const CalmVoteMessages& messages,
-                               const NodeSet& alive, NodeId from,
-                               const CarrySet& carries, const NodeSet& nodes) {
+    const NodeSet& alive,
+    NodeId from,
+    const CarrySet& carries,
+    const NodeSet& nodes) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -34,8 +42,9 @@ CalmVoteMessages broadcastVote(const CalmVoteMessages& messages,
 }
 
 CalmCommitMessages broadcastCommit(const CalmCommitMessages& messages,
-                                   const NodeSet& alive, NodeId from,
-                                   const CarrySet& commit) {
+    const NodeSet& alive,
+    NodeId from,
+    const CarrySet& commit) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -65,9 +74,11 @@ CalmState commit(CalmState sys, NodeId node, const CarrySet& carries) {
   return sys;
 }
 
-CalmState processVote(CalmState sys, NodeId node, NodeId source,
-                      const CarrySet& carries,
-                      const NodeSet& incomingNodes) {
+CalmState processVote(CalmState sys,
+    NodeId node,
+    NodeId source,
+    const CarrySet& carries,
+    const NodeSet& incomingNodes) {
   const auto previous = sys.local.at(node);
   if (previous.status == kCompleted || !previous.nodes.contains(source)) {
     return sys;
@@ -105,8 +116,8 @@ CalmState processVote(CalmState sys, NodeId node, NodeId source,
   if (sys.local.at(node).status == kToVote) {
     sys.local[node].status = kMayCommit;
     const auto& current = sys.local.at(node);
-    sys.voteMsgs = broadcastVote(sys.voteMsgs, sys.alive, node,
-                                 current.carries, current.nodes);
+    sys.voteMsgs =
+        broadcastVote(sys.voteMsgs, sys.alive, node, current.carries, current.nodes);
   }
 
   return sys;
@@ -114,8 +125,7 @@ CalmState processVote(CalmState sys, NodeId node, NodeId source,
 
 bool canApply(const CalmState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) && !sys.applied.contains(id) &&
-         sys.local.at(node).voted.empty() &&
-         sys.local.at(node).status != kCompleted;
+         sys.local.at(node).voted.empty() && sys.local.at(node).status != kCompleted;
 }
 
 CalmState apply(CalmState sys, NodeId node, MessageId id) {
@@ -134,8 +144,7 @@ CalmState deliverVote(CalmState sys, const CalmVoteMsg& msg) {
 }
 
 bool canDeliverCommit(const CalmState& sys, const CalmCommitMsg& msg) {
-  return sys.alive.contains(msg.to) &&
-         sys.local.at(msg.to).status != kCompleted &&
+  return sys.alive.contains(msg.to) && sys.local.at(msg.to).status != kCompleted &&
          sys.local.at(msg.to).carries == msg.commit;
 }
 
@@ -164,8 +173,8 @@ CalmState disconnect(CalmState sys, NodeId failed) {
       sys.local[node].nodes.erase(failed);
       continue;
     }
-    sys = processVote(std::move(sys), node, failed, current.carries,
-                      setWithout(current.nodes, failed));
+    sys = processVote(
+        std::move(sys), node, failed, current.carries, setWithout(current.nodes, failed));
   }
 
   return sys;
@@ -179,8 +188,7 @@ bool invariant(const CalmState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.applied) ||
-        !isSubset(self.voted, self.nodes)) {
+    if (!isSubset(self.carries, sys.applied) || !isSubset(self.voted, self.nodes)) {
       return false;
     }
     if (self.status == kCompleted) {
@@ -221,8 +229,8 @@ bool quiescent(const CalmState& sys) {
   }
 
   for (auto&& node : sys.alive) {
-    if (sys.local.at(node).voted.empty() &&
-        sys.local.at(node).status != kCompleted && sys.applied.size() < 3) {
+    if (sys.local.at(node).voted.empty() && sys.local.at(node).status != kCompleted &&
+        sys.applied.size() < 3) {
       return false;
     }
   }
@@ -234,8 +242,7 @@ DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::calm::canApply)
 DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::calm::apply)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::calm::canDeliverVote)
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::calm::deliverVote)
-DEFINE_ALGORITHM(canDeliverCommitExpr,
-                 ::leaderless_consensus::calm::canDeliverCommit)
+DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::calm::canDeliverCommit)
 DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::calm::deliverCommit)
 DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::calm::canDisconnect)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::calm::disconnect)
@@ -248,21 +255,17 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) &&
-               sys++ == applyExpr(sys, node, id);
+        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, voteMsgs)) {
-      return canDeliverVoteExpr(sys, msg) &&
-             sys++ == deliverVoteExpr(sys, msg);
+      return canDeliverVoteExpr(sys, msg) && sys++ == deliverVoteExpr(sys, msg);
     }
     || $E(msg, get_mem(sys, commitMsgs)) {
-      return canDeliverCommitExpr(sys, msg) &&
-             sys++ == deliverCommitExpr(sys, msg);
+      return canDeliverCommitExpr(sys, msg) && sys++ == deliverCommitExpr(sys, msg);
     }
     || $E(failed, nodes_) {
-      return canDisconnectExpr(sys, failed) &&
-             sys++ == disconnectExpr(sys, failed);
+      return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
     };
   }
 

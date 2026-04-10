@@ -2,7 +2,7 @@ BasedOnStyle: Chromium
 
 IndentWidth: 2
 ContinuationIndentWidth: 4
-ColumnLimit: 80
+ColumnLimit: 90
 
 BreakBeforeBraces: Attach
 PointerAlignment: Left
@@ -24,3 +24,8 @@ IfMacros:
   - if_as
   - if_is
   - if_eq
+
+Macros:
+  - '$A(x,y)=for (auto&& x : y)'
+  - '$E(x,y)=for (auto&& x : y)'
+  - '$if(x,y)=for (auto&& x : y)'

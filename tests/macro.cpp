@@ -28,8 +28,7 @@ TEST(Str, Normalize) {
 }
 
 TEST(Macro, Fun) {
-  TestStr("(template <typename T_a> decltype(auto) f(T_a&& a))",
-          STRINGIZE((fun(f, a))));
+  TestStr("(template <typename T_a> decltype(auto) f(T_a&& a))", STRINGIZE((fun(f, a))));
   TestStr(
       "(template <typename T_a, typename T_b> decltype(auto) u(T_a&& a, T_b&& "
       "b))",
@@ -38,7 +37,7 @@ TEST(Macro, Fun) {
 
 TEST(Macro, Funs) {
   TestStr("(template <typename... T_v> decltype(auto) f( T_v&& ...v))",
-          STRINGIZE((funs(f, v))));
+      STRINGIZE((funs(f, v))));
   TestStr(
       "(template <typename T_a, typename... T_v> decltype(auto) f(T_a&& a, "
       "T_v&& ...v))",
@@ -47,8 +46,6 @@ TEST(Macro, Funs) {
 
 #define MY_TEST_MACRO(X) macro_index_0 X macro_concat(macro_index_1 X, _);
 
-TEST(Macro, ArgIndex) {
-  TestStr("(int a_;)", STRINGIZE((MY_TEST_MACRO((int, a)))));
-}
+TEST(Macro, ArgIndex) { TestStr("(int a_;)", STRINGIZE((MY_TEST_MACRO((int, a))))); }
 
 }  // namespace test

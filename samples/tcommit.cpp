@@ -39,15 +39,14 @@ struct Model : IModel {
   }
 
   Boolean prepare(auto rm) {
-    return at(rmState, rm) == working &&
-           mutAt(rmState, rm, prepared);
+    return at(rmState, rm) == working && mutAt(rmState, rm, prepared);
   }
 
   Boolean decide(auto rm) {
     return (at(rmState, rm) == prepared && canCommit() &&
-            mutAt(rmState, rm, committed)) ||
+               mutAt(rmState, rm, committed)) ||
            (at(rmState, rm) $in undecidedStates && notCommitted() &&
-            mutAt(rmState, rm, aborted));
+               mutAt(rmState, rm, aborted));
   }
 
   Boolean typeOk() {
@@ -57,8 +56,7 @@ struct Model : IModel {
   Boolean consistent() {
     return $A(rm1, resourceManagers) {
       return $A(rm2, resourceManagers) {
-        return !(at(rmState, rm1) == aborted &&
-                 at(rmState, rm2) == committed);
+        return !(at(rmState, rm1) == aborted && at(rmState, rm2) == committed);
       };
     };
   }

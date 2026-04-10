@@ -107,8 +107,7 @@ bool allUnique(const std::vector<T>& values) {
 }
 
 template <typename T_message>
-std::set<T_message> purgeMessages(const std::set<T_message>& messages,
-                                  NodeId failed) {
+std::set<T_message> purgeMessages(const std::set<T_message>& messages, NodeId failed) {
   std::set<T_message> result;
   for (auto&& message : messages) {
     if (message.from != failed && message.to != failed) {
@@ -119,8 +118,7 @@ std::set<T_message> purgeMessages(const std::set<T_message>& messages,
 }
 
 template <typename T_message>
-bool queueEndpointsAreAlive(const std::set<T_message>& messages,
-                            const NodeSet& alive) {
+bool queueEndpointsAreAlive(const std::set<T_message>& messages, const NodeSet& alive) {
   for (auto&& message : messages) {
     if (!alive.contains(message.from) || !alive.contains(message.to)) {
       return false;

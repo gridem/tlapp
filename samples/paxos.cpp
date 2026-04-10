@@ -24,14 +24,13 @@ enum MessageType {
 };
 
 struct Message : hashable_tag_type {
-  explicit Message(MessageType type_, int acc_ = -1, int bal_ = -1,
-                   int val_ = -1, int mbal_ = -1, int mval_ = -1)
-      : type(type_),
-        acc(acc_),
-        bal(bal_),
-        val(val_),
-        mbal(mbal_),
-        mval(mval_) {}
+  explicit Message(MessageType type_,
+      int acc_ = -1,
+      int bal_ = -1,
+      int val_ = -1,
+      int mbal_ = -1,
+      int mval_ = -1)
+      : type(type_), acc(acc_), bal(bal_), val(val_), mbal(mbal_), mval(mval_) {}
 
   int type;
   int acc;
@@ -57,9 +56,7 @@ using Messages = std::set<Message>;
 // See TLA+ spec details here:
 // https://github.com/tlaplus/Examples/blob/master/specifications/PaxosHowToWinATuringAward/Paxos.tla
 struct Model : IModel {
-  fun(send, m) {
-    return msgs++ == (msgs $cup m);
-  }
+  fun(send, m) { return msgs++ == (msgs $cup m); }
 
   funs(sendMessage, args) { return send(creator<Message>(fwd(args)...)); }
 
@@ -73,6 +70,7 @@ struct Model : IModel {
 
   fun(send2b, acc, bal, val) { return sendMessage(M2b, fwd(acc, bal, val)); }
 
+  // clang-format off
   fun(showsSafeAt, b, v) {
     return $E(q, quorum) {
       return $A(a, q) {
@@ -103,8 +101,9 @@ struct Model : IModel {
 
   fun(phase1a, b) {
     return !($E(m, msgs) {
-      return get_mem(m, type) == M1a && get_mem(m, bal) == b;
-    }) && send1a(fwd(b)) &&
+             return get_mem(m, type) == M1a && get_mem(m, bal) == b;
+           }) &&
+           send1a(fwd(b)) &&
            unchanged(maxBal, maxVBal, maxVal);
   }
 
@@ -113,8 +112,8 @@ struct Model : IModel {
       return get_mem(m, type) == M1a && get_mem(m, bal) > at(maxBal, a) &&
              mutAt(maxBal, a, get_mem(m, bal)) &&
              send1b(a, get_mem(m, bal), at(maxVBal, a), at(maxVal, a));
-    }
-    &&unchanged(maxVBal, maxVal);
+    } &&
+           unchanged(maxVBal, maxVal);
   }
 
   fun(phase2a, b, v) {
@@ -134,6 +133,7 @@ struct Model : IModel {
              send2b(a, get_mem(m, bal), get_mem(m, val));
     };
   }
+  // clang-format on
 
   Map createMap(int v) {
     Map result;

@@ -9,24 +9,32 @@ struct_fields(MostCarryVote, (int, id), (NodeSet, votes));
 
 using CarryVotes = std::set<MostCarryVote>;
 
-struct_fields(MostVoteMsg, (int, from), (int, to), (CarrySet, carries),
-              (NodeSet, nodes));
+struct_fields(MostVoteMsg, (int, from), (int, to), (CarrySet, carries), (NodeSet, nodes));
 struct_fields(MostCommitMsg, (int, from), (int, to), (CarrySet, commit));
-struct_fields(MostNodeState, (int, status), (NodeSet, nodes), (NodeSet, votes),
-              (CarryVotes, carryVotes), (CarrySet, carries),
-              (CarrySet, committed));
+struct_fields(MostNodeState,
+    (int, status),
+    (NodeSet, nodes),
+    (NodeSet, votes),
+    (CarryVotes, carryVotes),
+    (CarrySet, carries),
+    (CarrySet, committed));
 
 using MostNodes = std::map<NodeId, MostNodeState>;
 using MostVoteMessages = std::set<MostVoteMsg>;
 using MostCommitMessages = std::set<MostCommitMsg>;
 
-struct_fields(MostState, (NodeSet, alive), (CarrySet, applied),
-              (MostNodes, local), (MostVoteMessages, voteMsgs),
-              (MostCommitMessages, commitMsgs));
+struct_fields(MostState,
+    (NodeSet, alive),
+    (CarrySet, applied),
+    (MostNodes, local),
+    (MostVoteMessages, voteMsgs),
+    (MostCommitMessages, commitMsgs));
 
 MostVoteMessages broadcastVote(const MostVoteMessages& messages,
-                               const NodeSet& alive, NodeId from,
-                               const CarrySet& carries, const NodeSet& nodes) {
+    const NodeSet& alive,
+    NodeId from,
+    const CarrySet& carries,
+    const NodeSet& nodes) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -37,8 +45,9 @@ MostVoteMessages broadcastVote(const MostVoteMessages& messages,
 }
 
 MostCommitMessages broadcastCommit(const MostCommitMessages& messages,
-                                   const NodeSet& alive, NodeId from,
-                                   const CarrySet& commit) {
+    const NodeSet& alive,
+    NodeId from,
+    const CarrySet& commit) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -63,8 +72,7 @@ MostState commit(MostState sys, NodeId node) {
   }
   self.status = kCommitted;
   self.committed = self.carries;
-  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node,
-                                   self.committed);
+  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node, self.committed);
   return sys;
 }
 
@@ -77,8 +85,7 @@ NodeSet carryVotesFor(const CarryVotes& carryVotes, MessageId id) {
   return {};
 }
 
-CarryVotes putCarryVotes(CarryVotes carryVotes, MessageId id,
-                         const NodeSet& votes) {
+CarryVotes putCarryVotes(CarryVotes carryVotes, MessageId id, const NodeSet& votes) {
   for (auto it = carryVotes.begin(); it != carryVotes.end(); ++it) {
     if (it->id == id) {
       carryVotes.erase(it);
@@ -110,9 +117,11 @@ struct VoteResult {
   MostNodeState local;
 };
 
-VoteResult processVote(const MostNodeState& state, NodeId self, NodeId source,
-                       const CarrySet& carries,
-                       const NodeSet& incomingNodes) {
+VoteResult processVote(const MostNodeState& state,
+    NodeId self,
+    NodeId source,
+    const CarrySet& carries,
+    const NodeSet& incomingNodes) {
   if (state.status == kCommitted || !state.nodes.contains(source)) {
     return {false, false, false, state};
   }
@@ -141,8 +150,8 @@ VoteResult processVote(const MostNodeState& state, NodeId self, NodeId source,
     carryVotes = std::move(filteredCarryVotes);
   }
 
-  auto local = MostNodeState{kVoting, nodes, votes, carryVotes, newCarries,
-                             state.committed};
+  auto local =
+      MostNodeState{kVoting, nodes, votes, carryVotes, newCarries, state.committed};
   if (firstVote) {
     return {local != state, true, false, local};
   }
@@ -166,8 +175,7 @@ VoteResult processVote(const MostNodeState& state, NodeId self, NodeId source,
 
 bool canApply(const MostState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) && !sys.applied.contains(id) &&
-         sys.local.at(node).votes.empty() &&
-         sys.local.at(node).status != kCommitted;
+         sys.local.at(node).votes.empty() && sys.local.at(node).status != kCommitted;
 }
 
 MostState apply(MostState sys, NodeId node, MessageId id) {
@@ -182,8 +190,8 @@ MostState apply(MostState sys, NodeId node, MessageId id) {
     return commit(std::move(sys), node);
   }
   if (out.sendVote) {
-    sys.voteMsgs = broadcastVote(sys.voteMsgs, sys.alive, node,
-                                 out.local.carries, out.local.nodes);
+    sys.voteMsgs =
+        broadcastVote(sys.voteMsgs, sys.alive, node, out.local.carries, out.local.nodes);
   }
   return sys;
 }
@@ -194,8 +202,7 @@ bool canDeliverVote(const MostState& sys, const MostVoteMsg& msg) {
 
 MostState deliverVote(MostState sys, const MostVoteMsg& msg) {
   sys.voteMsgs.erase(msg);
-  auto out = processVote(sys.local.at(msg.to), msg.to, msg.from, msg.carries,
-                         msg.nodes);
+  auto out = processVote(sys.local.at(msg.to), msg.to, msg.from, msg.carries, msg.nodes);
   if (!out.changed) {
     return sys;
   }
@@ -204,15 +211,14 @@ MostState deliverVote(MostState sys, const MostVoteMsg& msg) {
     return commit(std::move(sys), msg.to);
   }
   if (out.sendVote) {
-    sys.voteMsgs = broadcastVote(sys.voteMsgs, sys.alive, msg.to,
-                                 out.local.carries, out.local.nodes);
+    sys.voteMsgs = broadcastVote(
+        sys.voteMsgs, sys.alive, msg.to, out.local.carries, out.local.nodes);
   }
   return sys;
 }
 
 bool canDeliverCommit(const MostState& sys, const MostCommitMsg& msg) {
-  return sys.alive.contains(msg.to) &&
-         sys.local.at(msg.to).status != kCommitted &&
+  return sys.alive.contains(msg.to) && sys.local.at(msg.to).status != kCommitted &&
          sys.local.at(msg.to).carries == msg.commit;
 }
 
@@ -222,8 +228,7 @@ MostState deliverCommit(MostState sys, const MostCommitMsg& msg) {
   self.status = kCommitted;
   self.carries = msg.commit;
   self.committed = msg.commit;
-  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, msg.to,
-                                   msg.commit);
+  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, msg.to, msg.commit);
   return sys;
 }
 
@@ -248,9 +253,8 @@ MostState disconnect(MostState sys, NodeId failed) {
       continue;
     }
 
-    auto out =
-        processVote(current, node, failed, current.carries,
-                    setWithout(current.nodes, failed));
+    auto out = processVote(
+        current, node, failed, current.carries, setWithout(current.nodes, failed));
     if (!out.changed) {
       continue;
     }
@@ -258,8 +262,8 @@ MostState disconnect(MostState sys, NodeId failed) {
     if (out.sendCommit) {
       sys = commit(std::move(sys), node);
     } else if (out.sendVote) {
-      sys.voteMsgs = broadcastVote(sys.voteMsgs, sys.alive, node,
-                                   out.local.carries, out.local.nodes);
+      sys.voteMsgs = broadcastVote(
+          sys.voteMsgs, sys.alive, node, out.local.carries, out.local.nodes);
     }
   }
 
@@ -279,8 +283,7 @@ bool invariant(const MostState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.applied) ||
-        !isSubset(self.votes, self.nodes)) {
+    if (!isSubset(self.carries, sys.applied) || !isSubset(self.votes, self.nodes)) {
       return false;
     }
     for (auto&& entry : self.carryVotes) {
@@ -332,8 +335,8 @@ bool quiescent(const MostState& sys) {
   }
 
   for (auto&& node : sys.alive) {
-    if (sys.local.at(node).votes.empty() &&
-        sys.local.at(node).status != kCommitted && sys.applied.size() < 3) {
+    if (sys.local.at(node).votes.empty() && sys.local.at(node).status != kCommitted &&
+        sys.applied.size() < 3) {
       return false;
     }
   }
@@ -345,8 +348,7 @@ DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::most::canApply)
 DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::most::apply)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::most::canDeliverVote)
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::most::deliverVote)
-DEFINE_ALGORITHM(canDeliverCommitExpr,
-                 ::leaderless_consensus::most::canDeliverCommit)
+DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::most::canDeliverCommit)
 DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::most::deliverCommit)
 DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::most::canDisconnect)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::most::disconnect)
@@ -359,21 +361,17 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) &&
-               sys++ == applyExpr(sys, node, id);
+        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, voteMsgs)) {
-      return canDeliverVoteExpr(sys, msg) &&
-             sys++ == deliverVoteExpr(sys, msg);
+      return canDeliverVoteExpr(sys, msg) && sys++ == deliverVoteExpr(sys, msg);
     }
     || $E(msg, get_mem(sys, commitMsgs)) {
-      return canDeliverCommitExpr(sys, msg) &&
-             sys++ == deliverCommitExpr(sys, msg);
+      return canDeliverCommitExpr(sys, msg) && sys++ == deliverCommitExpr(sys, msg);
     }
     || $E(failed, nodes_) {
-      return canDisconnectExpr(sys, failed) &&
-             sys++ == disconnectExpr(sys, failed);
+      return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
     };
   }
 

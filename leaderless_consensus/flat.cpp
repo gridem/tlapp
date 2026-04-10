@@ -5,24 +5,37 @@ namespace leaderless_consensus::flat {
 constexpr int kVoting = 0;
 constexpr int kCommitted = 1;
 
-struct_fields(FlatVoteMsg, (int, from), (int, to), (CarrySet, carries),
-              (NodeSet, nodes), (NodeSet, votes));
+struct_fields(FlatVoteMsg,
+    (int, from),
+    (int, to),
+    (CarrySet, carries),
+    (NodeSet, nodes),
+    (NodeSet, votes));
 struct_fields(FlatCommitMsg, (int, from), (int, to));
-struct_fields(FlatNodeState, (int, status), (NodeSet, nodes), (NodeSet, votes),
-              (CarrySet, carries), (CarrySet, committed));
+struct_fields(FlatNodeState,
+    (int, status),
+    (NodeSet, nodes),
+    (NodeSet, votes),
+    (CarrySet, carries),
+    (CarrySet, committed));
 
 using FlatNodes = std::map<NodeId, FlatNodeState>;
 using FlatVoteMessages = std::set<FlatVoteMsg>;
 using FlatCommitMessages = std::set<FlatCommitMsg>;
 
-struct_fields(FlatState, (NodeSet, alive), (CarrySet, applied),
-              (FlatNodes, local), (FlatVoteMessages, voteMsgs),
-              (FlatCommitMessages, commitMsgs));
+struct_fields(FlatState,
+    (NodeSet, alive),
+    (CarrySet, applied),
+    (FlatNodes, local),
+    (FlatVoteMessages, voteMsgs),
+    (FlatCommitMessages, commitMsgs));
 
 FlatVoteMessages broadcastVote(const FlatVoteMessages& messages,
-                               const NodeSet& alive, NodeId from,
-                               const CarrySet& carries, const NodeSet& nodes,
-                               const NodeSet& votes) {
+    const NodeSet& alive,
+    NodeId from,
+    const CarrySet& carries,
+    const NodeSet& nodes,
+    const NodeSet& votes) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -33,7 +46,8 @@ FlatVoteMessages broadcastVote(const FlatVoteMessages& messages,
 }
 
 FlatCommitMessages broadcastCommit(const FlatCommitMessages& messages,
-                                   const NodeSet& alive, NodeId from) {
+    const NodeSet& alive,
+    NodeId from) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -62,10 +76,12 @@ FlatState commit(FlatState sys, NodeId node) {
   return sys;
 }
 
-FlatState processVote(FlatState sys, NodeId node, NodeId source,
-                      const CarrySet& carries,
-                      const NodeSet& incomingNodes,
-                      const NodeSet& incomingVotes) {
+FlatState processVote(FlatState sys,
+    NodeId node,
+    NodeId source,
+    const CarrySet& carries,
+    const NodeSet& incomingNodes,
+    const NodeSet& incomingVotes) {
   const auto previous = sys.local.at(node);
   if (previous.status == kCommitted || !previous.nodes.contains(source)) {
     return sys;
@@ -89,23 +105,20 @@ FlatState processVote(FlatState sys, NodeId node, NodeId source,
   }
 
   sys.local[node] =
-      FlatNodeState{kVoting, newNodes, newVotes, newCarries,
-                    previous.committed};
+      FlatNodeState{kVoting, newNodes, newVotes, newCarries, previous.committed};
 
   if (newNodes == newVotes) {
     return commit(std::move(sys), node);
   }
 
-  sys.voteMsgs = broadcastVote(sys.voteMsgs, sys.alive, node, newCarries,
-                               newNodes, newVotes);
+  sys.voteMsgs =
+      broadcastVote(sys.voteMsgs, sys.alive, node, newCarries, newNodes, newVotes);
   return sys;
 }
 
 bool canApply(const FlatState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) && !sys.applied.contains(id) &&
-         id == node + 10 &&
-         sys.local.at(node).votes.empty() &&
-         sys.local.at(node).status != kCommitted;
+  return sys.alive.contains(node) && !sys.applied.contains(id) && id == node + 10 &&
+         sys.local.at(node).votes.empty() && sys.local.at(node).status != kCommitted;
 }
 
 FlatState apply(FlatState sys, NodeId node, MessageId id) {
@@ -120,13 +133,11 @@ bool canDeliverVote(const FlatState& sys, const FlatVoteMsg& msg) {
 
 FlatState deliverVote(FlatState sys, const FlatVoteMsg& msg) {
   sys.voteMsgs.erase(msg);
-  return processVote(std::move(sys), msg.to, msg.from, msg.carries, msg.nodes,
-                     msg.votes);
+  return processVote(std::move(sys), msg.to, msg.from, msg.carries, msg.nodes, msg.votes);
 }
 
 bool canDeliverCommit(const FlatState& sys, const FlatCommitMsg& msg) {
-  return sys.alive.contains(msg.to) &&
-         sys.local.at(msg.to).status != kCommitted;
+  return sys.alive.contains(msg.to) && sys.local.at(msg.to).status != kCommitted;
 }
 
 FlatState deliverCommit(FlatState sys, const FlatCommitMsg& msg) {
@@ -155,7 +166,7 @@ FlatState disconnect(FlatState sys, NodeId failed) {
       continue;
     }
     sys = processVote(std::move(sys), node, failed, current.carries,
-                      setWithout(current.nodes, failed), {});
+        setWithout(current.nodes, failed), {});
   }
 
   return sys;
@@ -169,8 +180,7 @@ bool invariant(const FlatState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.applied) ||
-        !isSubset(self.votes, self.nodes)) {
+    if (!isSubset(self.carries, sys.applied) || !isSubset(self.votes, self.nodes)) {
       return false;
     }
     if (self.status == kCommitted) {
@@ -183,8 +193,7 @@ bool invariant(const FlatState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.applied) ||
-        !isSubset(msg.votes, msg.nodes)) {
+    if (!isSubset(msg.carries, sys.applied) || !isSubset(msg.votes, msg.nodes)) {
       return false;
     }
   }
@@ -210,8 +219,7 @@ DEFINE_ALGORITHM(canApplyExpr, ::leaderless_consensus::flat::canApply)
 DEFINE_ALGORITHM(applyExpr, ::leaderless_consensus::flat::apply)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::flat::canDeliverVote)
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::flat::deliverVote)
-DEFINE_ALGORITHM(canDeliverCommitExpr,
-                 ::leaderless_consensus::flat::canDeliverCommit)
+DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::flat::canDeliverCommit)
 DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::flat::deliverCommit)
 DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::flat::canDisconnect)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::flat::disconnect)
@@ -223,21 +231,17 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) &&
-               sys++ == applyExpr(sys, node, id);
+        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, voteMsgs)) {
-      return canDeliverVoteExpr(sys, msg) &&
-             sys++ == deliverVoteExpr(sys, msg);
+      return canDeliverVoteExpr(sys, msg) && sys++ == deliverVoteExpr(sys, msg);
     }
     || $E(msg, get_mem(sys, commitMsgs)) {
-      return canDeliverCommitExpr(sys, msg) &&
-             sys++ == deliverCommitExpr(sys, msg);
+      return canDeliverCommitExpr(sys, msg) && sys++ == deliverCommitExpr(sys, msg);
     }
     || $E(failed, nodes_) {
-      return canDisconnectExpr(sys, failed) &&
-             sys++ == disconnectExpr(sys, failed);
+      return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
     };
   }
 

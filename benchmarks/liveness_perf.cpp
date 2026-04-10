@@ -22,14 +22,12 @@ Boolean makeRingStep(Var<int>& node, int size) {
 }
 
 Boolean makeGuardedRingStep(Var<int>& node, Var<int>& done, int size) {
-  Boolean expr =
-      done == 0 && node == 0 && node++ == (size == 1 ? 0 : 1) && done++ == 0;
+  Boolean expr = done == 0 && node == 0 && node++ == (size == 1 ? 0 : 1) && done++ == 0;
   for (int i = 1; i + 1 < size; ++i) {
     expr = expr || (done == 0 && node == i && node++ == i + 1 && done++ == 0);
   }
   if (size > 1) {
-    expr = expr ||
-           (done == 0 && node == size - 1 && node++ == 0 && done++ == 0);
+    expr = expr || (done == 0 && node == size - 1 && node++ == 0 && done++ == 0);
   }
   return expr;
 }
@@ -118,39 +116,34 @@ TEST(LivenessPerf, Run) {
   constexpr int kFairnessSize = 1024;
 
   auto eventuallyEngine = makeExploredEngine<EventuallyRingModel>(kEventuallySize);
-  ASSERT_EQ(static_cast<size_t>(kEventuallySize),
-            eventuallyEngine.getStats().loop.states);
+  ASSERT_EQ(
+      static_cast<size_t>(kEventuallySize), eventuallyEngine.getStats().loop.states);
   ASSERT_NO_THROW(eventuallyEngine.checkLiveness());
   auto eventuallyToken = benchValue(eventuallyEngine.getStats());
-  expectBenchPerIteration("liveness_eventually_ring_4096", 200, eventuallyToken,
-                          [&]() {
-                            eventuallyEngine.checkLiveness();
-                            return eventuallyToken;
-                          });
+  expectBenchPerIteration("liveness_eventually_ring_4096", 200, eventuallyToken, [&]() {
+    eventuallyEngine.checkLiveness();
+    return eventuallyToken;
+  });
 
-  auto weakFairnessEngine =
-      makeExploredEngine<WeakFairnessCycleModel>(kFairnessSize);
-  ASSERT_EQ(static_cast<size_t>(kFairnessSize + 1),
-            weakFairnessEngine.getStats().loop.states);
+  auto weakFairnessEngine = makeExploredEngine<WeakFairnessCycleModel>(kFairnessSize);
+  ASSERT_EQ(
+      static_cast<size_t>(kFairnessSize + 1), weakFairnessEngine.getStats().loop.states);
   ASSERT_NO_THROW(weakFairnessEngine.checkLiveness());
   auto weakFairnessToken = benchValue(weakFairnessEngine.getStats());
-  expectBenchPerIteration("liveness_wf_cycle_1024", 25, weakFairnessToken,
-                          [&]() {
-                            weakFairnessEngine.checkLiveness();
-                            return weakFairnessToken;
-                          });
+  expectBenchPerIteration("liveness_wf_cycle_1024", 25, weakFairnessToken, [&]() {
+    weakFairnessEngine.checkLiveness();
+    return weakFairnessToken;
+  });
 
-  auto strongFairnessEngine =
-      makeExploredEngine<StrongFairnessCycleModel>(kFairnessSize);
+  auto strongFairnessEngine = makeExploredEngine<StrongFairnessCycleModel>(kFairnessSize);
   ASSERT_EQ(static_cast<size_t>(kFairnessSize + 1),
-            strongFairnessEngine.getStats().loop.states);
+      strongFairnessEngine.getStats().loop.states);
   ASSERT_NO_THROW(strongFairnessEngine.checkLiveness());
   auto strongFairnessToken = benchValue(strongFairnessEngine.getStats());
-  expectBenchPerIteration("liveness_sf_cycle_1024", 25, strongFairnessToken,
-                          [&]() {
-                            strongFairnessEngine.checkLiveness();
-                            return strongFairnessToken;
-                          });
+  expectBenchPerIteration("liveness_sf_cycle_1024", 25, strongFairnessToken, [&]() {
+    strongFairnessEngine.checkLiveness();
+    return strongFairnessToken;
+  });
 }
 
 }  // namespace liveness_perf

@@ -15,7 +15,7 @@ void appendVector(std::vector<T>& dst, std::vector<T>& src) {
     return;
   }
   dst.insert(dst.end(), std::make_move_iterator(src.begin()),
-             std::make_move_iterator(src.end()));
+      std::make_move_iterator(src.end()));
 }
 
 }  // namespace

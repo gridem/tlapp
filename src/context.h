@@ -41,8 +41,8 @@ struct Context {
   void ensureRegistered(Descriptor& descriptor) {
     if constexpr (I == LogicState::Next) {
       if (isInit()) {
-        throw VarInitError(asString("Variable ", descriptor.toStringNext(),
-                                    " cannot be used during init phase"));
+        throw VarInitError(asString(
+            "Variable ", descriptor.toStringNext(), " cannot be used during init phase"));
       }
     }
     if (descriptor.isAdded()) {
@@ -50,7 +50,7 @@ struct Context {
     }
     if constexpr (I == LogicState::Next) {
       throw VarInitError(asString("Variable ", descriptor.toStringNext(),
-                                  " cannot be used without registration"));
+          " cannot be used without registration"));
     }
     if (!isAddAllowed_ || !isInit()) {
       throw VarInitError(

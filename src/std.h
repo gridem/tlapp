@@ -13,14 +13,11 @@
 namespace std {
 
 tname(T) struct hash<unique_ptr<T>> {
-  size_t operator()(const unique_ptr<T>& t) const noexcept {
-    return calcHash(*t);
-  }
+  size_t operator()(const unique_ptr<T>& t) const noexcept { return calcHash(*t); }
 };
 
 tname(T) struct equal_to<unique_ptr<T>> {
-  constexpr bool operator()(const unique_ptr<T>& l,
-                            const unique_ptr<T>& r) const {
+  constexpr bool operator()(const unique_ptr<T>& l, const unique_ptr<T>& r) const {
     return *l == *r;
   }
 };
@@ -94,7 +91,7 @@ tname(T) struct hash<reference_wrapper<T>> {
 
 tname(T) struct equal_to<reference_wrapper<T>> {
   constexpr bool operator()(const reference_wrapper<T>& l,
-                            const reference_wrapper<T>& r) const {
+      const reference_wrapper<T>& r) const {
     return l.get() == r.get();
   }
 };

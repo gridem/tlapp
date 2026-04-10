@@ -33,8 +33,7 @@ tname(T) struct TValue : IValue {
 
   explicit TValue(const char* name) : name_{name} {}
 
-  tname(U) explicit TValue(U&& u, const char* name)
-      : val_{fwd(u)}, name_{name} {}
+  tname(U) explicit TValue(U&& u, const char* name) : val_{fwd(u)}, name_{name} {}
 
   bool equals(const IValue& other) const override {
     return val_ == static_cast<const TValue&>(other).val_;
@@ -77,8 +76,7 @@ struct Value {
   explicit Value(Value&& other);
 
   // Intended for tests (currently unused).
-  tname(T) explicit Value(const T& val, const char* name)
-      : Value{make<T>(val, name)} {}
+  tname(T) explicit Value(const T& val, const char* name) : Value{make<T>(val, name)} {}
 
   Value& operator=(const Value& other);
 

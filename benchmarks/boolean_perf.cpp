@@ -24,16 +24,14 @@ TEST(BooleanPerf, Run) {
   Var<int> z{"z"};
 
   auto wideOr = makeAssignOr(x, 64);
-  auto wideAnd =
-      makeAssignOr(x, 16) && makeAssignOr(y, 16) && makeAssignOr(z, 16);
+  auto wideAnd = makeAssignOr(x, 16) && makeAssignOr(y, 16) && makeAssignOr(z, 16);
 
   Context ctx;
 
-  expectBenchPerIteration("boolean_or_assign_64", 5000, 64,
-                          [&] { return wideOr(ctx); });
+  expectBenchPerIteration("boolean_or_assign_64", 5000, 64, [&] { return wideOr(ctx); });
 
-  expectBenchPerIteration("boolean_and_cross_16x16x16", 300, 4096,
-                          [&] { return wideAnd(ctx); });
+  expectBenchPerIteration(
+      "boolean_and_cross_16x16x16", 300, 4096, [&] { return wideAnd(ctx); });
 }
 
 }  // namespace boolean_perf

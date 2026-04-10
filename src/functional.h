@@ -19,8 +19,8 @@ namespace detail {
 
 fun(filterContainerOp, container, predicate) {
   std::decay_t<decltype(container)> result;
-  std::copy_if(container.begin(), container.end(),
-               std::inserter(result, result.end()), fwd(predicate));
+  std::copy_if(container.begin(), container.end(), std::inserter(result, result.end()),
+      fwd(predicate));
   return result;
 };
 
@@ -59,8 +59,7 @@ fun(filterOp, ctx, setExpr, elem, predicateExpr) {
 }  // namespace detail
 
 fun(filter, container, predicate) {
-  return detail::quantifier(as_lam(detail::filterOp),
-                            fwd(container, predicate));
+  return detail::quantifier(as_lam(detail::filterOp), fwd(container, predicate));
 }
 
 #define $if(D_var, D_in) macro_block(D_var, D_in, filter)

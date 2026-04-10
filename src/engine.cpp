@@ -16,8 +16,7 @@ struct BitLayout {
   BitWord tailMask = 0;
 };
 
-std::optional<BoundPredicate<Boolean>> bindPredicate(
-    std::optional<Boolean> e) {
+std::optional<BoundPredicate<Boolean>> bindPredicate(std::optional<Boolean> e) {
   if (!e) {
     return {};
   }
@@ -48,13 +47,13 @@ BitWord* rowBits(std::vector<BitWord>& bits, const BitLayout& layout, size_t row
   return bits.data() + row * layout.words;
 }
 
-const BitWord* rowBits(const std::vector<BitWord>& bits, const BitLayout& layout,
-                       size_t row) {
+const BitWord* rowBits(const std::vector<BitWord>& bits,
+    const BitLayout& layout,
+    size_t row) {
   return bits.data() + row * layout.words;
 }
 
-void setBit(std::vector<BitWord>& bits, const BitLayout& layout, size_t row,
-            size_t bit) {
+void setBit(std::vector<BitWord>& bits, const BitLayout& layout, size_t row, size_t bit) {
   rowBits(bits, layout, row)[bit / 64] |= BitWord{1} << (bit % 64);
 }
 
@@ -78,17 +77,14 @@ bool anyBits(const std::vector<BitWord>& bits) {
 }  // namespace
 
 std::string Stats::Init::toString() const {
-  return "{vars: " + asString(vars) + ", initial states: " + asString(states) +
-         "}";
+  return "{vars: " + asString(vars) + ", initial states: " + asString(states) + "}";
 }
 
 std::string Stats::Loop::toString() const {
   auto queued = states >= processed ? states - processed : 0;
   auto drain = states == 0 ? 0 : processed * 100 / states;
-  return "{total states: " + asString(states) +
-         ", processed: " + asString(processed) +
-         ", queued: " + asString(queued) +
-         ", drain: " + asString(drain) + "%" +
+  return "{total states: " + asString(states) + ", processed: " + asString(processed) +
+         ", queued: " + asString(queued) + ", drain: " + asString(drain) + "%" +
          ", transitions: " + asString(transitions) + "}";
 }
 
@@ -313,12 +309,10 @@ void Engine::handleResult(const BooleanResult& b, State& to) {
                 "Boolean result cannot return true without assignments");
           }
           VLOG(1) << "Handle result with false boolean";
-        }
-        else {
+        } else {
           for (auto&& assigns : v) {
             if (!assigns(ctx_)) {
-              VLOG(2) << "Skipping state because of false condition: "
-                      << asString(to);
+              VLOG(2) << "Skipping state because of false condition: " << asString(to);
             } else {
               tryAddState(to);
               if (ctx_.isInit() && ctx_.isAddAllowed()) {
@@ -340,13 +334,11 @@ void Engine::tryAddState(const State& state) {
   auto [stored, inserted] = tryEmplaceState(state);
   if (inserted) {
     if (holds(skip_, ctx_)) {
-      VLOG(1) << "Skipping state due to skip expression, state: "
-              << asString(ctx_);
+      VLOG(1) << "Skipping state due to skip expression, state: " << asString(ctx_);
       return;
     }
     if (holds(stop_, ctx_)) {
-      LOG(INFO) << "Stopping execution due to stop expression, state: "
-                << asString(ctx_);
+      LOG(INFO) << "Stopping execution due to stop expression, state: " << asString(ctx_);
       trace(*stored);
       throw EngineStop{};
     }
@@ -409,8 +401,7 @@ bool Engine::holdsOnState(const BoundPredicate<Boolean>& e, const State& state) 
   return e(ctx_);
 }
 
-Engine::PredicateCache Engine::computePredicateCache(
-    const BoundPredicate<Boolean>& e) {
+Engine::PredicateCache Engine::computePredicateCache(const BoundPredicate<Boolean>& e) {
   PredicateCache cache;
   cache.holds.reserve(graphStates_.size());
   for (auto&& state : graphStates_) {
@@ -419,8 +410,8 @@ Engine::PredicateCache Engine::computePredicateCache(
   return cache;
 }
 
-Engine::ActionCache Engine::computeActionCache(
-    const BoundNextAction<Boolean>& action, const GraphInfo& graph) {
+Engine::ActionCache Engine::computeActionCache(const BoundNextAction<Boolean>& action,
+    const GraphInfo& graph) {
   ActionCache cache;
   cache.enabled.resize(graphStates_.size());
   cache.targets.resize(graphStates_.size());
@@ -453,14 +444,13 @@ Engine::ActionCache Engine::computeActionCache(
     auto bound = action(ctx_);
     std::visit(
         [this, &graph, &outgoingMarks, &seenMarks, outgoingStamp, seenStamp,
-         &targets] lam_arg(v) {
+            &targets] lam_arg(v) {
           if_eq(v, bool) {
             if (v) {
               throw EngineBooleanError(
                   "Boolean result cannot return true without assignments");
             }
-          }
-          else {
+          } else {
             for (auto&& assigns : v) {
               if (assigns(ctx_)) {
                 auto&& nexts = ctx_.nexts();
@@ -555,8 +545,7 @@ Engine::SccInfo Engine::computeSccs(const GraphInfo& graph) const {
   return sccs;
 }
 
-bool Engine::isInfiniteScc(const std::vector<NodeId>& scc,
-                           const GraphInfo& graph) const {
+bool Engine::isInfiniteScc(const std::vector<NodeId>& scc, const GraphInfo& graph) const {
   if (scc.size() > 1) {
     return true;
   }
@@ -575,8 +564,8 @@ bool Engine::isInfiniteScc(const std::vector<NodeId>& scc,
 }
 
 bool Engine::extractCycleFromScc(const std::vector<NodeId>& scc,
-                                 const GraphInfo& graph,
-                                 std::vector<const State*>& cycle) const {
+    const GraphInfo& graph,
+    std::vector<const State*>& cycle) const {
   if (scc.empty()) {
     return false;
   }
@@ -642,8 +631,8 @@ bool Engine::extractCycleFromScc(const std::vector<NodeId>& scc,
 }
 
 bool Engine::findEventuallyCounterexample(const PredicateCache& predicate,
-                                          const GraphInfo& graph,
-                                          std::vector<const State*>& cycle) const {
+    const GraphInfo& graph,
+    std::vector<const State*>& cycle) const {
   std::vector<uint8_t> color(graphStates_.size());
   std::vector<size_t> stackPos(graphStates_.size());
   std::vector<NodeId> stack;

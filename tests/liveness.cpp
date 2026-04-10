@@ -28,19 +28,15 @@ TEST(Liveness, ClauseKindsAndBindingModes) {
   ASSERT_EQ(1, evt.eventually.size());
 
   static_assert(
-      is_eq<BooleanResult,
-            decltype(weak.weakFairness[0](std::declval<Context&>()))>);
+      is_eq<BooleanResult, decltype(weak.weakFairness[0](std::declval<Context&>()))>);
   static_assert(
-      is_eq<BooleanResult,
-            decltype(strong.strongFairness[0](std::declval<Context&>()))>);
-  static_assert(
-      is_eq<bool, decltype(evt.eventually[0](std::declval<Context&>()))>);
+      is_eq<BooleanResult, decltype(strong.strongFairness[0](std::declval<Context&>()))>);
+  static_assert(is_eq<bool, decltype(evt.eventually[0](std::declval<Context&>()))>);
 }
 
 TEST(Liveness, ConjunctionMergesClauses) {
   Var<int> x{"x"};
-  auto clauses = wf(x++ == 2) && sf(x++ == 3) && eventually(x > 0) &&
-                 eventually(x != 2);
+  auto clauses = wf(x++ == 2) && sf(x++ == 3) && eventually(x > 0) && eventually(x != 2);
 
   ASSERT_EQ(1, clauses.weakFairness.size());
   ASSERT_EQ(1, clauses.strongFairness.size());
@@ -52,9 +48,7 @@ namespace {
 struct EventuallyPassModel : IModel {
   Boolean init() override { return x == 0; }
   Boolean next() override { return x++ == 1; }
-  std::optional<LivenessBoolean> liveness() override {
-    return eventually(x == 1);
-  }
+  std::optional<LivenessBoolean> liveness() override { return eventually(x == 1); }
 
   Var<int> x{"x"};
 };
@@ -62,9 +56,7 @@ struct EventuallyPassModel : IModel {
 struct EventuallyCycleFailModel : IModel {
   Boolean init() override { return x == 0; }
   Boolean next() override { return x++ == x; }
-  std::optional<LivenessBoolean> liveness() override {
-    return eventually(x == 1);
-  }
+  std::optional<LivenessBoolean> liveness() override { return eventually(x == 1); }
 
   Var<int> x{"x"};
 };
@@ -74,9 +66,7 @@ struct EventuallyDeadlockFailModel : IModel {
   Boolean next() override {
     return Boolean{[](Context&) { return BooleanResult{false}; }};
   }
-  std::optional<LivenessBoolean> liveness() override {
-    return eventually(x == 1);
-  }
+  std::optional<LivenessBoolean> liveness() override { return eventually(x == 1); }
 
   Var<int> x{"x"};
 };
@@ -86,9 +76,7 @@ struct EventuallyAfterGoodPrefixPassModel : IModel {
   Boolean next() override {
     return x == 0 && x++ == 1 || x == 1 && x++ == 2 || x == 2 && x++ == 2;
   }
-  std::optional<LivenessBoolean> liveness() override {
-    return eventually(x == 1);
-  }
+  std::optional<LivenessBoolean> liveness() override { return eventually(x == 1); }
 
   Var<int> x{"x"};
 };
@@ -122,9 +110,7 @@ struct EventuallyMixedInitialFailModel : IModel {
   Boolean next() override {
     return x == 0 && x++ == 0 || x == 1 && x++ == 2 || x == 2 && x++ == 2;
   }
-  std::optional<LivenessBoolean> liveness() override {
-    return eventually(x == 1);
-  }
+  std::optional<LivenessBoolean> liveness() override { return eventually(x == 1); }
 
   Var<int> x{"x"};
 };
@@ -133,9 +119,7 @@ struct LivenessWithStopModel : IModel {
   Boolean init() override { return x == 0; }
   Boolean next() override { return x++ == x; }
   std::optional<Boolean> stop() override { return x == 0; }
-  std::optional<LivenessBoolean> liveness() override {
-    return eventually(x == 1);
-  }
+  std::optional<LivenessBoolean> liveness() override { return eventually(x == 1); }
 
   Var<int> x{"x"};
 };
@@ -155,15 +139,11 @@ struct WeakFairnessCombinedModel : WeakFairnessChoiceBase {
 };
 
 struct WeakFairnessSeparateModel : WeakFairnessChoiceBase {
-  std::optional<LivenessBoolean> liveness() override {
-    return wf(a()) && wf(b());
-  }
+  std::optional<LivenessBoolean> liveness() override { return wf(a()) && wf(b()); }
 };
 
 struct StrongFairnessChoiceBase : IModel {
-  Boolean cycle() {
-    return x == 0 && x++ == 1 || x == 1 && x++ == 0;
-  }
+  Boolean cycle() { return x == 0 && x++ == 1 || x == 1 && x++ == 0; }
 
   Boolean a() { return x == 0 && x++ == 2; }
 

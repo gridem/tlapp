@@ -3,10 +3,10 @@
 #include "macro_iterator.h"
 #include "true_forward.h"
 
-#define FOR_afun(D) auto &&D
+#define FOR_afun(D) auto&& D
 #define FOR_fun_typename(D) typename T_##D
 #define FOR_fun_typename_comma(D) typename T_##D,
-#define FOR_fun_args(D) T_##D &&D
+#define FOR_fun_args(D) T_##D&& D
 #define FOR_fun_args_comma(D) T_##D &&D,
 #define FOR_fun_spec_typename(D) typename D
 #define FOR_fwd(D) true_forward(D)
@@ -30,15 +30,13 @@
 // Declares set of templates.
 // Sample: tname(T, ...V) =>
 //      template<typename T, typename ...V>
-#define tname(...) \
-  template <macro_iterate_comma(FOR_fun_spec_typename, ##__VA_ARGS__)>
+#define tname(...) template <macro_iterate_comma(FOR_fun_spec_typename, ##__VA_ARGS__)>
 
 // Declares set of templates.
 // Sample: tname_if(I, T) =>
 //      template<typename T, use_if(I)>
-#define tname_if(D_if, ...)                                            \
-  template <macro_iterate_comma(FOR_fun_spec_typename, ##__VA_ARGS__), \
-            use_if(D_if)>
+#define tname_if(D_if, ...) \
+  template <macro_iterate_comma(FOR_fun_spec_typename, ##__VA_ARGS__), use_if(D_if)>
 
 // Creates standalone template function with auto types.
 // Sample: fun(X, a, b) =>
@@ -52,11 +50,10 @@
 // Sample: funs(X, a, b) =>
 //      template<typename T_a, typename... T_b>
 //      decltype(auto) X(T_a&& a, T_b&& b...)
-#define IMPL_funs_1(D_name, D_last, ...)                                 \
-  template <macro_iterate(FOR_fun_typename_comma, ##__VA_ARGS__)         \
-                typename... T_##D_last>                                  \
-  decltype(auto) D_name(macro_iterate(FOR_fun_args_comma, ##__VA_ARGS__) \
-                            T_##D_last &&...D_last)
+#define IMPL_funs_1(D_name, D_last, ...)                                                 \
+  template <macro_iterate(FOR_fun_typename_comma, ##__VA_ARGS__) typename... T_##D_last> \
+  decltype(auto) D_name(                                                                 \
+      macro_iterate(FOR_fun_args_comma, ##__VA_ARGS__) T_##D_last&&... D_last)
 #define IMPL_funs_0(...) IMPL_funs_1(__VA_ARGS__)
 #define funs(D_name, ...) IMPL_funs_0(D_name, macro_rotate(__VA_ARGS__))
 
@@ -64,9 +61,8 @@
 // Sample: fun_if(X, I, a, b) =>
 //      template<typename T_a, typename T_b, use_if(I)>
 //      decltype(auto) X(T_a&& a, T_b&& b)
-#define fun_if(D_name, D_if, ...)                                 \
-  template <macro_iterate_comma(FOR_fun_typename, ##__VA_ARGS__), \
-            use_if(D_if)>                                         \
+#define fun_if(D_name, D_if, ...)                                               \
+  template <macro_iterate_comma(FOR_fun_typename, ##__VA_ARGS__), use_if(D_if)> \
   decltype(auto) D_name(macro_iterate_comma(FOR_fun_args, ##__VA_ARGS__))
 
 // Forwards the value based on the value itself instead of type.
@@ -94,7 +90,7 @@
 #define lam_in(...) IMPL_lam_in_0(lam, macro_rotate(__VA_ARGS__))
 
 // Converts function to lambda object to be used as argument in other functions.
-#define as_lam(D_name) [](auto &&...v) { return D_name(fwd(v)...); }
+#define as_lam(D_name) [](auto&&... v) { return D_name(fwd(v)...); }
 
 // Packs variadic args in lambda capture.
 #define variadic_pack(D_var, D_call) D_var = std::make_tuple(D_call)

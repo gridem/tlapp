@@ -41,8 +41,9 @@ The current codebase strongly suggests these adjustments:
 - keep short functions and small blocks on one line when natural
 - treat `if_as`, `if_is`, and `if_eq` as control-flow macros
 - avoid automatic include sorting
-- treat 80 columns as a soft target; the current tree still has a few
-  intentional lines in the low-to-mid 80s
+- treat 90 columns as the practical limit for this repository; it avoids the
+  worst forced wraps while still preventing long DSL-heavy methods from
+  collapsing into too many single-line expressions
 
 ## Suggested `.clang-format`
 
@@ -51,7 +52,7 @@ BasedOnStyle: Chromium
 
 IndentWidth: 2
 ContinuationIndentWidth: 4
-ColumnLimit: 80
+ColumnLimit: 90
 
 BreakBeforeBraces: Attach
 PointerAlignment: Left
@@ -74,6 +75,25 @@ IfMacros:
   - if_is
   - if_eq
 ```
+
+`clang-format` 17 does not appear to provide a useful dedicated option for the
+project DSL block macros `$A`, `$E`, and `$if`. `ForEachMacros`,
+`StatementMacros`, and `WhitespaceSensitiveMacros` do not materially improve
+their invocation formatting in the current toolchain.
+
+The practical improvement for these macros comes from `Macros`, which allows
+clang-format to parse macro invocations using custom expansions. The checked-in
+config uses:
+
+```yaml
+Macros:
+  - '$A(x,y)=for (auto&& x : y)'
+  - '$E(x,y)=for (auto&& x : y)'
+  - '$if(x,y)=for (auto&& x : y)'
+```
+
+This is not semantically exact C++, but it gives clang-format a control-flow
+shape that improves spacing and wrapping for the DSL blocks.
 
 ## Validation Advice
 

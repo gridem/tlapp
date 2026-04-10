@@ -60,9 +60,9 @@ tname(K, V) std::string asString(const std::pair<K, V>& p) {
   return asString(p.first) + ": " + asString(p.second);
 }
 
-tname(T) std::string
-    containerAsString(const T& container, const std::string& left,
-                      const std::string& right) {
+tname(T) std::string containerAsString(const T& container,
+    const std::string& left,
+    const std::string& right) {
   std::string result;
   for (auto&& t : container) {
     if (!result.empty()) {
@@ -91,9 +91,7 @@ SINGLE_AS_STRING(std::unique_ptr)
 SINGLE_AS_STRING(std::shared_ptr)
 SINGLE_AS_STRING(std::optional)
 
-tname(T) std::string asStringQuote(const T& t) {
-  return '"' + asString(t) + '"';
-}
+tname(T) std::string asStringQuote(const T& t) { return '"' + asString(t) + '"'; }
 
 tname(T, ... V) std::string asString(const T& t, V&&... v) {
   return asString(t) + asString(fwd(v)...);

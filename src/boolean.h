@@ -13,8 +13,7 @@ namespace detail {
 tname(T_expr) struct CheckBranchOp {
   using expr_type = PreparedExpression<T_expr>;
 
-  tname(T) explicit CheckBranchOp(T&& expr)
-      : expr_{detail::prepare(fwd(expr))} {}
+  tname(T) explicit CheckBranchOp(T&& expr) : expr_{detail::prepare(fwd(expr))} {}
 
   bool apply(Context& ctx) const { return detail::extract(ctx, expr_); }
 
@@ -23,8 +22,7 @@ tname(T_expr) struct CheckBranchOp {
 };
 
 tname(T_l, T_r) struct AssignBranchOp {
-  tname(T1, T2) AssignBranchOp(T1&& l, T2&& r)
-      : l_{fwd(l)}, r_{fwd(r)} {}
+  tname(T1, T2) AssignBranchOp(T1&& l, T2&& r) : l_{fwd(l)}, r_{fwd(r)} {}
 
   bool apply(Context& ctx) const { return l_.assignTo(ctx, r_); }
 
@@ -74,8 +72,7 @@ struct BranchOp {
   ~BranchOp() { reset(); }
 
   template <typename T_op,
-            std::enable_if_t<!std::is_same_v<std::decay_t<T_op>, BranchOp>,
-                             int> = 0>
+      std::enable_if_t<!std::is_same_v<std::decay_t<T_op>, BranchOp>, int> = 0>
   explicit BranchOp(T_op&& op) {
     emplace<std::decay_t<T_op>>(fwd(op));
   }
@@ -216,9 +213,8 @@ struct BranchResult {
   }
 
   tname(T_l, T_r) static BranchResult fromAssign(T_l&& l, T_r&& r) {
-    return BranchResult{BranchOp{detail::AssignBranchOp<std::decay_t<T_l>,
-                                                        std::decay_t<T_r>>{
-        fwd(l, r)}}};
+    return BranchResult{BranchOp{
+        detail::AssignBranchOp<std::decay_t<T_l>, std::decay_t<T_r>>{fwd(l, r)}}};
   }
 
   size_t size() const { return size_; }
@@ -262,8 +258,7 @@ struct BranchResult {
   }
 
   const BranchOp* data() const {
-    return heap_ != nullptr ? heap_
-                            : reinterpret_cast<const BranchOp*>(storage_);
+    return heap_ != nullptr ? heap_ : reinterpret_cast<const BranchOp*>(storage_);
   }
 
   bool isInline() const { return heap_ == nullptr; }
@@ -327,8 +322,8 @@ struct BranchResult {
 
   void moveFrom(BranchResult&& other) {
     if (other.isInline()) {
-      append(std::make_move_iterator(other.begin()),
-             std::make_move_iterator(other.end()));
+      append(
+          std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
       other.clear();
     } else {
       heap_ = other.heap_;
@@ -376,17 +371,16 @@ struct LogicResult : std::vector<BranchResult> {
 struct BooleanResult : std::variant<bool, LogicResult> {
   using std::variant<bool, LogicResult>::variant;
 
-  tname(B) static BooleanResult fromRaw(B&& b) {
-    return LogicResult::fromRaw(fwd(b));
-  }
+  tname(B) static BooleanResult fromRaw(B&& b) { return LogicResult::fromRaw(fwd(b)); }
 
   // Should be used for testing purposes only because it represents a set of
   // possible combinations.
   bool evaluate(Context& ctx) const {
     return std::visit(
         [&ctx] lam_arg(v) {
-          if_eq(v, bool) { return v; }
-          else {
+          if_eq(v, bool) {
+            return v;
+          } else {
             return v.evaluate(ctx);
           }
         },
@@ -452,8 +446,9 @@ let assignOp = lam(ctx, l, r) {
 };
 
 fun(resultOf, t) {
-  if_is(t, lazy) { return t(); }
-  else {
+  if_is(t, lazy) {
+    return t();
+  } else {
     return fwd(t);
   }
 }
@@ -462,36 +457,30 @@ tname(L, R) using BinaryBooleanResultType =
     std::conditional_t<is_eq<L, R>, std::decay_t<L>, BooleanResult>;
 
 static_assert(is_eq<bool, BinaryBooleanResultType<bool, bool>>);
-static_assert(is_eq<BooleanResult,
-                    BinaryBooleanResultType<BooleanResult, BooleanResult>>);
 static_assert(
-    is_eq<LogicResult, BinaryBooleanResultType<LogicResult, LogicResult>>);
-static_assert(
-    is_eq<BooleanResult, BinaryBooleanResultType<bool, BooleanResult>>);
-static_assert(
-    is_eq<BooleanResult, BinaryBooleanResultType<BooleanResult, bool>>);
+    is_eq<BooleanResult, BinaryBooleanResultType<BooleanResult, BooleanResult>>);
+static_assert(is_eq<LogicResult, BinaryBooleanResultType<LogicResult, LogicResult>>);
+static_assert(is_eq<BooleanResult, BinaryBooleanResultType<bool, BooleanResult>>);
+static_assert(is_eq<BooleanResult, BinaryBooleanResultType<BooleanResult, bool>>);
 static_assert(is_eq<BooleanResult, BinaryBooleanResultType<LogicResult, bool>>);
 static_assert(is_eq<BooleanResult, BinaryBooleanResultType<bool, LogicResult>>);
 
 fun(binaryBooleanOp, impl, l, r) {
   // If any of lam_arg is bool, evaluate impl with first lam_arg as bool.
-  if_eq(resultOf(fwd(l)), bool) { return impl(fwd(l, r)); }
-  else if_eq(resultOf(fwd(r)), bool) {
+  if_eq(resultOf(fwd(l)), bool) {
+    return impl(fwd(l, r));
+  } else if_eq(resultOf(fwd(r)), bool) {
     return impl(fwd(r, l));
-  }
-  else if_eq(resultOf(fwd(l)), BooleanResult) {
+  } else if_eq(resultOf(fwd(l)), BooleanResult) {
     // Visit l and try again.
     return std::visit(
-        [&r, &impl] lam_arg(v) -> BooleanResult {
-          return binaryBooleanOp(fwd(impl, v, r));
-        },
+        [&r, &impl] lam_arg(
+            v) -> BooleanResult { return binaryBooleanOp(fwd(impl, v, r)); },
         resultOf(fwd(l)));
-  }
-  else if_eq(resultOf(fwd(r)), BooleanResult) {
+  } else if_eq(resultOf(fwd(r)), BooleanResult) {
     // extract right.
     return binaryBooleanOp(fwd(impl, r, l));
-  }
-  else {
+  } else {
     return impl(fwd(r, l));
   }
 }
@@ -502,8 +491,7 @@ fun(concatBranches, l, r) {
     l.reserve(l.size() + r.size());
     l.insert(l.end(), r.begin(), r.end());
     return fwd(l);
-  }
-  else {
+  } else {
     BranchResult branch = l;
     branch.reserve(branch.size() + r.size());
     branch.insert(branch.end(), r.begin(), r.end());
@@ -538,8 +526,7 @@ fun(concatVectors, l, r) {
   if_is(l, rvalue_reference_v) {
     appendLogic(l, r);
     return fwd(l);
-  }
-  else {
+  } else {
     auto v = l;
     v.reserve(v.size() + r.size());
     appendLogic(v, r);
@@ -568,33 +555,27 @@ fun(mulVectors, ls, rs) {
     } else {
       return mulVectorsImpl(fwd(ls, rs));
     }
-  }
-  else {
+  } else {
     return mulVectorsImpl(fwd(ls, rs));
   }
 }
 
 fun(orImpl, l, r) {
   if_eq(resultOf(fwd(l)), bool) {
-    return resultOf(fwd(l))
-               ? BinaryBooleanResultType<decltype(resultOf(fwd(l))),
-                                         decltype(resultOf(fwd(r)))>{true}
-               : resultOf(fwd(r));
-  }
-  else {
+    return resultOf(fwd(l)) ? BinaryBooleanResultType<decltype(resultOf(fwd(l))),
+                                  decltype(resultOf(fwd(r)))>{true}
+                            : resultOf(fwd(r));
+  } else {
     return concatVectors(resultOf(fwd(l)), resultOf(fwd(r)));
   }
 }
 
 fun(andImpl, l, r) {
   if_eq(resultOf(fwd(l)), bool) {
-    return resultOf(fwd(l))
-               ? BinaryBooleanResultType<decltype(resultOf(fwd(l))),
-                                         decltype(resultOf(fwd(r)))>{resultOf(
-                     fwd(r))}
-               : false;
-  }
-  else {
+    return resultOf(fwd(l)) ? BinaryBooleanResultType<decltype(resultOf(fwd(l))),
+                                  decltype(resultOf(fwd(r)))>{resultOf(fwd(r))}
+                            : false;
+  } else {
     return mulVectors(resultOf(fwd(l)), resultOf(fwd(r)));
   }
 }
@@ -608,16 +589,13 @@ inline bool operator!(const LogicResult&) {
   throw ExpressionError("Negative operation cannot be applied to logic result");
 }
 
-inline bool operator!(const BooleanResult& b) {
-  return std::visit(lam_in(v, !v), b);
-}
+inline bool operator!(const BooleanResult& b) { return std::visit(lam_in(v, !v), b); }
 
 fun_if(operator==, is_any_of(is_expression, T_l, T_r), l, r) {
   if_is(l, assignment) {
     // Left argument can be used in special assignment procedure.
     return evaluate_ctx(detail::assignOp, fwd(l, r));
-  }
-  else {
+  } else {
     // If assignment is not allowed, do just simple comparison.
     return evaluator(l == r, l, r);
   }

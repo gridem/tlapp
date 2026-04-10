@@ -17,9 +17,7 @@ Value& Value::operator=(const Value& other) {
 
 Value& Value::operator=(Value&& other) = default;
 
-bool Value::operator==(const Value& other) const {
-  return t_->equals(*other.t_);
-}
+bool Value::operator==(const Value& other) const { return t_->equals(*other.t_); }
 
 bool Value::operator!=(const Value& other) const { return !operator==(other); }
 
@@ -52,8 +50,8 @@ void TemporalState::validate() const {
   operator[](0).validate();
   for (auto&& s : operator[](1)) {
     if (!s->empty()) {
-      throw VarValidationError(asString("Temporal variable cannot be set: ",
-                                        asStringQuote(s->name())));
+      throw VarValidationError(
+          asString("Temporal variable cannot be set: ", asStringQuote(s->name())));
     }
   }
 }

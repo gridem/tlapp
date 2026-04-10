@@ -3,14 +3,18 @@
 namespace leaderless_consensus::rush {
 
 struct_fields(RushGenerationState, (MessageSeq, messages), (int, generation));
-struct_fields(RushPromiseState, (MessageSeq, prefix), (NodeSet, support),
-              (NodeSet, votes));
+struct_fields(RushPromiseState,
+    (MessageSeq, prefix),
+    (NodeSet, support),
+    (NodeSet, votes));
 
 using RushGenerations = std::vector<RushGenerationState>;
 using RushPromises = std::set<RushPromiseState>;
 
-struct_fields(RushCoreState, (CarrySet, carries), (RushGenerations, nodesMessages),
-              (RushPromises, promises));
+struct_fields(RushCoreState,
+    (CarrySet, carries),
+    (RushGenerations, nodesMessages),
+    (RushPromises, promises));
 
 }  // namespace leaderless_consensus::rush
 
@@ -18,8 +22,8 @@ namespace std {
 
 template <>
 struct hash<leaderless_consensus::rush::RushCoreState> {
-  size_t operator()(const leaderless_consensus::rush::RushCoreState& state) const
-      noexcept {
+  size_t operator()(
+      const leaderless_consensus::rush::RushCoreState& state) const noexcept {
     return state.toHash();
   }
 };
@@ -34,13 +38,14 @@ struct_fields(RushStateMsg, (int, from), (int, to), (RushCoreState, core));
 using RushNodes = std::map<NodeId, RushNodeState>;
 using RushStateMessages = std::set<RushStateMsg>;
 
-struct_fields(RushState, (NodeSet, alive), (CarrySet, applied),
-              (RushNodes, local), (RushStateMessages, stateMsgs));
+struct_fields(RushState,
+    (NodeSet, alive),
+    (CarrySet, applied),
+    (RushNodes, local),
+    (RushStateMessages, stateMsgs));
 
 RushCoreState makeEmptyCore(size_t nodeCount) {
-  return RushCoreState{{},
-                       RushGenerations(nodeCount, RushGenerationState{{}, 0}),
-                       {}};
+  return RushCoreState{{}, RushGenerations(nodeCount, RushGenerationState{{}, 0}), {}};
 }
 
 RushState makeState(const NodeSet& nodes) {
@@ -53,8 +58,9 @@ RushState makeState(const NodeSet& nodes) {
 }
 
 RushStateMessages broadcastState(const RushStateMessages& messages,
-                                 const NodeSet& alive, NodeId from,
-                                 const RushCoreState& core) {
+    const NodeSet& alive,
+    NodeId from,
+    const RushCoreState& core) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -64,9 +70,7 @@ RushStateMessages broadcastState(const RushStateMessages& messages,
   return result;
 }
 
-int majority(size_t nodeCount) {
-  return static_cast<int>(nodeCount / 2 + 1);
-}
+int majority(size_t nodeCount) { return static_cast<int>(nodeCount / 2 + 1); }
 
 int maxGeneration(size_t /*itemCount*/) { return 4; }
 
@@ -74,8 +78,7 @@ int nextGeneration(int generation, size_t itemCount) {
   return std::min(generation + 1, maxGeneration(itemCount));
 }
 
-NodeSet prefixSupport(const RushGenerations& generations,
-                      const MessageSeq& prefix) {
+NodeSet prefixSupport(const RushGenerations& generations, const MessageSeq& prefix) {
   NodeSet support;
   for (size_t node = 0; node < generations.size(); ++node) {
     if (isPrefix(prefix, generations[node].messages)) {
@@ -85,8 +88,9 @@ NodeSet prefixSupport(const RushGenerations& generations,
   return support;
 }
 
-NodeSet promiseVotesFor(const RushPromises& promises, const MessageSeq& prefix,
-                        const NodeSet& support) {
+NodeSet promiseVotesFor(const RushPromises& promises,
+    const MessageSeq& prefix,
+    const NodeSet& support) {
   for (auto&& promise : promises) {
     if (promise.prefix == prefix && promise.support == support) {
       return promise.votes;
@@ -95,8 +99,10 @@ NodeSet promiseVotesFor(const RushPromises& promises, const MessageSeq& prefix,
   return {};
 }
 
-RushPromises putPromiseVotes(RushPromises promises, const MessageSeq& prefix,
-                             const NodeSet& support, const NodeSet& votes) {
+RushPromises putPromiseVotes(RushPromises promises,
+    const MessageSeq& prefix,
+    const NodeSet& support,
+    const NodeSet& votes) {
   for (auto it = promises.begin(); it != promises.end(); ++it) {
     if (it->prefix == prefix && it->support == support) {
       promises.erase(it);
@@ -109,16 +115,14 @@ RushPromises putPromiseVotes(RushPromises promises, const MessageSeq& prefix,
 
 RushPromises mergePromises(RushPromises left, const RushPromises& right) {
   for (auto&& promise : right) {
-    auto votes = setUnion(promiseVotesFor(left, promise.prefix, promise.support),
-                          promise.votes);
-    left = putPromiseVotes(std::move(left), promise.prefix, promise.support,
-                           votes);
+    auto votes =
+        setUnion(promiseVotesFor(left, promise.prefix, promise.support), promise.votes);
+    left = putPromiseVotes(std::move(left), promise.prefix, promise.support, votes);
   }
   return left;
 }
 
-MessageId majorityId(const RushGenerations& generations, size_t index,
-                     int quorum) {
+MessageId majorityId(const RushGenerations& generations, size_t index, int quorum) {
   std::map<MessageId, int> counts;
   for (auto&& entry : generations) {
     if (index < entry.messages.size()) {
@@ -137,14 +141,15 @@ struct MergeResult {
   MessageSeq committed;
 };
 
-MergeResult mergeState(const RushNodeState& state, NodeId self,
-                       const RushCoreState& incoming, size_t nodeCount) {
+MergeResult mergeState(const RushNodeState& state,
+    NodeId self,
+    const RushCoreState& incoming,
+    size_t nodeCount) {
   auto newCore = makeEmptyCore(nodeCount);
   newCore.nodesMessages = state.core.nodesMessages;
 
   for (size_t i = 0; i < nodeCount; ++i) {
-    if (incoming.nodesMessages[i].generation >
-        newCore.nodesMessages[i].generation) {
+    if (incoming.nodesMessages[i].generation > newCore.nodesMessages[i].generation) {
       newCore.nodesMessages[i] = incoming.nodesMessages[i];
     }
   }
@@ -177,8 +182,7 @@ MergeResult mergeState(const RushNodeState& state, NodeId self,
       }
       votes = setIntersection(votes, support);
       newCore.promises =
-          putPromiseVotes(std::move(newCore.promises), promiseMessages, support,
-                          votes);
+          putPromiseVotes(std::move(newCore.promises), promiseMessages, support, votes);
       if (static_cast<int>(support.size()) >= quorum &&
           static_cast<int>(votes.size()) >= quorum) {
         commitMessages = promiseMessages;
@@ -192,12 +196,10 @@ MergeResult mergeState(const RushNodeState& state, NodeId self,
       auto& messages = newCore.nodesMessages[self].messages;
       if (i < messages.size()) {
         auto oldMessages = messages;
-        std::sort(messages.begin() + static_cast<std::ptrdiff_t>(i),
-                  messages.end());
+        std::sort(messages.begin() + static_cast<std::ptrdiff_t>(i), messages.end());
         if (messages != oldMessages) {
           newCore.nodesMessages[self].generation =
-              nextGeneration(state.core.nodesMessages[self].generation,
-                             nodeCount);
+              nextGeneration(state.core.nodesMessages[self].generation, nodeCount);
         }
       }
       continue;
@@ -260,17 +262,17 @@ RushState disconnect(RushState sys, NodeId failed) {
   return sys;
 }
 
-bool coreWellFormed(const RushCoreState& core, const CarrySet& applied,
-                    const NodeSet& allNodes, size_t nodeCount) {
-  if (!isSubset(core.carries, applied) ||
-      core.nodesMessages.size() != nodeCount) {
+bool coreWellFormed(const RushCoreState& core,
+    const CarrySet& applied,
+    const NodeSet& allNodes,
+    size_t nodeCount) {
+  if (!isSubset(core.carries, applied) || core.nodesMessages.size() != nodeCount) {
     return false;
   }
 
   for (auto&& entry : core.nodesMessages) {
     if (entry.generation < 0 || entry.generation > maxGeneration(nodeCount) ||
-        !itemsAreSubset(entry.messages, applied) ||
-        !allUnique(entry.messages)) {
+        !itemsAreSubset(entry.messages, applied) || !allUnique(entry.messages)) {
       return false;
     }
   }
@@ -298,8 +300,7 @@ bool invariant(const RushState& sys) {
 
   for (auto&& [node, state] : sys.local) {
     if (!coreWellFormed(state.core, sys.applied, allNodes, sys.local.size()) ||
-        !itemsAreSubset(state.committed, sys.applied) ||
-        !allUnique(state.committed)) {
+        !itemsAreSubset(state.committed, sys.applied) || !allUnique(state.committed)) {
       return false;
     }
   }
@@ -336,17 +337,14 @@ struct Model : IModel {
   Boolean next() override {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canApplyExpr(sys, node, id) &&
-               sys++ == applyExpr(sys, node, id);
+        return canApplyExpr(sys, node, id) && sys++ == applyExpr(sys, node, id);
       };
     }
     || $E(msg, get_mem(sys, stateMsgs)) {
-      return canDeliverStateExpr(sys, msg) &&
-             sys++ == deliverStateExpr(sys, msg);
+      return canDeliverStateExpr(sys, msg) && sys++ == deliverStateExpr(sys, msg);
     }
     || $E(failed, nodes_) {
-      return canDisconnectExpr(sys, failed) &&
-             sys++ == disconnectExpr(sys, failed);
+      return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
     };
   }
 

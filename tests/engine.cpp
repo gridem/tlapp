@@ -10,9 +10,8 @@ namespace test {
 namespace {
 
 Boolean nonBooleanCheckResult() {
-  return Boolean{[](Context&) {
-    return LogicResult::fromRaw([](Context&) { return true; });
-  }};
+  return Boolean{
+      [](Context&) { return LogicResult::fromRaw([](Context&) { return true; }); }};
 }
 
 }  // namespace

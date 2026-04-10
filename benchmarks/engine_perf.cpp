@@ -23,12 +23,15 @@ struct Model : IModel {
 }  // namespace
 
 TEST(EnginePerf, Run) {
-  auto result = runBench("engine_branchy_run", 1, [] {
-    Engine e;
-    e.createModel<Model>();
-    e.run();
-    return benchValue(e.getStats());
-  }, BenchConfig{0});
+  auto result = runBench(
+      "engine_branchy_run", 1,
+      [] {
+        Engine e;
+        e.createModel<Model>();
+        e.run();
+        return benchValue(e.getStats());
+      },
+      BenchConfig{0});
   EXPECT_GT(result.checksum, 0ull);
 }
 

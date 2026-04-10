@@ -24,8 +24,7 @@ tname(T) std::string typeSuffix() {
 tname(T) auto mangle() { return typeid(T).name(); }
 
 tname(T) auto demangle() {
-  return typePrefix<T>() + " " + detail::demangleImpl(mangle<T>()) +
-         typeSuffix<T>();
+  return typePrefix<T>() + " " + detail::demangleImpl(mangle<T>()) + typeSuffix<T>();
 }
 
 tname(T) auto demangle(T&&) { return demangle<T>(); }

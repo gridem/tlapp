@@ -20,8 +20,7 @@ struct Model : IModel {
   }
 
   Boolean next() override {
-    return (hr != 12 && hr++ == hr + 1) ||
-           (hr == 12 && hr++ == 1);
+    return (hr != 12 && hr++ == hr + 1) || (hr == 12 && hr++ == 1);
   }
 
   std::optional<Boolean> ensure() override { return hr >= 1 && hr <= 12; }

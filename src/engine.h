@@ -95,7 +95,7 @@ struct Engine {
   // Precomputes enabledness and matching targets for an action on all admitted
   // nodes.
   ActionCache computeActionCache(const BoundNextAction<Boolean>& action,
-                                 const GraphInfo& graph);
+      const GraphInfo& graph);
 
   // Computes strongly connected components of the admitted graph.
   SccInfo computeSccs(const GraphInfo& graph) const;
@@ -104,14 +104,15 @@ struct Engine {
   bool isInfiniteScc(const std::vector<NodeId>& scc, const GraphInfo& graph) const;
 
   // Extracts a cycle from the SCC.
-  bool extractCycleFromScc(const std::vector<NodeId>& scc, const GraphInfo& graph,
-                           std::vector<const State*>& cycle) const;
+  bool extractCycleFromScc(const std::vector<NodeId>& scc,
+      const GraphInfo& graph,
+      std::vector<const State*>& cycle) const;
 
   // Checks if there is a cycle (or deadlock-stutter) in the subgraph where
   // the predicate is false.
   bool findEventuallyCounterexample(const PredicateCache& predicate,
-                                    const GraphInfo& graph,
-                                    std::vector<const State*>& cycle) const;
+      const GraphInfo& graph,
+      std::vector<const State*>& cycle) const;
 
   // Show trace of the current state.
   void trace(const State& state) const;

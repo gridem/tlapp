@@ -23,10 +23,9 @@ struct Model : IModel {
     auto bigNext = min(big + small, 5);
     auto smallToBig = big++ == bigNext && small++ == small - (bigNext - big);
     auto smallNext = min(big + small, 3);
-    auto bigToSmall =
-        small++ == smallNext && big++ == big - (smallNext - small);
-    return fillSmallJug || fillBigJug || emptySmallJug || emptyBigJug ||
-           smallToBig || bigToSmall;
+    auto bigToSmall = small++ == smallNext && big++ == big - (smallNext - small);
+    return fillSmallJug || fillBigJug || emptySmallJug || emptyBigJug || smallToBig ||
+           bigToSmall;
   }
 
   std::optional<Boolean> stop() override { return big++ == 4; }

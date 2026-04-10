@@ -16,13 +16,11 @@ tname(R) using RawX = std::function<R(Context&)>;
 tname(T_expr) struct ErasureExpression : T_expr,
                                          expression_tag_type,
                                          expression_untyped_tag_type {
-  tname_if(!is_expression_untyped<T>, T) ErasureExpression(T&& t)
-      : T_expr{fwd(t)} {}
+  tname_if(!is_expression_untyped<T>, T) ErasureExpression(T&& t) : T_expr{fwd(t)} {}
 };
 
 // Variant with either immediate result or expression result.
-tname(R) using ErasureExpressionVariant =
-    ErasureExpression<std::variant<R, RawX<R>>>;
+tname(R) using ErasureExpressionVariant = ErasureExpression<std::variant<R, RawX<R>>>;
 
 // ErasureExpressionVariant lets an expression be either:
 //  1) an immediate value R (constant expression), or

@@ -43,8 +43,10 @@ uint64_t benchValue(T value) {
 }
 
 template <typename F>
-BenchResult runBench(std::string_view name, size_t iterations, F&& f,
-                     BenchConfig config = {}) {
+BenchResult runBench(std::string_view name,
+    size_t iterations,
+    F&& f,
+    BenchConfig config = {}) {
   for (size_t i = 0; i < config.warmupIterations; ++i) {
     (void)benchValue(f());
   }
@@ -60,30 +62,33 @@ BenchResult runBench(std::string_view name, size_t iterations, F&& f,
   auto perIterUs = std::chrono::duration<double, std::micro>(finish - start);
   perIterUs /= static_cast<double>(iterations);
 
-  BenchResult result{std::string{name}, iterations, checksum, elapsed.count(),
-                     perIterUs.count()};
+  BenchResult result{
+      std::string{name}, iterations, checksum, elapsed.count(), perIterUs.count()};
 
   std::cout << std::fixed << std::setprecision(3) << "BENCH name=" << result.name
-            << " iterations=" << result.iterations
-            << " checksum=" << result.checksum << " total_ms=" << result.totalMs
-            << " per_iter_us=" << result.perIterUs << '\n';
+            << " iterations=" << result.iterations << " checksum=" << result.checksum
+            << " total_ms=" << result.totalMs << " per_iter_us=" << result.perIterUs
+            << '\n';
   return result;
 }
 
 template <typename F>
-BenchResult expectBenchChecksum(std::string_view name, size_t iterations,
-                                uint64_t expectedChecksum, F&& f,
-                                BenchConfig config = {}) {
+BenchResult expectBenchChecksum(std::string_view name,
+    size_t iterations,
+    uint64_t expectedChecksum,
+    F&& f,
+    BenchConfig config = {}) {
   auto result = runBench(name, iterations, std::forward<F>(f), config);
   EXPECT_EQ(expectedChecksum, result.checksum);
   return result;
 }
 
 template <typename F>
-BenchResult expectBenchPerIteration(std::string_view name, size_t iterations,
-                                    uint64_t expectedPerIteration, F&& f,
-                                    BenchConfig config = {}) {
-  return expectBenchChecksum(name, iterations,
-                             expectedPerIteration * iterations,
-                             std::forward<F>(f), config);
+BenchResult expectBenchPerIteration(std::string_view name,
+    size_t iterations,
+    uint64_t expectedPerIteration,
+    F&& f,
+    BenchConfig config = {}) {
+  return expectBenchChecksum(
+      name, iterations, expectedPerIteration * iterations, std::forward<F>(f), config);
 }
