@@ -83,60 +83,83 @@ struct Model : IModel {
   // clang-format off
   fun(showsSafeAt, b, v) {
     return $E(q, quorum) {
-      return $A(a, q) {
-        return $E(m, msgs) {
-          return get_mem(m, type) == M1b && get_mem(m, bal) == b &&
-                 get_mem(m, acc) == a;
-        };
-      } && $A(m1, msgs) {
-        return !(get_mem(m1, type) == M1b && get_mem(m1, bal) == b &&
-                 get_mem(m1, acc) $in q && get_mem(m1, mbal) >= 0) ||
-               $A(m2, msgs) {
-                 return !(get_mem(m2, type) == M1b && get_mem(m2, bal) == b &&
-                          get_mem(m2, acc) $in q && get_mem(m2, mbal) >= 0) ||
-                        get_mem(m1, mbal) == get_mem(m2, mbal);
-               };
-      } &&
-             ($A(m, msgs) {
-               return !(get_mem(m, type) == M1b && get_mem(m, bal) == b &&
-                        get_mem(m, acc) $in q && get_mem(m, mbal) >= 0);
-             } ||
+      return
+          $A(a, q) {
+            return $E(m, msgs) {
+              return get_mem(m, type) == M1b &&
+                     get_mem(m, bal) == b &&
+                     get_mem(m, acc) == a;
+            };
+          } &&
+          $A(m1, msgs) {
+            return
+                !(get_mem(m1, type) == M1b &&
+                  get_mem(m1, bal) == b &&
+                  get_mem(m1, acc) $in q &&
+                  get_mem(m1, mbal) >= 0) ||
+                $A(m2, msgs) {
+                  return
+                      !(get_mem(m2, type) == M1b &&
+                        get_mem(m2, bal) == b &&
+                        get_mem(m2, acc) $in q &&
+                        get_mem(m2, mbal) >= 0) ||
+                      get_mem(m1, mbal) == get_mem(m2, mbal);
+                };
+          } &&
+          (
+              $A(m, msgs) {
+                return !(get_mem(m, type) == M1b &&
+                         get_mem(m, bal) == b &&
+                         get_mem(m, acc) $in q &&
+                         get_mem(m, mbal) >= 0);
+              } ||
               $E(m, msgs) {
-                return get_mem(m, type) == M1b && get_mem(m, bal) == b &&
-                       get_mem(m, acc) $in q && get_mem(m, mbal) >= 0 &&
+                return get_mem(m, type) == M1b &&
+                       get_mem(m, bal) == b &&
+                       get_mem(m, acc) $in q &&
+                       get_mem(m, mbal) >= 0 &&
                        get_mem(m, mval) == v;
-              });
+              }
+          );
     };
   }
 
   fun(phase1a, b) {
-    return !($E(m, msgs) {
-             return get_mem(m, type) == M1a && get_mem(m, bal) == b;
-           }) &&
-           send1a(fwd(b)) &&
-           unchanged(maxBal, maxVBal, maxVal);
+    return
+        !($E(m, msgs) {
+          return get_mem(m, type) == M1a &&
+                 get_mem(m, bal) == b;
+        }) &&
+        send1a(fwd(b)) &&
+        unchanged(maxBal, maxVBal, maxVal);
   }
 
   fun(phase1b, a) {
-    return $E(m, msgs) {
-      return get_mem(m, type) == M1a && get_mem(m, bal) > at(maxBal, a) &&
-             mutAt(maxBal, a, get_mem(m, bal)) &&
-             send1b(a, get_mem(m, bal), at(maxVBal, a), at(maxVal, a));
-    } &&
-           unchanged(maxVBal, maxVal);
+    return
+        $E(m, msgs) {
+          return get_mem(m, type) == M1a &&
+                 get_mem(m, bal) > at(maxBal, a) &&
+                 mutAt(maxBal, a, get_mem(m, bal)) &&
+                 send1b(a, get_mem(m, bal), at(maxVBal, a), at(maxVal, a));
+        } &&
+        unchanged(maxVBal, maxVal);
   }
 
   fun(phase2a, b, v) {
-    return !($E(m, msgs) {
-             return get_mem(m, type) == M2a && get_mem(m, bal) == b;
-           }) &&
-           showsSafeAt(b, v) && send2a(b, v) &&
-           unchanged(maxVal, maxVBal, maxBal);
+    return
+        !($E(m, msgs) {
+          return get_mem(m, type) == M2a &&
+                 get_mem(m, bal) == b;
+        }) &&
+        showsSafeAt(b, v) &&
+        send2a(b, v) &&
+        unchanged(maxVal, maxVBal, maxBal);
   }
 
   fun(phase2b, a) {
     return $E(m, msgs) {
-      return get_mem(m, type) == M2a && get_mem(m, bal) >= at(maxBal, a) &&
+      return get_mem(m, type) == M2a &&
+             get_mem(m, bal) >= at(maxBal, a) &&
              mutAt(maxBal, a, get_mem(m, bal)) &&
              mutAt(maxVBal, a, get_mem(m, bal)) &&
              mutAt(maxVal, a, get_mem(m, val)) &&
