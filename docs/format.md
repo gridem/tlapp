@@ -19,6 +19,9 @@ files such as:
 The closest built-in `clang-format` preset appears to be `Chromium`, with a
 small set of overrides for this repository.
 
+This should be treated as a starting point for local validation, not as a
+blanket instruction to reformat the whole tree.
+
 ## Why `Chromium`
 
 The current code style is broadly consistent with:
@@ -40,7 +43,8 @@ The current codebase strongly suggests these adjustments:
 - keep short functions and small blocks on one line when natural
 - treat `if_as`, `if_is`, and `if_eq` as control-flow macros
 - avoid automatic include sorting
-- keep line wrapping conservative around 80 columns
+- treat 80 columns as a soft target; the current tree still has a few
+  intentional lines in the low-to-mid 80s
 
 ## Suggested `.clang-format`
 
@@ -53,6 +57,7 @@ ColumnLimit: 80
 
 BreakBeforeBraces: Attach
 PointerAlignment: Left
+ReferenceAlignment: Pointer
 DerivePointerAlignment: false
 
 NamespaceIndentation: All
@@ -77,6 +82,7 @@ If a repo-wide formatter config is introduced, validate it first on:
 - `src/boolean.h`
 - `src/evaluate.h`
 - `src/quantifier.h`
+- `src/engine.cpp`
 
 These files are the most sensitive because they combine:
 
@@ -91,5 +97,7 @@ Until a checked-in formatter config exists:
 
 - use the existing code nearby as the primary formatting reference
 - prefer small manual adjustments over wide reformatting
+- validate any proposed `.clang-format` on a small file set before touching the
+  rest of the tree
 - avoid large formatting-only diffs in macro-heavy headers
 - treat this file as a starting point, not a strict guarantee of exact output
