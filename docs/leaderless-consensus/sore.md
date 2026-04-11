@@ -57,6 +57,6 @@ That is why `Sore` is intentionally kept as the expected failing variant.
 
 Recent checks:
 
-- executable safety fails as expected in about `0.16` seconds
+- executable safety fails as expected in under `0.1` seconds
 - TLC safety fails as expected in about `1.1` seconds (`9899` generated,
   `6762` distinct)

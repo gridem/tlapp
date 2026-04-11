@@ -9,6 +9,7 @@
 
 #include "flat.h"
 #include "hash.h"
+#include "inplace_vector.h"
 #include "macro.h"
 
 namespace std {
@@ -28,6 +29,18 @@ tname(T) struct equal_to<unique_ptr<T>> {
 tname(T, ... U) struct hash<vector<T, U...>> {
   size_t operator()(const vector<T, U...>& ts) const noexcept {
     size_t h = 0xbadbed;
+    for (auto&& t : ts) {
+      h <<= 1;
+      h ^= calcHash(t);
+    }
+    return h;
+  }
+};
+
+template <typename T, size_t N>
+struct hash<InplaceVector<T, N>> {
+  size_t operator()(const InplaceVector<T, N>& ts) const noexcept {
+    size_t h = 0x8badbed;
     for (auto&& t : ts) {
       h <<= 1;
       h ^= calcHash(t);

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "flat.h"
+#include "inplace_vector.h"
 #include "macro.h"
 
 tname(T) std::string asString(const T& t) {
@@ -88,6 +89,11 @@ CONTAINER_AS_STRING(std::set, "(", ")")
 CONTAINER_AS_STRING(std::map, "{", "}")
 CONTAINER_AS_STRING(FlatSet, "(", ")")
 CONTAINER_AS_STRING(FlatMap, "{", "}")
+
+template <typename T, size_t N>
+std::string asString(const InplaceVector<T, N>& container) {
+  return containerAsString(container, "[", "]");
+}
 
 #define SINGLE_AS_STRING(D_type)                             \
   tname(... T) std::string asString(const D_type<T...>& t) { \

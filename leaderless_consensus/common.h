@@ -5,8 +5,6 @@
 #include <algorithm>
 #include <map>
 #include <set>
-#include <vector>
-
 #include "../tests/engine_fixture.h"
 #include "algorithm.h"
 #include "boolean.h"
@@ -29,7 +27,7 @@ using NodeId = int;
 using MessageId = int;
 using NodeSet = FlatSet<NodeId>;
 using ProposalSet = FlatSet<MessageId>;
-using MessageSeq = std::vector<MessageId>;
+using MessageSeq = InplaceVector<MessageId>;
 
 inline const ProposalSet kProposalIds = {10, 11, 12};
 
@@ -75,8 +73,8 @@ typename T_map::mapped_type findOrEmpty(const T_map& map, const T_key& key) {
   return {};
 }
 
-template <typename T>
-bool isPrefix(const std::vector<T>& prefix, const std::vector<T>& values) {
+template <typename T_seq>
+bool isPrefix(const T_seq& prefix, const T_seq& values) {
   if (prefix.size() > values.size()) {
     return false;
   }
@@ -88,8 +86,8 @@ bool isPrefix(const std::vector<T>& prefix, const std::vector<T>& values) {
   return true;
 }
 
-template <typename T>
-bool itemsAreSubset(const std::vector<T>& values, const ProposalSet& allowed) {
+template <typename T_seq>
+bool itemsAreSubset(const T_seq& values, const ProposalSet& allowed) {
   for (auto&& value : values) {
     if (!allowed.contains(value)) {
       return false;
@@ -98,9 +96,9 @@ bool itemsAreSubset(const std::vector<T>& values, const ProposalSet& allowed) {
   return true;
 }
 
-template <typename T>
-bool allUnique(const std::vector<T>& values) {
-  FlatSet<T> seen;
+template <typename T_seq>
+bool allUnique(const T_seq& values) {
+  FlatSet<typename T_seq::value_type> seen;
   for (auto&& value : values) {
     if (!seen.insert(value).second) {
       return false;

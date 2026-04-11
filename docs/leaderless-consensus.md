@@ -122,14 +122,21 @@ Recent checks from `build/rel` and TLC:
 
 | Variant | TLA++ safety | TLC safety | TLA++ liveness | TLC liveness |
 | --- | ---: | ---: | ---: | ---: |
-| `Calm` | 5.1s | 8.4s | 7.0s | 22.6s |
-| `Flat` | 44.4s | 46.7s | 72.2s | 161.3s |
-| `Most` | 4.8s | 11.7s | 5.3s | 69.5s |
-| `Rush` | 21.5s | in progress | 40.6s | in progress |
+| `Calm` | 3.6s | 8.4s | 5.5s | 22.6s |
+| `Flat` | 28.0s | 46.7s | 45.5s | 161.3s |
+| `Most` | 3.3s | 11.7s | 3.6s | 69.5s |
+| `Rush` | 12.9s | in progress | 22.3s | in progress |
+
+Current takeaway:
+
+- in the completed comparisons on the current branch tip, the executable TLA++
+  models are consistently faster than TLC
+- the gap is most pronounced for liveness checks, where the executable checker
+  avoids a large fraction of TLC's temporal-analysis cost
 
 Additional current points:
 
-- `Sore` executable safety fails as expected in about `0.16s`
+- `Sore` executable safety fails as expected in under `0.1s`
 - `Sore` TLC safety fails in about `1.1s`
 - `Rush` TLC `LiveSpec` now starts cleanly, but did not finish in a reasonable
   run window

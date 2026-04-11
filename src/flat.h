@@ -4,12 +4,13 @@
 #include <initializer_list>
 #include <stdexcept>
 #include <utility>
-#include <vector>
+
+#include "inplace_vector.h"
 
 template <typename T, typename Compare = std::less<T>>
 struct FlatSet {
   using value_type = T;
-  using storage_type = std::vector<T>;
+  using storage_type = InplaceVector<T>;
   using iterator = typename storage_type::iterator;
   using const_iterator = typename storage_type::const_iterator;
 
@@ -151,7 +152,7 @@ struct FlatMap {
   using key_type = K;
   using mapped_type = V;
   using value_type = std::pair<K, V>;
-  using storage_type = std::vector<value_type>;
+  using storage_type = InplaceVector<value_type>;
   using iterator = typename storage_type::iterator;
   using const_iterator = typename storage_type::const_iterator;
 

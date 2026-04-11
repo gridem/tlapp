@@ -104,6 +104,14 @@ starting from the initial state. The final state satisfies the stop condition
 (`big' = 4`), so the engine terminates after producing a valid path to a
 4‑gallon result.
 
+## Performance
+
+On the current leaderless-consensus example, the executable TLA++ models are
+faster than the matching TLC runs in the completed checks, with the largest
+gap on liveness verification. See
+[`docs/leaderless-consensus.md`](docs/leaderless-consensus.md) for the current
+timing table and TLC status.
+
 ## Leaderless Consensus
 
 This repo also contains a larger multi-model example for leaderless consensus
