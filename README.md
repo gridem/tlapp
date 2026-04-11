@@ -193,8 +193,8 @@ The table below summarizes the mapping between TLA+ and TLA++:
 | Set filter | `{e \in set : ... }` | `$if(e, set) { ... }` |
 | Unchanged | `UNCHANGED x` | `unchanged(x)` |
 | Eventually | `<> P` | `eventually(p)` |
-| Weak fairness | `WF_vars(A)` | `wf(a)` |
-| Strong fairness | `SF_vars(A)` | `sf(a)` |
+| Weak fairness | `WF_vars(A)` | `weakFairness(a)` |
+| Strong fairness | `SF_vars(A)` | `strongFairness(a)` |
 
 The rest of the operations can be found in samples and tests.
 
@@ -407,8 +407,8 @@ So we could have additional engine behavior to modify the logic:
 The current liveness API supports conjunctions of:
 
 1. `eventually(p)` which corresponds to `<> P`.
-2. `wf(a)` which corresponds to weak fairness of an action.
-3. `sf(a)` which corresponds to strong fairness of an action.
+2. `weakFairness(a)` which corresponds to weak fairness of an action.
+3. `strongFairness(a)` which corresponds to strong fairness of an action.
 
 Example:
 
@@ -416,25 +416,25 @@ Example:
 Boolean advance() { return x < 3 && x++ == x + 1; }
 
 std::optional<LivenessBoolean> liveness() override {
-  return wf(advance()) && eventually(x == 3);
+  return weakFairness(advance()) && eventually(x == 3);
 }
 ```
 
 There are 2 important details here:
 
-1. `wf(...)` and `sf(...)` expect an action formula, so they are evaluated in the same next-state style as `next()`.
+1. `weakFairness(...)` and `strongFairness(...)` expect an action formula, so they are evaluated in the same next-state style as `next()`.
 2. `eventually(...)` expects a state predicate, so it is evaluated in predicate/check mode without assignments.
 
 Liveness conjunction is explicit:
 
 ```cpp
-return wf(a()) && wf(b()) && eventually(chosen());
+return weakFairness(a()) && weakFairness(b()) && eventually(chosen());
 ```
 
 This is not the same as:
 
 ```cpp
-return wf(a() || b()) && eventually(chosen());
+return weakFairness(a() || b()) && eventually(chosen());
 ```
 
 The first form requires fairness for `a` and `b` separately. The second form requires fairness only for the combined action `a \/ b`.
@@ -451,7 +451,8 @@ The engine checks liveness after the full reachable graph is built. `eventually(
   pure comparison (no assignment side effects), and branch-producing results
   are rejected there.
 - **Liveness mode:** `eventually(...)` is evaluated in predicate/check mode,
-  while `wf(...)` and `sf(...)` are evaluated as next-state actions.
+  while `weakFairness(...)` and `strongFairness(...)` are evaluated as
+  next-state actions.
 - **Full graph for liveness:** liveness is checked after exploration over the
   admitted state graph, not during the main state-generation loop.
 - **Deadlocks:** for liveness only, deadlocks are treated as stuttering
