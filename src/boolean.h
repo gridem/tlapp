@@ -3,12 +3,28 @@
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 
 #include "evaluate.h"
 #include "expression.h"
 
 namespace detail {
+
+template <typename T>
+struct SharedAssignValue {
+  SharedAssignValue() = default;
+
+  template <typename U>
+  explicit SharedAssignValue(U&& value) : value_{std::make_shared<T>(fwd(value))} {}
+
+  const T& get() const {
+    return *value_;
+  }
+
+ private:
+  std::shared_ptr<T> value_;
+};
 
 tname(T_expr) struct CheckBranchOp {
   using expr_type = PreparedExpression<T_expr>;
@@ -24,15 +40,19 @@ tname(T_expr) struct CheckBranchOp {
 };
 
 tname(T_l, T_r) struct AssignBranchOp {
+  using lhs_type = std::decay_t<T_l>;
+  using rhs_type = std::decay_t<T_r>;
+  using rhs_storage_type = SharedAssignValue<rhs_type>;
+
   tname(T1, T2) AssignBranchOp(T1&& l, T2&& r) : l_{fwd(l)}, r_{fwd(r)} {}
 
   bool apply(Context& ctx) const {
-    return l_.assignTo(ctx, r_);
+    return l_.assignTo(ctx, r_.get());
   }
 
  private:
-  std::decay_t<T_l> l_;
-  std::decay_t<T_r> r_;
+  lhs_type l_;
+  rhs_storage_type r_;
 };
 
 }  // namespace detail
