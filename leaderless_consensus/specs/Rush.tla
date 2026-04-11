@@ -35,9 +35,9 @@ NodeState ==
 StateMessage ==
   [from : Nodes, to : Nodes, core : CoreState]
 
-VARIABLES alive, applied, local, stateMsgs
+VARIABLES alive, proposed, local, stateMsgs
 
-vars == <<alive, applied, local, stateMsgs>>
+vars == <<alive, proposed, local, stateMsgs>>
 
 InitPromises == {}
 
@@ -53,7 +53,7 @@ InitLocal ==
 
 Init ==
   /\ alive = Nodes
-  /\ applied = {}
+  /\ proposed = {}
   /\ local = InitLocal
   /\ stateMsgs = {}
 
@@ -233,7 +233,7 @@ MergeResult(state, self, incoming) ==
 
 Propose(node, msg) ==
   /\ node \in alive
-  /\ msg \notin applied
+  /\ msg \notin proposed
   /\ local[node] = InitLocal[node]
   /\ LET incoming ==
            [carries |-> {msg},
@@ -243,7 +243,7 @@ Propose(node, msg) ==
      IN
        /\ out.changed
        /\ alive' = alive
-       /\ applied' = applied \cup {msg}
+       /\ proposed' = proposed \cup {msg}
        /\ local' = [local EXCEPT ![node] = [core |-> out.core,
                                             committed |-> out.committed]]
        /\ stateMsgs' = BroadcastState(stateMsgs, node, out.core, alive)
@@ -255,7 +255,7 @@ DeliverState(msg) ==
      IN
        /\ out.changed
        /\ alive' = alive
-       /\ applied' = applied
+       /\ proposed' = proposed
        /\ local' = [local EXCEPT ![msg.to] = [core |-> out.core,
                                               committed |-> out.committed]]
        /\ stateMsgs' = BroadcastState(stateMsgs \ {msg}, msg.to, out.core, alive)
@@ -266,17 +266,17 @@ Next ==
 
 CoreWellFormed(core) ==
   /\ core \in CoreState
-  /\ core.carries \subseteq applied
+  /\ core.carries \subseteq proposed
   /\ \A n \in Nodes :
-       /\ SeqElems(core.nodesMessages[n].messages) \subseteq applied
+       /\ SeqElems(core.nodesMessages[n].messages) \subseteq proposed
        /\ NoDuplicates(core.nodesMessages[n].messages)
   /\ \A promise \in core.promises :
-       /\ SeqElems(promise.prefix) \subseteq applied
+       /\ SeqElems(promise.prefix) \subseteq proposed
        /\ promise.votes \subseteq PrefixSupport(core.nodesMessages, promise.prefix)
 
 TypeOK ==
   /\ alive \subseteq Nodes
-  /\ applied \subseteq MessageIds
+  /\ proposed \subseteq MessageIds
   /\ local \in [Nodes -> NodeState]
   /\ stateMsgs \subseteq StateMessage
 
@@ -284,7 +284,7 @@ LocalWellFormed ==
   \A n \in Nodes :
     /\ CoreWellFormed(local[n].core)
     /\ local[n].committed \in MessageSeqs
-    /\ SeqElems(local[n].committed) \subseteq applied
+    /\ SeqElems(local[n].committed) \subseteq proposed
     /\ NoDuplicates(local[n].committed)
 
 MessageWellFormed ==
@@ -308,7 +308,7 @@ CanProposeAny ==
   \E node \in Nodes :
     \E msg \in MessageIds :
       /\ node \in alive
-      /\ msg \notin applied
+      /\ msg \notin proposed
       /\ local[node] = InitLocal[node]
 
 Quiescent ==

@@ -29,9 +29,9 @@ VoteMessage ==
 CommitMessage ==
   [from : Nodes, to : Nodes, commit : SUBSET MessageIds]
 
-VARIABLES alive, applied, local, voteMsgs, commitMsgs
+VARIABLES alive, proposed, local, voteMsgs, commitMsgs
 
-vars == <<alive, applied, local, voteMsgs, commitMsgs>>
+vars == <<alive, proposed, local, voteMsgs, commitMsgs>>
 
 InitLocal ==
   [n \in Nodes |->
@@ -43,7 +43,7 @@ InitLocal ==
 
 Init ==
   /\ alive = Nodes
-  /\ applied = {}
+  /\ proposed = {}
   /\ local = InitLocal
   /\ voteMsgs = {}
   /\ commitMsgs = {}
@@ -118,14 +118,14 @@ CalmVoteResult(state, self, source, carries, incomingNodes) ==
 
 Propose(node, msg) ==
   /\ node \in alive
-  /\ msg \notin applied
+  /\ msg \notin proposed
   /\ local[node].voted = {}
   /\ local[node].status # CalmCompleted
   /\ LET out == CalmVoteResult(local[node], node, node, {msg}, local[node].nodes)
      IN
        /\ out.changed
        /\ alive' = alive
-       /\ applied' = applied \cup {msg}
+       /\ proposed' = proposed \cup {msg}
        /\ local' = [local EXCEPT ![node] = out.local]
        /\ voteMsgs' =
             IF out.sendVote
@@ -145,7 +145,7 @@ DeliverVote(msg) ==
      IN
        /\ out.changed
        /\ alive' = alive
-       /\ applied' = applied
+       /\ proposed' = proposed
        /\ local' = [local EXCEPT ![msg.to] = out.local]
        /\ voteMsgs' =
             IF out.sendVote
@@ -163,7 +163,7 @@ DeliverCommit(msg) ==
   /\ local[msg.to].status # CalmCompleted
   /\ local[msg.to].carries = msg.commit
   /\ alive' = alive
-  /\ applied' = applied
+  /\ proposed' = proposed
   /\ local' =
        [local EXCEPT
          ![msg.to].status = CalmCompleted,
@@ -183,7 +183,7 @@ DisconnectLocal(state, self, failed) ==
 Disconnect(failed) ==
   /\ failed \in alive
   /\ alive' = alive \ {failed}
-  /\ applied' = applied
+  /\ proposed' = proposed
   /\ local' =
        [n \in Nodes |->
          IF n \in alive'
@@ -200,7 +200,7 @@ Next ==
 
 TypeOK ==
   /\ alive \subseteq Nodes
-  /\ applied \subseteq MessageIds
+  /\ proposed \subseteq MessageIds
   /\ local \in [Nodes -> NodeState]
   /\ voteMsgs \subseteq VoteMessage
   /\ commitMsgs \subseteq CommitMessage
@@ -208,7 +208,7 @@ TypeOK ==
 LocalWellFormed ==
   \A n \in alive :
     /\ local[n].voted \subseteq local[n].nodes
-    /\ local[n].carries \subseteq applied
+    /\ local[n].carries \subseteq proposed
     /\ IF local[n].status = CalmCompleted
        THEN local[n].committed = local[n].carries
        ELSE local[n].committed = {}
@@ -217,13 +217,13 @@ VoteWellFormed ==
   \A msg \in voteMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ msg.carries \subseteq applied
+    /\ msg.carries \subseteq proposed
 
 CommitWellFormed ==
   \A msg \in commitMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ msg.commit \subseteq applied
+    /\ msg.commit \subseteq proposed
 
 Agreement ==
   \A left \in alive :
@@ -243,7 +243,7 @@ CanProposeAny ==
   \E node \in Nodes :
     \E msg \in MessageIds :
       /\ node \in alive
-      /\ msg \notin applied
+      /\ msg \notin proposed
       /\ local[node].voted = {}
       /\ local[node].status # CalmCompleted
 

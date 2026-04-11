@@ -26,8 +26,8 @@ Messages are:
 
 ## Step Rules
 
-1. `Propose(node, id)` inserts `id` into global `applied` and processes it as a
-   self-vote.
+1. `Propose(node, id)` inserts `id` into the global proposal set and processes
+   it as a self-vote.
 2. `processVote` intersects memberships, unions carries, and records the
    aggregate round vote set in `votes`.
 3. For each carried id in the incoming message, the sender is added to that

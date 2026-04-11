@@ -25,7 +25,7 @@ using MostCommitMessages = std::set<MostCommitMsg>;
 
 struct_fields(MostState,
     (NodeSet, alive),
-    (CarrySet, applied),
+    (CarrySet, proposed),
     (MostNodes, local),
     (MostVoteMessages, voteMsgs),
     (MostCommitMessages, commitMsgs));
@@ -175,13 +175,13 @@ VoteResult processVote(const MostNodeState& state,
 
 bool canPropose(const MostState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
-         !sys.applied.contains(id) &&
+         !sys.proposed.contains(id) &&
          sys.local.at(node).votes.empty() &&
          sys.local.at(node).status != kCommitted;
 }
 
 MostState propose(MostState sys, NodeId node, MessageId id) {
-  sys.applied.insert(id);
+  sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
   auto out = processVote(sys.local.at(node), node, node, CarrySet{id}, nodes);
   if (!out.changed) {
@@ -286,7 +286,7 @@ bool invariant(const MostState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.applied) || !isSubset(self.votes, self.nodes)) {
+    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.votes, self.nodes)) {
       return false;
     }
     for (auto&& entry : self.carryVotes) {
@@ -304,13 +304,13 @@ bool invariant(const MostState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.applied)) {
+    if (!isSubset(msg.carries, sys.proposed)) {
       return false;
     }
   }
 
   for (auto&& msg : sys.commitMsgs) {
-    if (!isSubset(msg.commit, sys.applied)) {
+    if (!isSubset(msg.commit, sys.proposed)) {
       return false;
     }
   }
@@ -340,7 +340,7 @@ bool quiescent(const MostState& sys) {
   for (auto&& node : sys.alive) {
     if (sys.local.at(node).votes.empty() &&
         sys.local.at(node).status != kCommitted &&
-        sys.applied.size() < 3) {
+        sys.proposed.size() < 3) {
       return false;
     }
   }

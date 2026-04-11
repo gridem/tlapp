@@ -37,7 +37,7 @@ using RushStateMessages = std::set<RushStateMsg>;
 
 struct_fields(RushState,
     (NodeSet, alive),
-    (CarrySet, applied),
+    (CarrySet, proposed),
     (RushNodes, local),
     (RushStateMessages, stateMsgs));
 
@@ -264,16 +264,16 @@ MergeResult mergeState(const RushNodeState& state,
 
 bool canPropose(const RushState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
-         !sys.applied.contains(id) &&
+         !sys.proposed.contains(id) &&
          sys.local.at(node) == RushNodeState{makeEmptyCore(sys.local.size()), {}};
 }
 
 RushState propose(RushState sys, NodeId node, MessageId id) {
-  sys.applied.insert(id);
+  sys.proposed.insert(id);
   auto incoming = makeEmptyCore(sys.local.size());
   incoming.carries.insert(id);
   auto out = mergeState(
-      sys.local.at(node), node, incoming, sys.local.size(), sys.applied.size());
+      sys.local.at(node), node, incoming, sys.local.size(), sys.proposed.size());
   if (!out.changed) {
     return sys;
   }
@@ -289,7 +289,7 @@ bool canDeliverState(const RushState& sys, const RushStateMsg& msg) {
 RushState deliverState(RushState sys, const RushStateMsg& msg) {
   sys.stateMsgs.erase(msg);
   auto out = mergeState(
-      sys.local.at(msg.to), msg.to, msg.core, sys.local.size(), sys.applied.size());
+      sys.local.at(msg.to), msg.to, msg.core, sys.local.size(), sys.proposed.size());
   if (!out.changed) {
     return sys;
   }
@@ -299,24 +299,24 @@ RushState deliverState(RushState sys, const RushStateMsg& msg) {
 }
 
 bool coreWellFormed(const RushCoreState& core,
-    const CarrySet& applied,
+    const CarrySet& proposed,
     const NodeSet& allNodes,
     size_t nodeCount) {
-  if (!isSubset(core.carries, applied) || core.nodesMessages.size() != nodeCount) {
+  if (!isSubset(core.carries, proposed) || core.nodesMessages.size() != nodeCount) {
     return false;
   }
 
   for (auto&& entry : core.nodesMessages) {
     if (entry.generation < 0 ||
         entry.generation > maxGeneration(nodeCount) ||
-        !itemsAreSubset(entry.messages, applied) ||
+        !itemsAreSubset(entry.messages, proposed) ||
         !allUnique(entry.messages)) {
       return false;
     }
   }
 
   for (auto&& promise : core.promises) {
-    if (!itemsAreSubset(promise.prefix, applied) ||
+    if (!itemsAreSubset(promise.prefix, proposed) ||
         !allUnique(promise.prefix) ||
         !isSubset(promise.votes, prefixSupport(core.nodesMessages, promise.prefix))) {
       return false;
@@ -337,15 +337,15 @@ bool invariant(const RushState& sys) {
   }
 
   for (auto&& [node, state] : sys.local) {
-    if (!coreWellFormed(state.core, sys.applied, allNodes, sys.local.size()) ||
-        !itemsAreSubset(state.committed, sys.applied) ||
+    if (!coreWellFormed(state.core, sys.proposed, allNodes, sys.local.size()) ||
+        !itemsAreSubset(state.committed, sys.proposed) ||
         !allUnique(state.committed)) {
       return false;
     }
   }
 
   for (auto&& msg : sys.stateMsgs) {
-    if (!coreWellFormed(msg.core, sys.applied, allNodes, sys.local.size())) {
+    if (!coreWellFormed(msg.core, sys.proposed, allNodes, sys.local.size())) {
       return false;
     }
   }
@@ -363,7 +363,7 @@ bool invariant(const RushState& sys) {
 }
 
 bool canProposeAny(const RushState& sys) {
-  if (sys.applied.size() >= sys.local.size()) {
+  if (sys.proposed.size() >= sys.local.size()) {
     return false;
   }
 

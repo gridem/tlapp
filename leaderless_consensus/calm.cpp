@@ -22,7 +22,7 @@ using CalmCommitMessages = std::set<CalmCommitMsg>;
 
 struct_fields(CalmState,
     (NodeSet, alive),
-    (CarrySet, applied),
+    (CarrySet, proposed),
     (CalmNodes, local),
     (CalmVoteMessages, voteMsgs),
     (CalmCommitMessages, commitMsgs));
@@ -125,13 +125,13 @@ CalmState processVote(CalmState sys,
 
 bool canPropose(const CalmState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
-         !sys.applied.contains(id) &&
+         !sys.proposed.contains(id) &&
          sys.local.at(node).voted.empty() &&
          sys.local.at(node).status != kCompleted;
 }
 
 CalmState propose(CalmState sys, NodeId node, MessageId id) {
-  sys.applied.insert(id);
+  sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
   return processVote(std::move(sys), node, node, CarrySet{id}, nodes);
 }
@@ -191,7 +191,7 @@ bool invariant(const CalmState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.applied) || !isSubset(self.voted, self.nodes)) {
+    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.voted, self.nodes)) {
       return false;
     }
     if (self.status == kCompleted) {
@@ -204,7 +204,7 @@ bool invariant(const CalmState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.applied)) {
+    if (!isSubset(msg.carries, sys.proposed)) {
       return false;
     }
   }
@@ -234,7 +234,7 @@ bool quiescent(const CalmState& sys) {
   for (auto&& node : sys.alive) {
     if (sys.local.at(node).voted.empty() &&
         sys.local.at(node).status != kCompleted &&
-        sys.applied.size() < 3) {
+        sys.proposed.size() < 3) {
       return false;
     }
   }

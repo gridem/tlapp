@@ -21,7 +21,7 @@ using SoreCommitMessages = std::set<SoreCommitMsg>;
 
 struct_fields(SoreState,
     (NodeSet, alive),
-    (CarrySet, applied),
+    (CarrySet, proposed),
     (SoreNodes, local),
     (SoreVoteMessages, voteMsgs),
     (SoreCommitMessages, commitMsgs));
@@ -118,13 +118,13 @@ VoteResult processVote(const SoreNodeState& state,
 
 bool canPropose(const SoreState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
-         !sys.applied.contains(id) &&
+         !sys.proposed.contains(id) &&
          sys.local.at(node).voted.empty() &&
          sys.local.at(node).status != kCompleted;
 }
 
 SoreState propose(SoreState sys, NodeId node, MessageId id) {
-  sys.applied.insert(id);
+  sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
   auto out = processVote(sys.local.at(node), node, node, CarrySet{id}, nodes);
   if (!out.changed) {
@@ -219,7 +219,7 @@ bool invariant(const SoreState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.applied) || !isSubset(self.voted, self.nodes)) {
+    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.voted, self.nodes)) {
       return false;
     }
     if (self.status == kCompleted) {
@@ -232,13 +232,13 @@ bool invariant(const SoreState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.applied)) {
+    if (!isSubset(msg.carries, sys.proposed)) {
       return false;
     }
   }
 
   for (auto&& msg : sys.commitMsgs) {
-    if (!isSubset(msg.commit, sys.applied)) {
+    if (!isSubset(msg.commit, sys.proposed)) {
       return false;
     }
   }

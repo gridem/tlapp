@@ -24,7 +24,7 @@ using FlatCommitMessages = NodeSet;
 
 struct_fields(FlatState,
     (NodeSet, alive),
-    (CarrySet, applied),
+    (CarrySet, proposed),
     (FlatNodes, local),
     (FlatVoteMessages, voteMsgs),
     (FlatCommitMessages, commitMsgs));
@@ -147,14 +147,14 @@ FlatState processVote(FlatState sys,
 
 bool canPropose(const FlatState& sys, NodeId node, MessageId id) {
   return sys.alive.contains(node) &&
-         !sys.applied.contains(id) &&
+         !sys.proposed.contains(id) &&
          id == node + 10 &&
          sys.local.at(node).votes.empty() &&
          sys.local.at(node).status != kCommitted;
 }
 
 FlatState propose(FlatState sys, NodeId node, MessageId id) {
-  sys.applied.insert(id);
+  sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
   return processVote(std::move(sys), node, node, CarrySet{id}, nodes, {});
 }
@@ -212,7 +212,7 @@ bool invariant(const FlatState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.applied) || !isSubset(self.votes, self.nodes)) {
+    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.votes, self.nodes)) {
       return false;
     }
     if (self.status == kCommitted) {
@@ -225,7 +225,7 @@ bool invariant(const FlatState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.applied) || !isSubset(msg.votes, msg.nodes)) {
+    if (!isSubset(msg.carries, sys.proposed) || !isSubset(msg.votes, msg.nodes)) {
       return false;
     }
   }
@@ -248,7 +248,7 @@ bool invariant(const FlatState& sys) {
 }
 
 bool canProposeAny(const FlatState& sys) {
-  if (sys.applied.size() >= sys.local.size()) {
+  if (sys.proposed.size() >= sys.local.size()) {
     return false;
   }
 

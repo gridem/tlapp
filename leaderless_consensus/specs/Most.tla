@@ -30,9 +30,9 @@ VoteMessage ==
 CommitMessage ==
   [from : Nodes, to : Nodes, commit : SUBSET MessageIds]
 
-VARIABLES alive, applied, local, voteMsgs, commitMsgs
+VARIABLES alive, proposed, local, voteMsgs, commitMsgs
 
-vars == <<alive, applied, local, voteMsgs, commitMsgs>>
+vars == <<alive, proposed, local, voteMsgs, commitMsgs>>
 
 InitCarryVotes == [m \in MessageIds |-> {}]
 
@@ -47,7 +47,7 @@ InitLocal ==
 
 Init ==
   /\ alive = Nodes
-  /\ applied = {}
+  /\ proposed = {}
   /\ local = InitLocal
   /\ voteMsgs = {}
   /\ commitMsgs = {}
@@ -118,14 +118,14 @@ MostVoteResult(state, self, source, carries, incomingNodes) ==
 
 Propose(node, msg) ==
   /\ node \in alive
-  /\ msg \notin applied
+  /\ msg \notin proposed
   /\ local[node].votes = {}
   /\ local[node].status # MostCommitted
   /\ LET out == MostVoteResult(local[node], node, node, {msg}, local[node].nodes)
      IN
        /\ out.changed
        /\ alive' = alive
-       /\ applied' = applied \cup {msg}
+       /\ proposed' = proposed \cup {msg}
        /\ local' =
             IF out.sendCommit
             THEN [local EXCEPT
@@ -154,7 +154,7 @@ DeliverVote(msg) ==
      IN
        /\ out.changed
        /\ alive' = alive
-       /\ applied' = applied
+       /\ proposed' = proposed
        /\ local' =
             IF out.sendCommit
             THEN [local EXCEPT
@@ -181,7 +181,7 @@ DeliverCommit(msg) ==
   /\ local[msg.to].status # MostCommitted
   /\ local[msg.to].carries = msg.commit
   /\ alive' = alive
-  /\ applied' = applied
+  /\ proposed' = proposed
   /\ local' =
        [local EXCEPT
          ![msg.to].status = MostCommitted,
@@ -206,7 +206,7 @@ DisconnectLocal(state, self, failed) ==
 Disconnect(failed) ==
   /\ failed \in alive
   /\ alive' = alive \ {failed}
-  /\ applied' = applied
+  /\ proposed' = proposed
   /\ local' =
        [n \in Nodes |->
          IF n \in alive'
@@ -223,7 +223,7 @@ Next ==
 
 TypeOK ==
   /\ alive \subseteq Nodes
-  /\ applied \subseteq MessageIds
+  /\ proposed \subseteq MessageIds
   /\ local \in [Nodes -> NodeState]
   /\ voteMsgs \subseteq VoteMessage
   /\ commitMsgs \subseteq CommitMessage
@@ -231,7 +231,7 @@ TypeOK ==
 LocalWellFormed ==
   \A n \in alive :
     /\ local[n].votes \subseteq local[n].nodes
-    /\ local[n].carries \subseteq applied
+    /\ local[n].carries \subseteq proposed
     /\ \A msg \in MessageIds : local[n].carryVotes[msg] \subseteq Nodes
     /\ IF local[n].status = MostCommitted
        THEN local[n].committed = local[n].carries
@@ -241,13 +241,13 @@ VoteWellFormed ==
   \A msg \in voteMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ msg.carries \subseteq applied
+    /\ msg.carries \subseteq proposed
 
 CommitWellFormed ==
   \A msg \in commitMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ msg.commit \subseteq applied
+    /\ msg.commit \subseteq proposed
 
 Agreement ==
   \A left \in alive :
@@ -267,7 +267,7 @@ CanProposeAny ==
   \E node \in Nodes :
     \E msg \in MessageIds :
       /\ node \in alive
-      /\ msg \notin applied
+      /\ msg \notin proposed
       /\ local[node].votes = {}
       /\ local[node].status # MostCommitted
 

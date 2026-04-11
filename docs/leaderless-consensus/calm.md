@@ -26,8 +26,8 @@ Messages are:
 
 ## Step Rules
 
-1. `Propose(node, id)` inserts `id` into global `applied` and feeds it through
-   `processVote` as a self-vote.
+1. `Propose(node, id)` inserts `id` into the global proposal set and feeds it
+   through `processVote` as a self-vote.
 2. `processVote` first rejects input from a source that is no longer in the
    local node view.
 3. If the node was already in `MayCommit` and the incoming `carries` differ

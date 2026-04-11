@@ -25,8 +25,8 @@ Messages are:
 
 ## Step Rules
 
-1. `Propose(node, id)` inserts `id` into global `applied` and treats the node as
-   having voted for `{id}`.
+1. `Propose(node, id)` inserts `id` into the global proposal set and treats the
+   node as having voted for `{id}`.
 2. `processVote` unions incoming `carries` into local `carries`.
 3. If the incoming `nodes` view differs from the local one, the node intersects
    memberships and clears prior votes by resetting to `Initial`.
