@@ -76,7 +76,7 @@ commit a non-empty proposal set.
 
 Recent `build/rel` runs:
 
-- executable safety model: about 182.4 seconds
-- executable liveness model: about 296.5 seconds
+- executable safety model: about 63.6 seconds, `770773` states, `8560654` transitions
+- executable liveness model: about 103.4 seconds, `762123` states, `8451112` transitions
 - TLC safety: about 46.7 seconds, `1396276` generated, `224973` distinct
 - TLC liveness: about 161.3 seconds, `1331224` generated, `216323` distinct

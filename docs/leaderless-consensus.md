@@ -122,13 +122,14 @@ Recent checks from `build/rel` and TLC:
 
 | Variant | TLA++ safety | TLC safety | TLA++ liveness | TLC liveness |
 | --- | ---: | ---: | ---: | ---: |
-| `Calm` | 21.7s | 8.4s | 30.5s | 22.6s |
-| `Flat` | 182.4s | 46.7s | 296.5s | 161.3s |
-| `Most` | 19.2s | 11.7s | 20.1s | 69.5s |
-| `Rush` | 40.0s | in progress | 75.5s | in progress |
+| `Calm` | 7.5s | 8.4s | 10.8s | 22.6s |
+| `Flat` | 63.6s | 46.7s | 103.4s | 161.3s |
+| `Most` | 7.7s | 11.7s | 7.8s | 69.5s |
+| `Rush` | 28.0s | in progress | 50.5s | in progress |
 
 Additional current points:
 
+- `Sore` executable safety fails as expected in about `0.16s`
 - `Sore` TLC safety fails in about `1.1s`
 - `Rush` TLC `LiveSpec` now starts cleanly, but did not finish in a reasonable
   run window
