@@ -14,8 +14,10 @@ Each node stores:
 
 - `status`: `Voting` or `Committed`
 - `nodes`: the current membership view
-- `votes`: which nodes have responded in the current round
-- `carryVotes`: per-proposal vote sets, keyed by proposal id
+- `votes`: which nodes are currently counted as having voted in that node's
+  current membership view during voting
+- `carryVotes`: for each proposal id, the set of nodes currently counted as
+  supporting that proposal
 - `carries`: the locally known proposal ids
 - `committed`: the final committed carry set once complete
 
@@ -29,7 +31,7 @@ Messages are:
 1. `Propose(node, id)` inserts `id` into the global proposal set and processes
    it as a self-vote.
 2. `processVote` intersects memberships, unions carries, and records the
-   aggregate round vote set in `votes`.
+   current local vote set in `votes`.
 3. For each carried id in the incoming message, the sender is added to that
    id's entry in `carryVotes`.
 4. On a membership reduction, every `carryVotes` entry is intersected with the

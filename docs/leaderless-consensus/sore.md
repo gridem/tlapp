@@ -14,7 +14,9 @@ Each node stores:
 
 - `status`: `Initial`, `Voted`, or `Completed`
 - `nodes`: the current membership view for that node
-- `voted`: which nodes have voted in that view
+- `voted`: which nodes have voted in that view while the node is not
+  `Completed`; the field may still be present afterward but no longer drives
+  transitions
 - `carries`: the set of proposal ids known locally
 - `committed`: the final committed set once completion happens
 

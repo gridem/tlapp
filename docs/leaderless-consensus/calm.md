@@ -5,7 +5,7 @@ and "cannot commit" after conflicting evidence arrives.
 
 ## Core Idea
 
-A node may commit only if it has completed a full round over its current
+A node may commit only if it has completed a full pass over its current
 membership view and its carry set stayed stable while it was in the
 commit-eligible phase.
 
@@ -15,7 +15,8 @@ Each node stores:
 
 - `status`: `ToVote`, `MayCommit`, `CannotCommit`, or `Completed`
 - `nodes`: the current membership view
-- `voted`: nodes heard from in that view
+- `voted`: nodes heard from in that view while the node is not `Completed`; the
+  field may still be present afterward but no longer drives transitions
 - `carries`: the locally known proposal ids
 - `committed`: the final committed carry set once complete
 
@@ -37,7 +38,7 @@ Messages are:
 5. After recording `source` and `self` as having voted, two cases matter:
    - if `voted == nodes` and status is still `MayCommit`, the node commits
    - if `voted == nodes` but status is `CannotCommit`, the node resets to
-     `ToVote` and starts another round
+     `ToVote` and starts another pass over its current membership view
 6. Whenever a node is in `ToVote`, it moves to `MayCommit` and broadcasts one
    vote message with its current `carries` and `nodes`.
 7. `Commit` carries the explicit committed set, and the receiver accepts it only

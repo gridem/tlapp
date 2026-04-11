@@ -5,8 +5,9 @@ vote message instead of rebuilding that evidence only from local state.
 
 ## Core Idea
 
-Nodes merge carry sets and vote sets in a uniform way. When the merged vote set
-covers the merged node set, the node commits its current carry set.
+Nodes merge carry sets and the sets of nodes counted as supporting each
+proposal. When the merged voting set covers the merged node set, the node
+commits its current carry set.
 
 ## Local State
 
@@ -14,7 +15,7 @@ Each node stores:
 
 - `status`: `Voting` or `Committed`
 - `nodes`: the current membership view
-- `votes`: nodes whose votes are currently counted
+- `votes`: nodes whose votes are currently counted during voting
 - `carries`: the locally known proposal ids
 - `committed`: the final committed set once complete
 
