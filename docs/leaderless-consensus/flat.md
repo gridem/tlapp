@@ -21,7 +21,7 @@ Each node stores:
 Messages are:
 
 - `Vote(from, to, carries, nodes, votes)`
-- `Commit(from, to)`
+- pending commit recipients, keyed only by `to` in the current model
 
 ## Step Rules
 
@@ -43,7 +43,8 @@ Messages are:
 6. Otherwise it broadcasts a new `Vote` message with the merged `carries`,
    merged `nodes`, and merged `votes`.
 7. `Commit` is payload-free in the current model, so the receiver commits its
-   own current `carries`.
+   own current `carries`. The queue representation is reduced to a recipient set
+   because the sender identity does not affect the state transition.
 
 ## Disconnect Handling
 
@@ -54,7 +55,13 @@ replays each survivor's local `carries` against the smaller node set.
 
 - `Flat` retains more message detail than `Calm`, because vote messages carry
   `votes` in addition to `carries` and `nodes`.
+- The current model also coalesces vote messages by exact
+  `(from, to, carries, nodes)` bucket, keeping only non-dominated `votes` sets.
+- Inbound vote traffic to an already committed node is purged on commit, and
+  the commit queue is reduced to pending recipients instead of `(from, to)`
+  pairs.
 - That larger message payload is the main reason this variant has a much larger
   reachable state space.
-- On the current branch tip, this model is still treated as long-running rather
-  than conclusively verified.
+- On the current branch tip, the reduced executable model now completes. A
+  recent release run finished in about 175 seconds with `770773` states and
+  `8560654` transitions.

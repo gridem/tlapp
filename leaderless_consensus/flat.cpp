@@ -11,7 +11,6 @@ struct_fields(FlatVoteMsg,
     (CarrySet, carries),
     (NodeSet, nodes),
     (NodeSet, votes));
-struct_fields(FlatCommitMsg, (int, from), (int, to));
 struct_fields(FlatNodeState,
     (int, status),
     (NodeSet, nodes),
@@ -21,7 +20,7 @@ struct_fields(FlatNodeState,
 
 using FlatNodes = std::map<NodeId, FlatNodeState>;
 using FlatVoteMessages = std::set<FlatVoteMsg>;
-using FlatCommitMessages = std::set<FlatCommitMsg>;
+using FlatCommitMessages = NodeSet;
 
 struct_fields(FlatState,
     (NodeSet, alive),
@@ -39,19 +38,46 @@ FlatVoteMessages broadcastVote(const FlatVoteMessages& messages,
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
-      result.insert(FlatVoteMsg{from, to, carries, nodes, votes});
+      auto keepNew = true;
+      for (auto it = result.begin(); it != result.end();) {
+        if (it->from == from &&
+            it->to == to &&
+            it->carries == carries &&
+            it->nodes == nodes) {
+          if (isSubset(votes, it->votes)) {
+            keepNew = false;
+            break;
+          }
+          if (isSubset(it->votes, votes)) {
+            it = result.erase(it);
+            continue;
+          }
+        }
+        ++it;
+      }
+      if (keepNew) {
+        result.insert(FlatVoteMsg{from, to, carries, nodes, votes});
+      }
     }
   }
   return result;
 }
 
-FlatCommitMessages broadcastCommit(const FlatCommitMessages& messages,
-    const NodeSet& alive,
-    NodeId from) {
-  auto result = messages;
-  for (auto&& to : alive) {
-    if (to != from) {
-      result.insert(FlatCommitMsg{from, to});
+FlatVoteMessages purgeVotesTo(const FlatVoteMessages& messages, NodeId to) {
+  FlatVoteMessages result;
+  for (auto&& msg : messages) {
+    if (msg.to != to) {
+      result.insert(msg);
+    }
+  }
+  return result;
+}
+
+FlatCommitMessages broadcastCommit(const FlatState& sys, NodeId from) {
+  auto result = setWithout(sys.commitMsgs, from);
+  for (auto&& to : sys.alive) {
+    if (to != from && sys.local.at(to).status != kCommitted) {
+      result.insert(to);
     }
   }
   return result;
@@ -72,7 +98,9 @@ FlatState commit(FlatState sys, NodeId node) {
   }
   self.status = kCommitted;
   self.committed = self.carries;
-  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node);
+  sys.voteMsgs = purgeVotesTo(sys.voteMsgs, node);
+  sys.commitMsgs = setWithout(sys.commitMsgs, node);
+  sys.commitMsgs = broadcastCommit(sys, node);
   return sys;
 }
 
@@ -140,13 +168,13 @@ FlatState deliverVote(FlatState sys, const FlatVoteMsg& msg) {
   return processVote(std::move(sys), msg.to, msg.from, msg.carries, msg.nodes, msg.votes);
 }
 
-bool canDeliverCommit(const FlatState& sys, const FlatCommitMsg& msg) {
-  return sys.alive.contains(msg.to) && sys.local.at(msg.to).status != kCommitted;
+bool canDeliverCommit(const FlatState& sys, NodeId node) {
+  return sys.alive.contains(node) && sys.local.at(node).status != kCommitted;
 }
 
-FlatState deliverCommit(FlatState sys, const FlatCommitMsg& msg) {
-  sys.commitMsgs.erase(msg);
-  return commit(std::move(sys), msg.to);
+FlatState deliverCommit(FlatState sys, NodeId node) {
+  sys.commitMsgs.erase(node);
+  return commit(std::move(sys), node);
 }
 
 bool canDisconnect(const FlatState& sys, NodeId failed) {
@@ -160,7 +188,7 @@ FlatState disconnect(FlatState sys, NodeId failed) {
 
   sys.alive.erase(failed);
   sys.voteMsgs = purgeMessages(sys.voteMsgs, failed);
-  sys.commitMsgs = purgeMessages(sys.commitMsgs, failed);
+  sys.commitMsgs.erase(failed);
 
   auto survivors = sys.alive;
   for (auto&& node : survivors) {
@@ -178,7 +206,7 @@ FlatState disconnect(FlatState sys, NodeId failed) {
 
 bool invariant(const FlatState& sys) {
   if (!queueEndpointsAreAlive(sys.voteMsgs, sys.alive) ||
-      !queueEndpointsAreAlive(sys.commitMsgs, sys.alive)) {
+      !isSubset(sys.commitMsgs, sys.alive)) {
     return false;
   }
 
@@ -243,8 +271,8 @@ struct Model : IModel {
     || $E(msg, get_mem(sys, voteMsgs)) {
       return canDeliverVoteExpr(sys, msg) && sys++ == deliverVoteExpr(sys, msg);
     }
-    || $E(msg, get_mem(sys, commitMsgs)) {
-      return canDeliverCommitExpr(sys, msg) && sys++ == deliverCommitExpr(sys, msg);
+    || $E(node, get_mem(sys, commitMsgs)) {
+      return canDeliverCommitExpr(sys, node) && sys++ == deliverCommitExpr(sys, node);
     }
     || $E(failed, nodes_) {
       return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
@@ -261,7 +289,7 @@ struct Model : IModel {
   CarrySet messageIds_ = {10, 11, 12};
 };
 
-TEST_F(EngineFixture, DISABLED_FlatExploration) {
+TEST_F(EngineFixture, FlatExploration) {
   e.createModel<Model>();
   e.run();
 }

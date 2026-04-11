@@ -32,9 +32,6 @@ VoteMessage ==
    nodes : SUBSET Nodes,
    votes : SUBSET Nodes]
 
-CommitMessage ==
-  [from : Nodes, to : Nodes]
-
 VARIABLES alive, applied, local, voteMsgs, commitMsgs
 
 vars == <<alive, applied, local, voteMsgs, commitMsgs>>
@@ -55,11 +52,28 @@ Init ==
   /\ commitMsgs = {}
 
 BroadcastVote(queue, from, carries, nodes, votes, aliveSet) ==
-  queue \cup {Vote(from, to, carries, nodes, votes) :
-                to \in (aliveSet \ {from})}
+  {m \in queue :
+     ~(\E to \in (aliveSet \ {from}) :
+         /\ m.from = from
+         /\ m.to = to
+         /\ m.carries = carries
+         /\ m.nodes = nodes
+         /\ m.votes \subseteq votes)} \cup
+  {Vote(from, to, carries, nodes, votes) :
+     /\ to \in (aliveSet \ {from})
+     /\ ~(\E m \in queue :
+            /\ m.from = from
+            /\ m.to = to
+            /\ m.carries = carries
+            /\ m.nodes = nodes
+            /\ votes \subseteq m.votes)}
 
-BroadcastCommit(queue, from, aliveSet) ==
-  queue \cup {Commit(from, to) : to \in (aliveSet \ {from})}
+PurgeVotesTo(queue, node) ==
+  {m \in queue : m.to # node}
+
+BroadcastCommit(queue, from, aliveSet, localState) ==
+  (queue \ {from}) \cup
+  {to \in (aliveSet \ {from}) : localState[to].status # FlatCommitted}
 
 FlatVoteResult(state, self, source, carries, incomingNodes, incomingVotes) ==
   IF state.status = FlatCommitted \/ source \notin state.nodes
@@ -114,19 +128,22 @@ Propose(node, msg) ==
   /\ local[node].status # FlatCommitted
   /\ LET out ==
            FlatVoteResult(local[node], node, node, {msg}, local[node].nodes, {})
+         local1 == [local EXCEPT ![node] = out.local]
      IN
        /\ out.changed
        /\ alive' = alive
        /\ applied' = applied \cup {msg}
-       /\ local' = [local EXCEPT ![node] = out.local]
+       /\ local' = local1
        /\ voteMsgs' =
-            IF out.sendVote
+            IF out.sendCommit
+            THEN PurgeVotesTo(voteMsgs, node)
+            ELSE IF out.sendVote
             THEN BroadcastVote(voteMsgs, node, out.local.carries, out.local.nodes,
                                out.local.votes, alive)
             ELSE voteMsgs
        /\ commitMsgs' =
             IF out.sendCommit
-            THEN BroadcastCommit(commitMsgs, node, alive)
+            THEN BroadcastCommit(commitMsgs, node, alive, local1)
             ELSE commitMsgs
 
 DeliverVote(msg) ==
@@ -135,33 +152,38 @@ DeliverVote(msg) ==
   /\ LET out ==
            FlatVoteResult(local[msg.to], msg.to, msg.from, msg.carries, msg.nodes,
                           msg.votes)
+         local1 == [local EXCEPT ![msg.to] = out.local]
      IN
        /\ out.changed
        /\ alive' = alive
        /\ applied' = applied
-       /\ local' = [local EXCEPT ![msg.to] = out.local]
+       /\ local' = local1
        /\ voteMsgs' =
-            IF out.sendVote
+            IF out.sendCommit
+            THEN PurgeVotesTo(voteMsgs \ {msg}, msg.to)
+            ELSE IF out.sendVote
             THEN BroadcastVote(voteMsgs \ {msg}, msg.to, out.local.carries,
                                out.local.nodes, out.local.votes, alive)
             ELSE voteMsgs \ {msg}
        /\ commitMsgs' =
             IF out.sendCommit
-            THEN BroadcastCommit(commitMsgs, msg.to, alive)
+            THEN BroadcastCommit(commitMsgs, msg.to, alive, local1)
             ELSE commitMsgs
 
 DeliverCommit(msg) ==
   /\ msg \in commitMsgs
-  /\ msg.to \in alive
-  /\ local[msg.to].status # FlatCommitted
+  /\ msg \in alive
+  /\ local[msg].status # FlatCommitted
+  /\ LET local1 ==
+           [local EXCEPT
+             ![msg].status = FlatCommitted,
+             ![msg].committed = local[msg].carries]
+     IN
   /\ alive' = alive
   /\ applied' = applied
-  /\ local' =
-       [local EXCEPT
-         ![msg.to].status = FlatCommitted,
-         ![msg.to].committed = local[msg.to].carries]
-  /\ voteMsgs' = voteMsgs
-  /\ commitMsgs' = BroadcastCommit(commitMsgs \ {msg}, msg.to, alive)
+  /\ local' = local1
+  /\ voteMsgs' = PurgeVotesTo(voteMsgs, msg)
+  /\ commitMsgs' = BroadcastCommit(commitMsgs \ {msg}, msg, alive, local1)
 
 DisconnectLocal(state, self, failed) ==
   IF state.carries = {}
@@ -172,17 +194,72 @@ DisconnectLocal(state, self, failed) ==
                          {})
     IN out.local
 
+DisconnectOut(state, self, failed) ==
+  IF state.carries = {}
+  THEN [changed |-> TRUE,
+        local |-> [state EXCEPT !.nodes = @ \ {failed}],
+        sendVote |-> FALSE,
+        sendCommit |-> FALSE]
+  ELSE FlatVoteResult(state, self, failed, state.carries, state.nodes \ {failed}, {})
+
+RECURSIVE DisconnectBroadcast(_, _, _, _)
+
+DisconnectBroadcast(queue, senders, localAfter, aliveSet) ==
+  IF senders = {}
+  THEN queue
+  ELSE LET sender == CHOOSE n \in senders : TRUE
+       IN DisconnectBroadcast(
+            BroadcastVote(queue, sender, localAfter[sender].carries,
+                          localAfter[sender].nodes, localAfter[sender].votes,
+                          aliveSet),
+            senders \ {sender},
+            localAfter,
+            aliveSet)
+
 Disconnect(failed) ==
   /\ failed \in alive
-  /\ alive' = alive \ {failed}
-  /\ applied' = applied
-  /\ local' =
-       [n \in Nodes |->
-         IF n \in alive'
-         THEN DisconnectLocal(local[n], n, failed)
-         ELSE local[n]]
-  /\ voteMsgs' = {m \in voteMsgs : m.from # failed /\ m.to # failed}
-  /\ commitMsgs' = {m \in commitMsgs : m.from # failed /\ m.to # failed}
+  /\ LET alive1 == alive \ {failed}
+         out ==
+           [n \in Nodes |->
+             IF n \in alive1
+             THEN DisconnectOut(local[n], n, failed)
+             ELSE [changed |-> FALSE,
+                   local |-> local[n],
+                   sendVote |-> FALSE,
+                   sendCommit |-> FALSE]]
+         local1 ==
+           [n \in Nodes |->
+             IF n \in alive1
+             THEN out[n].local
+             ELSE local[n]]
+         committedNow == {n \in alive1 : out[n].sendCommit}
+         local2 ==
+           [n \in Nodes |->
+             IF n \in committedNow
+             THEN [local1[n] EXCEPT
+                     !.status = FlatCommitted,
+                     !.committed = local1[n].carries]
+             ELSE local1[n]]
+         voteBase ==
+           {m \in voteMsgs :
+              /\ m.from # failed
+              /\ m.to # failed
+              /\ m.to \notin committedNow}
+         voteOut ==
+           DisconnectBroadcast(voteBase,
+               {n \in alive1 : out[n].sendVote},
+               local2,
+               alive1)
+         commitOut ==
+           IF committedNow = {}
+           THEN (commitMsgs \ {failed})
+           ELSE alive1 \ committedNow
+     IN
+       /\ alive' = alive1
+       /\ applied' = applied
+       /\ local' = local2
+       /\ voteMsgs' = voteOut
+       /\ commitMsgs' = commitOut
 
 Next ==
   \/ \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
@@ -195,7 +272,7 @@ TypeOK ==
   /\ applied \subseteq MessageIds
   /\ local \in [Nodes -> NodeState]
   /\ voteMsgs \subseteq VoteMessage
-  /\ commitMsgs \subseteq CommitMessage
+  /\ commitMsgs \subseteq Nodes
 
 LocalWellFormed ==
   \A n \in alive :
@@ -214,8 +291,7 @@ VoteWellFormed ==
 
 CommitWellFormed ==
   \A msg \in commitMsgs :
-    /\ msg.from \in alive
-    /\ msg.to \in alive
+    msg \in alive
 
 Agreement ==
   \A left \in alive :

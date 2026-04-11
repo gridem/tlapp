@@ -81,7 +81,7 @@ Executable TLA++ sample on the current branch tip:
 
 - `Sore`: expected to fail; serves as the negative baseline and finds a counterexample
 - `Calm`: holds under the current finite model, including the liveness check
-- `Flat`: long-running in the current finite model; no conclusion recorded in this pass
+- `Flat`: holds under the current reduced executable model and now completes
 - `Most`: holds under the current finite model, including the liveness check
 - `Rush`: holds under the current reduced executable model, including the liveness check
 
@@ -89,14 +89,13 @@ Current failures in the executable model:
 
 - `Sore` (expected negative case)
 
-Open item:
-
-- `Flat` remains long-running; no completed result is recorded on the current branch tip
-
 TLC status:
 
 - TLC verification is a work in progress.
 - `Calm` and `Most` were rerun with the current liveness property and passed.
+- `Flat` now completes in the executable model after queue reductions. A recent
+  release run finished in about 175 seconds with `770773` distinct states and
+  `8560654` transitions.
 - `Rush` now also carries the same eventual-quiescence liveness property in the executable model and passed a recent release run in about 74 seconds.
 
 ## Commands
