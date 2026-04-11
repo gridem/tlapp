@@ -142,9 +142,12 @@ VoteResult processVote(const MostNodeState& state,
   votes = setIntersection(votes, nodes);
 
   auto proposalVotes = state.proposalVotes;
-  for (auto&& id : proposals) {
+  for (auto&& id : newProposals) {
     auto votesFor = proposalVotesFor(proposalVotes, id);
-    votesFor.insert(source);
+    votesFor.insert(self);
+    if (proposals.contains(id)) {
+      votesFor.insert(source);
+    }
     proposalVotes = putProposalVotes(std::move(proposalVotes), id, votesFor);
   }
   if (changedNodes) {
@@ -246,6 +249,14 @@ bool canDisconnect(const MostState& sys, NodeId failed) {
   return sys.alive.contains(failed);
 }
 
+size_t quorumSize(const MostState& sys) {
+  return sys.local.size() / 2 + 1;
+}
+
+bool canLiveDisconnect(const MostState& sys, NodeId failed) {
+  return canDisconnect(sys, failed) && sys.alive.size() - 1 >= quorumSize(sys);
+}
+
 MostState disconnect(MostState sys, NodeId failed) {
   if (!sys.alive.contains(failed)) {
     return sys;
@@ -339,20 +350,13 @@ bool invariant(const MostState& sys) {
   return true;
 }
 
-bool quiescent(const MostState& sys) {
-  if (!sys.voteMsgs.empty() || !sys.commitMsgs.empty()) {
-    return false;
-  }
-
-  for (auto&& node : sys.alive) {
-    if (sys.local.at(node).votes.empty() &&
-        sys.local.at(node).status != kCommitted &&
-        sys.proposed.size() < 3) {
-      return false;
+bool commitHappened(const MostState& sys) {
+  for (auto&& [node, local] : sys.local) {
+    if (local.status == kCommitted && !local.committed.empty()) {
+      return true;
     }
   }
-
-  return true;
+  return false;
 }
 
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::most::canPropose)
@@ -362,11 +366,12 @@ DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::most::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::most::canDeliverCommit)
 DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::most::deliverCommit)
 DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::most::canDisconnect)
+DEFINE_ALGORITHM(canLiveDisconnectExpr, ::leaderless_consensus::most::canLiveDisconnect)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::most::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::most::invariant)
-DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::most::quiescent)
+DEFINE_ALGORITHM(commitHappenedExpr, ::leaderless_consensus::most::commitHappened)
 
-struct Model : IModel {
+struct BaseModel : IModel {
   Boolean init() override {
     return sys == makeState(nodes_);
   }
@@ -405,18 +410,49 @@ struct Model : IModel {
     return invariantExpr(sys);
   }
 
-  std::optional<LivenessBoolean> liveness() override {
-    return wf(proposeAny()) && wf(deliverAnyVote()) && eventually(quiescentExpr(sys));
-  }
-
   Var<MostState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
   ProposalSet messageIds_ = kProposalIds;
 };
 
-TEST_F(EngineFixture, MostHoldsInvariantAndConverges) {
-  e.createModel<Model>();
+struct SafetyModel : BaseModel {
+  Boolean disconnectAny() {
+    return $E(failed, nodes_) {
+      return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
+    };
+  }
+
+  Boolean next() override {
+    return proposeAny() || deliverAnyVote() || deliverAnyCommit() || disconnectAny();
+  }
+};
+
+struct LivenessModel : BaseModel {
+  Boolean disconnectAny() {
+    return $E(failed, nodes_) {
+      return canLiveDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
+    };
+  }
+
+  Boolean next() override {
+    return proposeAny() || deliverAnyVote() || deliverAnyCommit() || disconnectAny();
+  }
+
+  std::optional<LivenessBoolean> liveness() override {
+    return wf(proposeAny()) &&
+           wf(deliverAnyVote()) &&
+           eventually(commitHappenedExpr(sys));
+  }
+};
+
+TEST_F(EngineFixture, MostSafetyHoldsInvariant) {
+  e.createModel<SafetyModel>();
+  EXPECT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, MostLivenessCommitsWithMajorityAlive) {
+  e.createModel<LivenessModel>();
   EXPECT_NO_THROW(e.run());
 }
 

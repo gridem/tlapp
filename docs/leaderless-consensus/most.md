@@ -33,8 +33,9 @@ Messages are:
    it as a self-vote.
 2. `processVote` intersects memberships, unions proposals, and records the
    current local vote set in `votes`.
-3. For each proposal id in the incoming message, the sender is added to that
-   id's entry in `proposalVotes`.
+3. For each proposal id in the merged proposal set, the receiver counts itself
+   as supporting that id. For proposal ids present in the incoming message, the
+   sender is counted too.
 4. On a membership reduction, every `proposalVotes` entry is intersected with the
    reduced node set.
 5. The first observed vote always causes a rebroadcast so the node's current
@@ -56,9 +57,16 @@ the current model also intersects `proposalVotes` with the reduced membership.
 
 Safety still requires all live committed nodes to agree on the committed proposal set.
 
-Like `Calm`, this model also carries a liveness check: under weak fairness of
-`ProposeAny` and `DeliverAnyVote`, the system must eventually reach
-quiescence.
+The current model also checks liveness in a separate liveness model. Safety
+keeps the full disconnect space. Liveness reuses the same transition logic, but
+limits disconnects so that a majority of the original nodes remains alive.
+Under weak fairness of `ProposeAny` and `DeliverAnyVote`, some node must
+eventually commit a non-empty proposal set.
+
+Recent `build/rel` runs:
+
+- safety model: about 70.7 seconds, `881776` states, `4033024` transitions
+- liveness model: about 40.6 seconds, `347812` states, `1161604` transitions
 
 ## Important Nuance
 

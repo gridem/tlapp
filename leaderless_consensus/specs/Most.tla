@@ -5,6 +5,8 @@ CONSTANTS Nodes, MessageIds
 
 ASSUME Cardinality(Nodes) = 3
 
+Majority == (Cardinality(Nodes) \div 2) + 1
+
 MostVoting == "Voting"
 MostCommitted == "Committed"
 
@@ -76,8 +78,9 @@ MostVoteResult(state, self, source, proposals, incomingNodes) ==
         votes1 == (state.votes \cup {self, source}) \cap nodes1
         proposalVotes1 ==
           [m \in MessageIds |->
-             IF m \in proposals
-             THEN state.proposalVotes[m] \cup {source}
+             IF m \in proposals1
+             THEN state.proposalVotes[m] \cup {self} \cup
+                  (IF m \in proposals THEN {source} ELSE {})
              ELSE state.proposalVotes[m]]
         proposalVotes2 ==
           IF changedNodes
@@ -227,11 +230,25 @@ DeliverAnyCommit ==
 DisconnectAny ==
   \E failed \in Nodes : Disconnect(failed)
 
+LiveDisconnect(failed) ==
+  /\ failed \in alive
+  /\ Cardinality(alive \ {failed}) >= Majority
+  /\ Disconnect(failed)
+
+LiveDisconnectAny ==
+  \E failed \in Nodes : LiveDisconnect(failed)
+
 Next ==
   \/ ProposeAny
   \/ DeliverAnyVote
   \/ DeliverAnyCommit
   \/ DisconnectAny
+
+LiveNext ==
+  \/ ProposeAny
+  \/ DeliverAnyVote
+  \/ DeliverAnyCommit
+  \/ LiveDisconnectAny
 
 TypeOK ==
   /\ alive \subseteq Nodes
@@ -275,24 +292,16 @@ Invariant ==
   /\ CommitWellFormed
   /\ Agreement
 
-CanProposeAny ==
+CommitHappened ==
   \E node \in Nodes :
-    \E msg \in MessageIds :
-      /\ node \in alive
-      /\ msg \notin proposed
-      /\ local[node].votes = {}
-      /\ local[node].status # MostCommitted
+    /\ local[node].status = MostCommitted
+    /\ local[node].committed # {}
 
-Quiescent ==
-  /\ voteMsgs = {}
-  /\ commitMsgs = {}
-  /\ ~CanProposeAny
-
-Termination == <>Quiescent
+Termination == <>CommitHappened
 
 Spec == Init /\ [][Next]_vars
 LiveSpec ==
-  /\ Spec
+  /\ Init /\ [][LiveNext]_vars
   /\ WF_vars(ProposeAny)
   /\ WF_vars(DeliverAnyVote)
 
