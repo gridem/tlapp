@@ -11,8 +11,8 @@ namespace test {
 TEST(Liveness, ClauseKindsAndBindingModes) {
   Var<int> x{"x"};
 
-  auto weak = wf(x++ == 3);
-  auto strong = sf(x++ == 4);
+  auto weak = weakFairness(x++ == 3);
+  auto strong = strongFairness(x++ == 4);
   auto evt = eventually(x == 2);
 
   ASSERT_EQ(1, weak.weakFairness.size());
@@ -36,7 +36,10 @@ TEST(Liveness, ClauseKindsAndBindingModes) {
 
 TEST(Liveness, ConjunctionMergesClauses) {
   Var<int> x{"x"};
-  auto clauses = wf(x++ == 2) && sf(x++ == 3) && eventually(x > 0) && eventually(x != 2);
+  auto clauses = weakFairness(x++ == 2) &&
+                 strongFairness(x++ == 3) &&
+                 eventually(x > 0) &&
+                 eventually(x != 2);
 
   ASSERT_EQ(1, clauses.weakFairness.size());
   ASSERT_EQ(1, clauses.strongFairness.size());
@@ -199,13 +202,13 @@ struct WeakFairnessChoiceBase : IModel {
 
 struct WeakFairnessCombinedModel : WeakFairnessChoiceBase {
   std::optional<LivenessBoolean> liveness() override {
-    return wf(a() || b());
+    return weakFairness(a() || b());
   }
 };
 
 struct WeakFairnessSeparateModel : WeakFairnessChoiceBase {
   std::optional<LivenessBoolean> liveness() override {
-    return wf(a()) && wf(b());
+    return weakFairness(a()) && weakFairness(b());
   }
 };
 
@@ -231,13 +234,13 @@ struct StrongFairnessChoiceBase : IModel {
 
 struct WeakFairnessOnlyModel : StrongFairnessChoiceBase {
   std::optional<LivenessBoolean> liveness() override {
-    return wf(a());
+    return weakFairness(a());
   }
 };
 
 struct StrongFairnessOnlyModel : StrongFairnessChoiceBase {
   std::optional<LivenessBoolean> liveness() override {
-    return sf(a());
+    return strongFairness(a());
   }
 };
 

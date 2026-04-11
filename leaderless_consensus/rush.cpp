@@ -423,8 +423,8 @@ struct LivenessModel : BaseModel {
   }
 
   std::optional<LivenessBoolean> liveness() override {
-    return wf(proposeAny()) &&
-           wf(deliverAnyState()) &&
+    return weakFairness(proposeAny()) &&
+           weakFairness(deliverAnyState()) &&
            eventually(commitHappenedExpr(sys));
   }
 };

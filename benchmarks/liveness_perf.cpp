@@ -97,7 +97,7 @@ struct FairnessCycleBase : IModel {
 
 struct WeakFairnessCycleModel : FairnessCycleBase {
   explicit WeakFairnessCycleModel(int size)
-      : FairnessCycleBase(size), livenessExpr_{wf(cycleExpr_)} {}
+      : FairnessCycleBase(size), livenessExpr_{weakFairness(cycleExpr_)} {}
 
   std::optional<LivenessBoolean> liveness() override {
     return livenessExpr_;
@@ -108,7 +108,7 @@ struct WeakFairnessCycleModel : FairnessCycleBase {
 
 struct StrongFairnessCycleModel : FairnessCycleBase {
   explicit StrongFairnessCycleModel(int size)
-      : FairnessCycleBase(size), livenessExpr_{sf(cycleExpr_)} {}
+      : FairnessCycleBase(size), livenessExpr_{strongFairness(cycleExpr_)} {}
 
   std::optional<LivenessBoolean> liveness() override {
     return livenessExpr_;
@@ -147,20 +147,22 @@ TEST(LivenessPerf, Run) {
       static_cast<size_t>(kFairnessSize + 1), weakFairnessEngine.getStats().loop.states);
   ASSERT_NO_THROW(weakFairnessEngine.checkLiveness());
   auto weakFairnessToken = benchValue(weakFairnessEngine.getStats());
-  expectBenchPerIteration("liveness_wf_cycle_1024", 25, weakFairnessToken, [&]() {
-    weakFairnessEngine.checkLiveness();
-    return weakFairnessToken;
-  });
+  expectBenchPerIteration(
+      "liveness_weak_fairness_cycle_1024", 25, weakFairnessToken, [&]() {
+        weakFairnessEngine.checkLiveness();
+        return weakFairnessToken;
+      });
 
   auto strongFairnessEngine = makeExploredEngine<StrongFairnessCycleModel>(kFairnessSize);
   ASSERT_EQ(static_cast<size_t>(kFairnessSize + 1),
       strongFairnessEngine.getStats().loop.states);
   ASSERT_NO_THROW(strongFairnessEngine.checkLiveness());
   auto strongFairnessToken = benchValue(strongFairnessEngine.getStats());
-  expectBenchPerIteration("liveness_sf_cycle_1024", 25, strongFairnessToken, [&]() {
-    strongFairnessEngine.checkLiveness();
-    return strongFairnessToken;
-  });
+  expectBenchPerIteration(
+      "liveness_strong_fairness_cycle_1024", 25, strongFairnessToken, [&]() {
+        strongFairnessEngine.checkLiveness();
+        return strongFairnessToken;
+      });
 }
 
 }  // namespace liveness_perf

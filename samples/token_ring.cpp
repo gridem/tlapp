@@ -62,7 +62,7 @@ struct Model : IModel {
             ((c1 == 0 && c2 == 0) || (c1 == 1 && c2 == 0) || (c1 == 1 && c2 == 1))) ||
         (c0 == 2 &&
             ((c1 == 1 && c2 == 1) || (c1 == 2 && c2 == 1) || (c1 == 2 && c2 == 2)));
-    return wf(next()) && eventually(uniqueToken);
+    return weakFairness(next()) && eventually(uniqueToken);
   }
 
   Var<CounterMap> c{"c"};

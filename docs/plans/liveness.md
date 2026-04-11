@@ -23,8 +23,8 @@ The current branch now implements:
 
 - `LivenessBoolean`
 - `IModel::liveness()`
-- `wf(Boolean)`
-- `sf(Boolean)`
+- `weakFairness(Boolean)`
+- `strongFairness(Boolean)`
 - `eventually(Boolean)`
 - retained admitted-state graph edges in the engine
 - `<>(P)` checking
@@ -86,8 +86,8 @@ struct LivenessBoolean {
 Constructors:
 
 ```cpp
-LivenessBoolean wf(Boolean action);
-LivenessBoolean sf(Boolean action);
+LivenessBoolean weakFairness(Boolean action);
+LivenessBoolean strongFairness(Boolean action);
 LivenessBoolean eventually(Boolean state);
 LivenessBoolean operator&&(LivenessBoolean, LivenessBoolean);
 ```
@@ -96,13 +96,15 @@ Usage:
 
 ```cpp
 std::optional<LivenessBoolean> liveness() override {
-  return wf(phase1b()) && wf(phase2b()) && eventually(chosen());
+  return weakFairness(phase1b()) &&
+         weakFairness(phase2b()) &&
+         eventually(chosen());
 }
 ```
 
 Notes:
 
-- `wf(Boolean)` and `sf(Boolean)` bind the `Boolean` with `NextMode`.
+- `weakFairness(Boolean)` and `strongFairness(Boolean)` bind the `Boolean` with `NextMode`.
 - `eventually(Boolean)` binds the `Boolean` with `PredicateMode`.
 - `&&` means conjunction of liveness obligations by merging the corresponding vectors.
 - No vector-based API is exposed to the user directly.
@@ -141,8 +143,8 @@ The `LivenessBoolean` value represents conjunction of all stored obligations:
 
 Important:
 
-- `wf(a) && wf(b)` means `WF(a) /\ WF(b)`
-- `wf(a || b)` means `WF(a \/ b)`
+- `weakFairness(a) && weakFairness(b)` means `WF(a) /\ WF(b)`
+- `weakFairness(a || b)` means `WF(a \/ b)`
 - these are not equivalent in general, so they must remain distinguishable
 
 ## Engine Design
@@ -338,7 +340,7 @@ Expected:
 
 ### API binding behavior
 
-Construct `wf(...)`, `sf(...)`, and `eventually(...)` values and verify that:
+Construct `weakFairness(...)`, `strongFairness(...)`, and `eventually(...)` values and verify that:
 
 - fairness clauses are stored as next-action bindings
 - eventualities are stored as predicate bindings
@@ -350,8 +352,8 @@ Model where `A || B` keeps happening forever but `B` never happens even though i
 
 Expected:
 
-- `wf(A || B)` passes
-- `wf(A) && wf(B)` fails
+- `weakFairness(A || B)` passes
+- `weakFairness(A) && weakFairness(B)` fails
 
 This test is important because it validates the semantics that motivated the internal vector-of-obligations design.
 

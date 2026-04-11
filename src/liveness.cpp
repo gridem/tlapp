@@ -20,11 +20,11 @@ void appendVector(std::vector<T>& dst, std::vector<T>& src) {
 
 }  // namespace
 
-LivenessBoolean wf(Boolean action) {
+LivenessBoolean weakFairness(Boolean action) {
   return {{bind(std::move(action), NextMode{})}, {}, {}};
 }
 
-LivenessBoolean sf(Boolean action) {
+LivenessBoolean strongFairness(Boolean action) {
   return {{}, {bind(std::move(action), NextMode{})}, {}};
 }
 
