@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <utility>
 #include <unordered_map>
 #include <unordered_set>
@@ -90,12 +91,14 @@ struct Engine {
   bool holdsOnState(const BoundPredicate<Boolean>& e, const State& state);
 
   // Precomputes state-predicate results for all admitted nodes.
-  PredicateCache computePredicateCache(const BoundPredicate<Boolean>& e);
+  PredicateCache computePredicateCache(const BoundPredicate<Boolean>& e,
+      const std::function<void(size_t current, size_t total)>& progress = {});
 
   // Precomputes enabledness and matching targets for an action on all admitted
   // nodes.
   ActionCache computeActionCache(const BoundNextAction<Boolean>& action,
-      const GraphInfo& graph);
+      const GraphInfo& graph,
+      const std::function<void(size_t current, size_t total)>& progress = {});
 
   // Computes strongly connected components of the admitted graph.
   SccInfo computeSccs(const GraphInfo& graph) const;

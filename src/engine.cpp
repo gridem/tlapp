@@ -83,15 +83,15 @@ std::string Stats::Init::toString() const {
 std::string Stats::Loop::toString() const {
   auto queued = states >= processed ? states - processed : 0;
   auto drain = states == 0 ? 0 : processed * 100 / states;
-  return "{total states: " +
+  return "{drain: " +
+         asString(drain) +
+         "%" +
+         ", total states: " +
          asString(states) +
          ", processed: " +
          asString(processed) +
          ", queued: " +
          asString(queued) +
-         ", drain: " +
-         asString(drain) +
-         "%" +
          ", transitions: " +
          asString(transitions) +
          "}";
@@ -181,13 +181,39 @@ void Engine::checkLiveness() {
     return;
   }
 
+  auto lastLog = std::chrono::steady_clock::time_point{};
+  auto maybeLog = [&](const std::string& phase, size_t current, size_t total) {
+    auto now = std::chrono::steady_clock::now();
+    if (now - lastLog < std::chrono::seconds(1)) {
+      return;
+    }
+    auto progress = total == 0 ? 0 : current * 100 / total;
+    LOG(INFO) << "Liveness stats: {progress: " << progress << "%" << ", phase: " << phase
+              << ", current: " << current << ", total: " << total
+              << ", states: " << graphStates_.size() << "}";
+    lastLog = now;
+  };
+
+  LOG(INFO) << "Liveness started: {states: " << graphStates_.size()
+            << ", eventually: " << liveness_->eventually.size()
+            << ", weak fairness: " << liveness_->weakFairness.size()
+            << ", strong fairness: " << liveness_->strongFairness.size() << "}";
+
+  maybeLog("graph", 0, 1);
   auto graph = buildGraphInfo();
+  maybeLog("scc", 0, 1);
   auto sccs = computeSccs(graph);
+  LOG(INFO) << "Liveness graph ready: {states: " << graphStates_.size()
+            << ", components: " << sccs.components.size() << "}";
   auto weakLayout = makeBitLayout(liveness_->weakFairness.size());
   auto strongLayout = makeBitLayout(liveness_->strongFairness.size());
 
-  for (auto&& predicate : liveness_->eventually) {
-    auto cache = computePredicateCache(predicate);
+  for (size_t i = 0; i < liveness_->eventually.size(); ++i) {
+    maybeLog("eventually", i + 1, liveness_->eventually.size());
+    auto&& predicate = liveness_->eventually[i];
+    auto cache = computePredicateCache(predicate, [&](size_t current, size_t total) {
+      maybeLog("eventually_states", current, total);
+    });
     std::vector<const State*> cycle;
     if (!findEventuallyCounterexample(cache, graph, cycle)) {
       continue;
@@ -203,7 +229,11 @@ void Engine::checkLiveness() {
   auto weakEnabled = makeBitRows(graphStates_.size(), weakLayout);
   auto weakTaken = makeBitRows(sccs.components.size(), weakLayout);
   for (size_t i = 0; i < liveness_->weakFairness.size(); ++i) {
-    auto cache = computeActionCache(liveness_->weakFairness[i], graph);
+    maybeLog("weak_fairness", i + 1, liveness_->weakFairness.size());
+    auto cache = computeActionCache(
+        liveness_->weakFairness[i], graph, [&](size_t current, size_t total) {
+          maybeLog("weak_fairness_states", current, total);
+        });
     for (size_t node = 0; node < cache.enabled.size(); ++node) {
       if (cache.enabled[node]) {
         setBit(weakEnabled, weakLayout, node, i);
@@ -221,7 +251,11 @@ void Engine::checkLiveness() {
   auto strongEnabled = makeBitRows(graphStates_.size(), strongLayout);
   auto strongTaken = makeBitRows(sccs.components.size(), strongLayout);
   for (size_t i = 0; i < liveness_->strongFairness.size(); ++i) {
-    auto cache = computeActionCache(liveness_->strongFairness[i], graph);
+    maybeLog("strong_fairness", i + 1, liveness_->strongFairness.size());
+    auto cache = computeActionCache(
+        liveness_->strongFairness[i], graph, [&](size_t current, size_t total) {
+          maybeLog("strong_fairness_states", current, total);
+        });
     for (size_t node = 0; node < cache.enabled.size(); ++node) {
       if (cache.enabled[node]) {
         setBit(strongEnabled, strongLayout, node, i);
@@ -311,6 +345,9 @@ void Engine::checkLiveness() {
       throw LivenessError("Strong fairness condition violated");
     }
   }
+
+  LOG(INFO) << "Liveness done: {states: " << graphStates_.size()
+            << ", components: " << sccs.components.size() << "}";
 }
 
 void Engine::handleResult(const BooleanResult& b, State& to) {
@@ -414,17 +451,24 @@ bool Engine::holdsOnState(const BoundPredicate<Boolean>& e, const State& state) 
   return e(ctx_);
 }
 
-Engine::PredicateCache Engine::computePredicateCache(const BoundPredicate<Boolean>& e) {
+Engine::PredicateCache Engine::computePredicateCache(const BoundPredicate<Boolean>& e,
+    const std::function<void(size_t current, size_t total)>& progress) {
   PredicateCache cache;
   cache.holds.reserve(graphStates_.size());
-  for (auto&& state : graphStates_) {
+  auto total = graphStates_.size();
+  for (size_t i = 0; i < total; ++i) {
+    if (progress) {
+      progress(i + 1, total);
+    }
+    auto&& state = graphStates_[i];
     cache.holds.push_back(holdsOnState(e, *state) ? 1 : 0);
   }
   return cache;
 }
 
 Engine::ActionCache Engine::computeActionCache(const BoundNextAction<Boolean>& action,
-    const GraphInfo& graph) {
+    const GraphInfo& graph,
+    const std::function<void(size_t current, size_t total)>& progress) {
   ActionCache cache;
   cache.enabled.resize(graphStates_.size());
   cache.targets.resize(graphStates_.size());
@@ -435,7 +479,11 @@ Engine::ActionCache Engine::computeActionCache(const BoundNextAction<Boolean>& a
   size_t outgoingStamp = 1;
   size_t seenStamp = 1;
 
-  for (size_t i = 0; i < graphStates_.size(); ++i) {
+  auto total = graphStates_.size();
+  for (size_t i = 0; i < total; ++i) {
+    if (progress) {
+      progress(i + 1, total);
+    }
     auto&& outgoing = graph.outgoing[i];
     if (outgoing.empty()) {
       continue;
