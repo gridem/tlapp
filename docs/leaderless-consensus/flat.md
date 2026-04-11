@@ -62,6 +62,12 @@ replays each survivor's local `carries` against the smaller node set.
   pairs.
 - That larger message payload is the main reason this variant has a much larger
   reachable state space.
-- On the current branch tip, the reduced executable model now completes. A
-  recent release run finished in about 175 seconds with `770773` states and
-  `8560654` transitions.
+
+## Safety and Liveness
+
+Safety requires all live committed nodes to agree on the committed set.
+
+The current model also checks liveness: under weak fairness of `Next`, the
+system must eventually become quiescent, meaning there are no in-flight vote or
+commit messages and no further `Propose` is still enabled. A recent release run
+with this liveness property passed in about 348 seconds.

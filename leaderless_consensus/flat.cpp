@@ -247,6 +247,24 @@ bool invariant(const FlatState& sys) {
   return true;
 }
 
+bool canProposeAny(const FlatState& sys) {
+  if (sys.applied.size() >= sys.local.size()) {
+    return false;
+  }
+
+  for (auto&& node : sys.alive) {
+    if (sys.local.at(node).votes.empty() && sys.local.at(node).status != kCommitted) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool quiescent(const FlatState& sys) {
+  return sys.voteMsgs.empty() && sys.commitMsgs.empty() && !canProposeAny(sys);
+}
+
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::flat::canPropose)
 DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::flat::propose)
 DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::flat::canDeliverVote)
@@ -256,6 +274,7 @@ DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::flat::deliverCommit)
 DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::flat::canDisconnect)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::flat::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::flat::invariant)
+DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::flat::quiescent)
 
 struct Model : IModel {
   Boolean init() override {
@@ -283,15 +302,19 @@ struct Model : IModel {
     return invariantExpr(sys);
   }
 
+  std::optional<LivenessBoolean> liveness() override {
+    return wf(next()) && eventually(quiescentExpr(sys));
+  }
+
   Var<FlatState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
   CarrySet messageIds_ = {10, 11, 12};
 };
 
-TEST_F(EngineFixture, FlatExploration) {
+TEST_F(EngineFixture, FlatHoldsInvariantAndConverges) {
   e.createModel<Model>();
-  e.run();
+  EXPECT_NO_THROW(e.run());
 }
 
 }  // namespace leaderless_consensus::flat
