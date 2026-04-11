@@ -73,10 +73,10 @@ That weaker invariant matches the algorithm's progressive prefix-commit design.
 `Calm`, `Flat`, `Most`, and `Rush` also include a liveness check in both the executable model and
 the TLA+ spec:
 
-- eventual quiescence, meaning there are no in-flight vote or commit messages
-  and no further `Propose` action is enabled
-- `Calm` now uses action-level weak fairness on `ProposeAny`,
-  and `DeliverAnyVote`
+- `Calm` now uses separate safety and liveness models: safety keeps the full
+  disconnect space, while liveness requires some node to commit a non-empty
+  proposal set under majority-preserving disconnects
+- `Calm` uses action-level weak fairness on `ProposeAny` and `DeliverAnyVote`
 - `Flat` and `Most` now also use action-level weak fairness on `ProposeAny`
   and `DeliverAnyVote`
 - `Rush` now uses action-level weak fairness on `ProposeAny` and
@@ -101,7 +101,8 @@ TLC status:
 - TLC verification is a work in progress.
 - recent release runs on the current branch tip passed with the current
   executable liveness checks:
-  - `Calm`: about 30 seconds, `234780` states, `1367893` transitions
+  - `Calm` safety: about 19.6 seconds, `234780` states, `1367893` transitions
+  - `Calm` liveness: about 18.8 seconds, `214265` states, `1239748` transitions
   - `Most`: about 101 seconds, `881776` states, `4033024` transitions
   - `Rush`: about 74 seconds, `465187` states, `1607206` transitions
   - `Flat`: about 293 seconds, `770773` states, `8560654` transitions

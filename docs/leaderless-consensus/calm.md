@@ -49,11 +49,21 @@ Messages are:
 `Disconnect` removes the failed node from the live set, purges its queued
 messages, and replays each survivor's current `proposals` against the reduced
 membership view. That can force a `MayCommit` node into `CannotCommit`.
+The safety model keeps unrestricted disconnects. The liveness model reuses the
+same transition logic, but limits disconnects so that a majority of the
+original nodes remains alive. In the 3-node model, that means at most one
+disconnect.
 
 ## Safety and Liveness
 
 Safety requires all live completed nodes to have the same committed proposal set.
 
 The current model also checks liveness: under weak fairness of `ProposeAny`
-and `DeliverAnyVote`, the system must eventually become quiescent, meaning no
-vote or commit messages remain and no fresh `Propose` is still enabled.
+and `DeliverAnyVote`, some node must eventually commit a non-empty proposal
+set. That liveness check is evaluated in a separate liveness model that uses
+the majority-preserving disconnect rule above.
+
+Recent `build/rel` runs:
+
+- safety model: about 19.6 seconds, `234780` states, `1367893` transitions
+- liveness model: about 18.8 seconds, `214265` states, `1239748` transitions
