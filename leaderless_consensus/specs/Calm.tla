@@ -182,17 +182,77 @@ DisconnectLocal(state, self, failed) ==
           CalmVoteResult(state, self, failed, state.proposals, state.nodes \ {failed})
     IN out.local
 
+DisconnectOut(state, self, failed) ==
+  IF state.proposals = {}
+  THEN [changed |-> TRUE,
+        local |-> [state EXCEPT !.nodes = @ \ {failed}],
+        sendVote |-> FALSE,
+        sendCommit |-> FALSE,
+        commit |-> {}]
+  ELSE CalmVoteResult(state, self, failed, state.proposals, state.nodes \ {failed})
+
+RECURSIVE DisconnectBroadcastVotes(_, _, _, _)
+
+DisconnectBroadcastVotes(queue, senders, localAfter, aliveSet) ==
+  IF senders = {}
+  THEN queue
+  ELSE LET sender == CHOOSE n \in senders : TRUE
+       IN DisconnectBroadcastVotes(
+            BroadcastVote(queue, sender, localAfter[sender].proposals,
+                          localAfter[sender].nodes, aliveSet),
+            senders \ {sender},
+            localAfter,
+            aliveSet)
+
+RECURSIVE DisconnectBroadcastCommits(_, _, _, _)
+
+DisconnectBroadcastCommits(queue, senders, localAfter, aliveSet) ==
+  IF senders = {}
+  THEN queue
+  ELSE LET sender == CHOOSE n \in senders : TRUE
+       IN DisconnectBroadcastCommits(
+            BroadcastCommit(queue, sender, localAfter[sender].committed, aliveSet),
+            senders \ {sender},
+            localAfter,
+            aliveSet)
+
 Disconnect(failed) ==
   /\ failed \in alive
-  /\ alive' = alive \ {failed}
-  /\ proposed' = proposed
-  /\ local' =
-       [n \in Nodes |->
-         IF n \in alive'
-         THEN DisconnectLocal(local[n], n, failed)
-         ELSE local[n]]
-  /\ voteMsgs' = {m \in voteMsgs : m.from # failed /\ m.to # failed}
-  /\ commitMsgs' = {m \in commitMsgs : m.from # failed /\ m.to # failed}
+  /\ LET alive1 == alive \ {failed}
+         out ==
+           [n \in Nodes |->
+             IF n \in alive1
+             THEN DisconnectOut(local[n], n, failed)
+             ELSE [changed |-> FALSE,
+                   local |-> local[n],
+                   sendVote |-> FALSE,
+                   sendCommit |-> FALSE,
+                   commit |-> {}]]
+         local1 ==
+           [n \in Nodes |->
+             IF n \in alive1
+             THEN out[n].local
+             ELSE local[n]]
+         voteBase ==
+           {m \in voteMsgs : m.from # failed /\ m.to # failed}
+         commitBase ==
+           {m \in commitMsgs : m.from # failed /\ m.to # failed}
+         voteOut ==
+           DisconnectBroadcastVotes(voteBase,
+               {n \in alive1 : out[n].sendVote},
+               local1,
+               alive1)
+         commitOut ==
+           DisconnectBroadcastCommits(commitBase,
+               {n \in alive1 : out[n].sendCommit},
+               local1,
+               alive1)
+     IN
+       /\ alive' = alive1
+       /\ proposed' = proposed
+       /\ local' = local1
+       /\ voteMsgs' = voteOut
+       /\ commitMsgs' = commitOut
 
 ProposeAny ==
   \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)

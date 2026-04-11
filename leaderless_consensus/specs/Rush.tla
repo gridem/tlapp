@@ -126,6 +126,11 @@ PutPromiseVotes(promises, prefix, votes) ==
      THEN retained
      ELSE retained \cup {[prefix |-> prefix, votes |-> votes]}
 
+PrefixSupport(nodesMessages, prefix) ==
+  {n \in Nodes :
+     /\ Len(nodesMessages[n].messages) >= Len(prefix)
+     /\ prefix = SubSeq(nodesMessages[n].messages, 1, Len(prefix))}
+
 NormalizePromises(promises, nodesMessages, proposals, committed) ==
   {p \in PromiseState :
      LET support == PrefixSupport(nodesMessages, p.prefix)
@@ -135,12 +140,13 @@ NormalizePromises(promises, nodesMessages, proposals, committed) ==
         /\ votes # {}
         /\ p.votes = votes}
 
-BumpGeneration(generation, steps) ==
-  IF generation + steps < MaxGeneration
-  THEN generation + steps
-  ELSE MaxGeneration
+BumpGeneration(generation, steps, proposalCount) ==
+  LET cap == 2 * proposalCount + 1
+  IN IF generation + steps < cap
+     THEN generation + steps
+     ELSE cap
 
-BaseCore(core, self, incoming, committed) ==
+BaseCore(core, self, incoming, committed, proposalCount) ==
   LET mergedNodes == MergeNodesMessages(core.nodesMessages, incoming.nodesMessages)
       newIds == NewProposalSeq(core.proposals, incoming.proposals)
       self0 == mergedNodes[self]
@@ -149,7 +155,7 @@ BaseCore(core, self, incoming, committed) ==
         THEN self0
         ELSE [self0 EXCEPT
                 !.messages = @ \o newIds,
-                !.generation = BumpGeneration(@, Len(newIds))]
+                !.generation = BumpGeneration(@, Len(newIds), proposalCount)]
       proposals1 == core.proposals \cup incoming.proposals
       nodes1 == [mergedNodes EXCEPT ![self] = self1]
   IN
@@ -164,14 +170,9 @@ MajorityIds(nodesMessages, idx) ==
                     /\ Len(nodesMessages[n].messages) >= idx
                     /\ nodesMessages[n].messages[idx] = id}) >= Majority}
 
-PrefixSupport(nodesMessages, prefix) ==
-  {n \in Nodes :
-     /\ Len(nodesMessages[n].messages) >= Len(prefix)
-     /\ prefix = SubSeq(nodesMessages[n].messages, 1, Len(prefix))}
+RECURSIVE Iterate(_, _, _, _, _, _, _)
 
-RECURSIVE Iterate(_, _, _, _, _, _)
-
-Iterate(core, self, idx, sorted, prefix, committed) ==
+Iterate(core, self, idx, sorted, prefix, committed, proposalCount) ==
   IF idx > Cardinality(core.proposals)
   THEN [core |-> core, committed |-> committed]
   ELSE
@@ -197,7 +198,7 @@ Iterate(core, self, idx, sorted, prefix, committed) ==
                  !.promises =
                    NormalizePromises(promises1, core.nodesMessages,
                                      core.proposals, committed1)]
-        IN Iterate(core1, self, idx + 1, sorted, prefix1, committed1)
+        IN Iterate(core1, self, idx + 1, sorted, prefix1, committed1, proposalCount)
       ELSE IF ~sorted
            THEN
              LET sortedMsgs == SortFrom(core.nodesMessages[self].messages, idx)
@@ -207,18 +208,18 @@ Iterate(core, self, idx, sorted, prefix, committed) ==
                    ELSE [core EXCEPT
                            !.nodesMessages[self].messages = sortedMsgs,
                            !.nodesMessages[self].generation =
-                             BumpGeneration(@, 1),
+                             BumpGeneration(@, 1, proposalCount),
                            !.promises =
                              NormalizePromises(@, [core.nodesMessages EXCEPT ![self].messages = sortedMsgs],
                                                core.proposals, committed)]
-             IN Iterate(core1, self, idx, TRUE, prefix, committed)
+             IN Iterate(core1, self, idx, TRUE, prefix, committed, proposalCount)
            ELSE [core |-> core, committed |-> committed]
 
-MergeResult(state, self, incoming) ==
-  LET base == BaseCore(state.core, self, incoming, state.committed)
+MergeResult(state, self, incoming, proposalCount) ==
+  LET base == BaseCore(state.core, self, incoming, state.committed, proposalCount)
       iter ==
         Iterate(base, self, Len(state.committed) + 1, FALSE,
-                state.committed, state.committed)
+                state.committed, state.committed, proposalCount)
   IN
     IF iter.core = state.core
     THEN [changed |-> FALSE,
@@ -239,7 +240,7 @@ Propose(node, msg) ==
            [proposals |-> {msg},
             nodesMessages |-> EmptyNodesMessages,
             promises |-> InitPromises]
-         out == MergeResult(local[node], node, incoming)
+         out == MergeResult(local[node], node, incoming, Cardinality(proposed \cup {msg}))
      IN
        /\ out.changed
        /\ alive' = alive
@@ -251,7 +252,7 @@ Propose(node, msg) ==
 DeliverState(msg) ==
   /\ msg \in stateMsgs
   /\ msg.to \in alive
-  /\ LET out == MergeResult(local[msg.to], msg.to, msg.core)
+  /\ LET out == MergeResult(local[msg.to], msg.to, msg.core, Cardinality(proposed))
      IN
        /\ out.changed
        /\ alive' = alive
@@ -312,7 +313,7 @@ Invariant ==
 
 CommitHappened ==
   \E node \in Nodes :
-    local[node].committed # {}
+    local[node].committed # <<>>
 
 Termination == <>CommitHappened
 

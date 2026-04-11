@@ -62,13 +62,13 @@ BroadcastVote(queue, from, proposals, nodes, votes, aliveSet) ==
          /\ m.nodes = nodes
          /\ m.votes \subseteq votes)} \cup
   {Vote(from, to, proposals, nodes, votes) :
-     /\ to \in (aliveSet \ {from})
-     /\ ~(\E m \in queue :
-            /\ m.from = from
-            /\ m.to = to
-            /\ m.proposals = proposals
-            /\ m.nodes = nodes
-            /\ votes \subseteq m.votes)}
+     to \in {node \in (aliveSet \ {from}) :
+              ~(\E m \in queue :
+                   /\ m.from = from
+                   /\ m.to = node
+                   /\ m.proposals = proposals
+                   /\ m.nodes = nodes
+                   /\ votes \subseteq m.votes)}}
 
 PurgeVotesTo(queue, node) ==
   {m \in queue : m.to # node}
@@ -180,12 +180,11 @@ DeliverCommit(msg) ==
            [local EXCEPT
              ![msg].status = FlatCommitted,
              ![msg].committed = local[msg].proposals]
-     IN
-  /\ alive' = alive
-  /\ proposed' = proposed
-  /\ local' = local1
-  /\ voteMsgs' = PurgeVotesTo(voteMsgs, msg)
-  /\ commitMsgs' = BroadcastCommit(commitMsgs \ {msg}, msg, alive, local1)
+     IN /\ alive' = alive
+        /\ proposed' = proposed
+        /\ local' = local1
+        /\ voteMsgs' = PurgeVotesTo(voteMsgs, msg)
+        /\ commitMsgs' = BroadcastCommit(commitMsgs \ {msg}, msg, alive, local1)
 
 DisconnectLocal(state, self, failed) ==
   IF state.proposals = {}
