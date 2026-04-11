@@ -412,7 +412,7 @@ struct Model : IModel {
   Var<MostState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  ProposalSet messageIds_ = {10, 11, 12};
+  ProposalSet messageIds_ = kProposalIds;
 };
 
 TEST_F(EngineFixture, MostHoldsInvariantAndConverges) {

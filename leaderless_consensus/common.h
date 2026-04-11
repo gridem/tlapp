@@ -30,6 +30,8 @@ using NodeSet = std::set<NodeId>;
 using ProposalSet = std::set<MessageId>;
 using MessageSeq = std::vector<MessageId>;
 
+inline const ProposalSet kProposalIds = {10, 11, 12};
+
 template <typename T>
 std::set<T> setUnion(std::set<T> left, const std::set<T>& right) {
   left.insert(right.begin(), right.end());

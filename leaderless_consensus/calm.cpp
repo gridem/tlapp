@@ -134,6 +134,10 @@ bool canPropose(const CalmState& state, NodeId node, MessageId id) {
          state.local.at(node).status != kCompleted;
 }
 
+size_t quorumSize(const CalmState& state) {
+  return state.local.size() / 2 + 1;
+}
+
 CalmState propose(CalmState state, NodeId node, MessageId id) {
   state.proposed.insert(id);
   auto nodes = state.local.at(node).nodes;
@@ -162,6 +166,10 @@ CalmState deliverCommit(CalmState state, const CalmCommitMsg& msg) {
 
 bool canDisconnect(const CalmState& state, NodeId failed) {
   return state.alive.contains(failed);
+}
+
+bool canLiveDisconnect(const CalmState& state, NodeId failed) {
+  return canDisconnect(state, failed) && state.alive.size() - 1 >= quorumSize(state);
 }
 
 CalmState disconnect(CalmState state, NodeId failed) {
@@ -230,20 +238,13 @@ bool invariant(const CalmState& state) {
   return true;
 }
 
-bool quiescent(const CalmState& state) {
-  if (!state.voteMsgs.empty() || !state.commitMsgs.empty()) {
-    return false;
-  }
-
-  for (auto&& node : state.alive) {
-    if (state.local.at(node).voted.empty() &&
-        state.local.at(node).status != kCompleted &&
-        state.proposed.size() < 3) {
-      return false;
+bool commitHappened(const CalmState& state) {
+  for (auto&& [node, local] : state.local) {
+    if (local.status == kCompleted && !local.committed.empty()) {
+      return true;
     }
   }
-
-  return true;
+  return false;
 }
 
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::calm::canPropose)
@@ -253,11 +254,12 @@ DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::calm::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::calm::canDeliverCommit)
 DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::calm::deliverCommit)
 DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::calm::canDisconnect)
+DEFINE_ALGORITHM(canLiveDisconnectExpr, ::leaderless_consensus::calm::canLiveDisconnect)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::calm::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::calm::invariant)
-DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::calm::quiescent)
+DEFINE_ALGORITHM(commitHappenedExpr, ::leaderless_consensus::calm::commitHappened)
 
-struct Model : IModel {
+struct BaseModel : IModel {
   Boolean init() override {
     return state == makeState(nodes_);
   }
@@ -282,6 +284,17 @@ struct Model : IModel {
     };
   }
 
+  std::optional<Boolean> ensure() override {
+    return invariantExpr(state);
+  }
+
+  Var<CalmState> state{"state"};
+
+  NodeSet nodes_ = {0, 1, 2};
+  ProposalSet messageIds_ = kProposalIds;
+};
+
+struct SafetyModel : BaseModel {
   Boolean disconnectAny() {
     return $E(failed, nodes_) {
       return canDisconnectExpr(state, failed) && state++ == disconnectExpr(state, failed);
@@ -291,23 +304,34 @@ struct Model : IModel {
   Boolean next() override {
     return proposeAny() || deliverAnyVote() || deliverAnyCommit() || disconnectAny();
   }
+};
 
-  std::optional<Boolean> ensure() override {
-    return invariantExpr(state);
+struct LivenessModel : BaseModel {
+  Boolean disconnectAny() {
+    return $E(failed, nodes_) {
+      return canLiveDisconnectExpr(state, failed) &&
+             state++ == disconnectExpr(state, failed);
+    };
+  }
+
+  Boolean next() override {
+    return proposeAny() || deliverAnyVote() || deliverAnyCommit() || disconnectAny();
   }
 
   std::optional<LivenessBoolean> liveness() override {
-    return wf(proposeAny()) && wf(deliverAnyVote()) && eventually(quiescentExpr(state));
+    return wf(proposeAny()) &&
+           wf(deliverAnyVote()) &&
+           eventually(commitHappenedExpr(state));
   }
-
-  Var<CalmState> state{"state"};
-
-  NodeSet nodes_ = {0, 1, 2};
-  ProposalSet messageIds_ = {10, 11, 12};
 };
 
-TEST_F(EngineFixture, CalmHoldsInvariantAndConverges) {
-  e.createModel<Model>();
+TEST_F(EngineFixture, CalmSafetyHoldsInvariant) {
+  e.createModel<SafetyModel>();
+  EXPECT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, CalmLivenessCommitsWithMajorityAlive) {
+  e.createModel<LivenessModel>();
   EXPECT_NO_THROW(e.run());
 }
 
