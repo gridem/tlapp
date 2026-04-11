@@ -192,11 +192,23 @@ Disconnect(failed) ==
   /\ voteMsgs' = {m \in voteMsgs : m.from # failed /\ m.to # failed}
   /\ commitMsgs' = {m \in commitMsgs : m.from # failed /\ m.to # failed}
 
+ProposeAny ==
+  \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
+
+DeliverAnyVote ==
+  \E msg \in voteMsgs : DeliverVote(msg)
+
+DeliverAnyCommit ==
+  \E msg \in commitMsgs : DeliverCommit(msg)
+
+DisconnectAny ==
+  \E failed \in Nodes : Disconnect(failed)
+
 Next ==
-  \/ \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
-  \/ \E msg \in voteMsgs : DeliverVote(msg)
-  \/ \E msg \in commitMsgs : DeliverCommit(msg)
-  \/ \E failed \in Nodes : Disconnect(failed)
+  \/ ProposeAny
+  \/ DeliverAnyVote
+  \/ DeliverAnyCommit
+  \/ DisconnectAny
 
 TypeOK ==
   /\ alive \subseteq Nodes
@@ -255,6 +267,9 @@ Quiescent ==
 Termination == <>Quiescent
 
 Spec == Init /\ [][Next]_vars
-LiveSpec == Spec /\ WF_vars(Next)
+LiveSpec ==
+  /\ Spec
+  /\ WF_vars(ProposeAny)
+  /\ WF_vars(DeliverAnyVote)
 
 =============================================================================

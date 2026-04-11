@@ -73,9 +73,12 @@ That weaker invariant matches the algorithm's progressive prefix-commit design.
 `Calm`, `Flat`, `Most`, and `Rush` also include a liveness check in both the executable model and
 the TLA+ spec:
 
-- weak fairness on the combined `Next` action
 - eventual quiescence, meaning there are no in-flight vote or commit messages
   and no further `Propose` action is enabled
+- `Calm` now uses action-level weak fairness on `ProposeAny`,
+  and `DeliverAnyVote`
+- `Flat`, `Most`, and `Rush` still use weak fairness on the combined `Next`
+  action
 
 ## Verification Result
 

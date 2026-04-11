@@ -54,6 +54,6 @@ membership view. That can force a `MayCommit` node into `CannotCommit`.
 
 Safety requires all live completed nodes to have the same committed proposal set.
 
-The current model also checks liveness: under weak fairness of `Next`, the
-system must eventually become quiescent, meaning no vote or commit messages
-remain and no fresh `Propose` is still enabled.
+The current model also checks liveness: under weak fairness of `ProposeAny`
+and `DeliverAnyVote`, the system must eventually become quiescent, meaning no
+vote or commit messages remain and no fresh `Propose` is still enabled.
