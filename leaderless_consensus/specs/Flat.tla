@@ -5,6 +5,8 @@ CONSTANTS Nodes, MessageIds
 
 ASSUME Cardinality(Nodes) = 3
 
+Majority == (Cardinality(Nodes) \div 2) + 1
+
 FlatVoting == "Voting"
 FlatCommitted == "Committed"
 
@@ -273,11 +275,25 @@ DeliverAnyCommit ==
 DisconnectAny ==
   \E failed \in Nodes : Disconnect(failed)
 
+LiveDisconnect(failed) ==
+  /\ failed \in alive
+  /\ Cardinality(alive \ {failed}) >= Majority
+  /\ Disconnect(failed)
+
+LiveDisconnectAny ==
+  \E failed \in Nodes : LiveDisconnect(failed)
+
 Next ==
   \/ ProposeAny
   \/ DeliverAnyVote
   \/ DeliverAnyCommit
   \/ DisconnectAny
+
+LiveNext ==
+  \/ ProposeAny
+  \/ DeliverAnyVote
+  \/ DeliverAnyCommit
+  \/ LiveDisconnectAny
 
 TypeOK ==
   /\ alive \subseteq Nodes
@@ -319,25 +335,16 @@ Invariant ==
   /\ CommitWellFormed
   /\ Agreement
 
-CanProposeAny ==
+CommitHappened ==
   \E node \in Nodes :
-    \E msg \in MessageIds :
-      /\ node \in alive
-      /\ msg \notin proposed
-      /\ msg = node + 10
-      /\ local[node].votes = {}
-      /\ local[node].status # FlatCommitted
+    /\ local[node].status = FlatCommitted
+    /\ local[node].committed # {}
 
-Quiescent ==
-  /\ voteMsgs = {}
-  /\ commitMsgs = {}
-  /\ ~CanProposeAny
-
-Termination == <>Quiescent
+Termination == <>CommitHappened
 
 Spec == Init /\ [][Next]_vars
 LiveSpec ==
-  /\ Spec
+  /\ Init /\ [][LiveNext]_vars
   /\ WF_vars(ProposeAny)
   /\ WF_vars(DeliverAnyVote)
 

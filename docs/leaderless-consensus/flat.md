@@ -68,7 +68,13 @@ replays each survivor's local `proposals` against the smaller node set.
 
 Safety requires all live committed nodes to agree on the committed proposal set.
 
-The current model also checks liveness: under weak fairness of `ProposeAny`
-and `DeliverAnyVote`, the system must eventually become quiescent, meaning
-there are no in-flight vote or commit messages and no further `Propose` is
-still enabled.
+The current model also checks liveness in a separate liveness model. Safety
+keeps unrestricted disconnects. Liveness reuses the same transition logic, but
+limits disconnect so that a majority of the original nodes remains alive. Under
+weak fairness of `ProposeAny` and `DeliverAnyVote`, some node must eventually
+commit a non-empty proposal set.
+
+Recent `build/rel` runs:
+
+- safety model: about 180.2 seconds, `770773` states, `8560654` transitions
+- liveness model: about 298.5 seconds, `762123` states, `8451112` transitions

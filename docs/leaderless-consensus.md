@@ -76,11 +76,15 @@ the TLA+ spec:
 - `Calm` now uses separate safety and liveness models: safety keeps the full
   disconnect space, while liveness requires some node to commit a non-empty
   proposal set under majority-preserving disconnects
-- `Calm` uses action-level weak fairness on `ProposeAny` and `DeliverAnyVote`
-- `Flat` and `Most` now also use action-level weak fairness on `ProposeAny`
+- `Flat` also uses separate safety and liveness models: safety keeps the full
+  disconnect space, while liveness requires some node to commit a non-empty
+  proposal set under majority-preserving disconnects
+- `Rush` uses separate safety and liveness models over the same reduced
+  no-disconnect transition relation, and liveness requires some node to commit
+  a non-empty prefix
+- `Calm`, `Flat`, and `Most` use action-level weak fairness on `ProposeAny`
   and `DeliverAnyVote`
-- `Rush` now uses action-level weak fairness on `ProposeAny` and
-  `DeliverAnyState`
+- `Rush` uses action-level weak fairness on `ProposeAny` and `DeliverAnyState`
 
 ## Verification Result
 
@@ -103,9 +107,11 @@ TLC status:
   executable liveness checks:
   - `Calm` safety: about 19.6 seconds, `234780` states, `1367893` transitions
   - `Calm` liveness: about 18.8 seconds, `214265` states, `1239748` transitions
+  - `Flat` safety: about 180.2 seconds, `770773` states, `8560654` transitions
+  - `Flat` liveness: about 298.5 seconds, `762123` states, `8451112` transitions
   - `Most`: about 101 seconds, `881776` states, `4033024` transitions
-  - `Rush`: about 74 seconds, `465187` states, `1607206` transitions
-  - `Flat`: about 293 seconds, `770773` states, `8560654` transitions
+  - `Rush` safety: about 39.4 seconds, `465187` states, `1607206` transitions
+  - `Rush` liveness: about 75.2 seconds, `465187` states, `1607206` transitions
 
 ## Commands
 

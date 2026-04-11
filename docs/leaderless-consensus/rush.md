@@ -78,7 +78,13 @@ pair of committed sequences is prefix-comparable. That matches the intended
 progressive-commit structure: later commits may extend earlier ones, but they
 must not branch.
 
-The current executable model also carries a liveness check: under weak fairness
-of `ProposeAny` and `DeliverAnyState`, it must eventually reach a quiescent
-state with no pending state-message traffic and no further `Propose` still
-enabled.
+The current executable model also carries a liveness check in a separate
+liveness model. The safety and liveness models use the same transition
+relation, since disconnect is already omitted in the reduced model. Under weak
+fairness of `ProposeAny` and `DeliverAnyState`, some node must eventually
+commit a non-empty prefix.
+
+Recent `build/rel` runs:
+
+- safety model: about 39.4 seconds, `465187` states, `1607206` transitions
+- liveness model: about 75.2 seconds, `465187` states, `1607206` transitions

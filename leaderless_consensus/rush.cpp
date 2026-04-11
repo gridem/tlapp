@@ -362,23 +362,13 @@ bool invariant(const RushState& sys) {
   return true;
 }
 
-bool canProposeAny(const RushState& sys) {
-  if (sys.proposed.size() >= sys.local.size()) {
-    return false;
-  }
-
-  auto initial = RushNodeState{makeEmptyCore(sys.local.size()), {}};
-  for (auto&& node : sys.alive) {
-    if (sys.local.at(node) == initial) {
+bool commitHappened(const RushState& sys) {
+  for (auto&& [node, local] : sys.local) {
+    if (!local.committed.empty()) {
       return true;
     }
   }
-
   return false;
-}
-
-bool quiescent(const RushState& sys) {
-  return sys.stateMsgs.empty() && !canProposeAny(sys);
 }
 
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::rush::canPropose)
@@ -386,9 +376,9 @@ DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::rush::propose)
 DEFINE_ALGORITHM(canDeliverStateExpr, ::leaderless_consensus::rush::canDeliverState)
 DEFINE_ALGORITHM(deliverStateExpr, ::leaderless_consensus::rush::deliverState)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::rush::invariant)
-DEFINE_ALGORITHM(quiescentExpr, ::leaderless_consensus::rush::quiescent)
+DEFINE_ALGORITHM(commitHappenedExpr, ::leaderless_consensus::rush::commitHappened)
 
-struct Model : IModel {
+struct BaseModel : IModel {
   Boolean init() override {
     return sys == makeState(nodes_);
   }
@@ -415,18 +405,37 @@ struct Model : IModel {
     return invariantExpr(sys);
   }
 
-  std::optional<LivenessBoolean> liveness() override {
-    return wf(proposeAny()) && wf(deliverAnyState()) && eventually(quiescentExpr(sys));
-  }
-
   Var<RushState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
   ProposalSet messageIds_ = kProposalIds;
 };
 
-TEST_F(EngineFixture, RushHoldsInvariantAndConverges) {
-  e.createModel<Model>();
+struct SafetyModel : BaseModel {
+  Boolean next() override {
+    return proposeAny() || deliverAnyState();
+  }
+};
+
+struct LivenessModel : BaseModel {
+  Boolean next() override {
+    return proposeAny() || deliverAnyState();
+  }
+
+  std::optional<LivenessBoolean> liveness() override {
+    return wf(proposeAny()) &&
+           wf(deliverAnyState()) &&
+           eventually(commitHappenedExpr(sys));
+  }
+};
+
+TEST_F(EngineFixture, RushSafetyHoldsInvariant) {
+  e.createModel<SafetyModel>();
+  EXPECT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, RushLivenessCommits) {
+  e.createModel<LivenessModel>();
   EXPECT_NO_THROW(e.run());
 }
 

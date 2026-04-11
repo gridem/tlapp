@@ -310,18 +310,11 @@ Invariant ==
   /\ MessageWellFormed
   /\ PrefixAgreement
 
-CanProposeAny ==
+CommitHappened ==
   \E node \in Nodes :
-    \E msg \in MessageIds :
-      /\ node \in alive
-      /\ msg \notin proposed
-      /\ local[node] = InitLocal[node]
+    local[node].committed # {}
 
-Quiescent ==
-  /\ stateMsgs = {}
-  /\ ~CanProposeAny
-
-Termination == <>Quiescent
+Termination == <>CommitHappened
 
 Spec == Init /\ [][Next]_vars
 LiveSpec ==
