@@ -25,7 +25,7 @@ PromiseState ==
   [prefix : MessageSeqs, votes : SUBSET Nodes]
 
 CoreState ==
-  [carries : SUBSET MessageIds,
+  [proposals : SUBSET MessageIds,
    nodesMessages : [Nodes -> GenerationState],
    promises : SUBSET PromiseState]
 
@@ -46,7 +46,7 @@ EmptyNodesMessages ==
 
 InitLocal ==
   [n \in Nodes |->
-    [core |-> [carries |-> {},
+    [core |-> [proposals |-> {},
                nodesMessages |-> EmptyNodesMessages,
                promises |-> InitPromises],
      committed |-> <<>>]]
@@ -77,8 +77,8 @@ SortedSeqFromSet(set) ==
   ELSE LET item == MinSet(set)
        IN <<item>> \o SortedSeqFromSet(set \ {item})
 
-NewCarrySeq(oldCarries, incomingCarries) ==
-  SortedSeqFromSet(incomingCarries \ oldCarries)
+NewProposalSeq(oldProposals, incomingProposals) ==
+  SortedSeqFromSet(incomingProposals \ oldProposals)
 
 SortFrom(seq, idx) ==
   IF idx >= Len(seq)
@@ -126,11 +126,11 @@ PutPromiseVotes(promises, prefix, votes) ==
      THEN retained
      ELSE retained \cup {[prefix |-> prefix, votes |-> votes]}
 
-NormalizePromises(promises, nodesMessages, carries, committed) ==
+NormalizePromises(promises, nodesMessages, proposals, committed) ==
   {p \in PromiseState :
      LET support == PrefixSupport(nodesMessages, p.prefix)
          votes == PromiseVotesFor(promises, p.prefix) \cap support
-     IN /\ SeqElems(p.prefix) \subseteq carries
+     IN /\ SeqElems(p.prefix) \subseteq proposals
         /\ ~IsPrefix(p.prefix, committed)
         /\ votes # {}
         /\ p.votes = votes}
@@ -142,7 +142,7 @@ BumpGeneration(generation, steps) ==
 
 BaseCore(core, self, incoming, committed) ==
   LET mergedNodes == MergeNodesMessages(core.nodesMessages, incoming.nodesMessages)
-      newIds == NewCarrySeq(core.carries, incoming.carries)
+      newIds == NewProposalSeq(core.proposals, incoming.proposals)
       self0 == mergedNodes[self]
       self1 ==
         IF Len(newIds) = 0
@@ -150,13 +150,13 @@ BaseCore(core, self, incoming, committed) ==
         ELSE [self0 EXCEPT
                 !.messages = @ \o newIds,
                 !.generation = BumpGeneration(@, Len(newIds))]
-      carries1 == core.carries \cup incoming.carries
+      proposals1 == core.proposals \cup incoming.proposals
       nodes1 == [mergedNodes EXCEPT ![self] = self1]
   IN
-    [carries |-> carries1,
+    [proposals |-> proposals1,
      nodesMessages |-> nodes1,
      promises |-> NormalizePromises(core.promises \cup incoming.promises,
-                                    nodes1, carries1, committed)]
+                                    nodes1, proposals1, committed)]
 
 MajorityIds(nodesMessages, idx) ==
   {id \in MessageIds :
@@ -172,7 +172,7 @@ PrefixSupport(nodesMessages, prefix) ==
 RECURSIVE Iterate(_, _, _, _, _, _)
 
 Iterate(core, self, idx, sorted, prefix, committed) ==
-  IF idx > Cardinality(core.carries)
+  IF idx > Cardinality(core.proposals)
   THEN [core |-> core, committed |-> committed]
   ELSE
     LET ids == MajorityIds(core.nodesMessages, idx)
@@ -196,7 +196,7 @@ Iterate(core, self, idx, sorted, prefix, committed) ==
               [core EXCEPT
                  !.promises =
                    NormalizePromises(promises1, core.nodesMessages,
-                                     core.carries, committed1)]
+                                     core.proposals, committed1)]
         IN Iterate(core1, self, idx + 1, sorted, prefix1, committed1)
       ELSE IF ~sorted
            THEN
@@ -210,7 +210,7 @@ Iterate(core, self, idx, sorted, prefix, committed) ==
                              BumpGeneration(@, 1),
                            !.promises =
                              NormalizePromises(@, [core.nodesMessages EXCEPT ![self].messages = sortedMsgs],
-                                               core.carries, committed)]
+                                               core.proposals, committed)]
              IN Iterate(core1, self, idx, TRUE, prefix, committed)
            ELSE [core |-> core, committed |-> committed]
 
@@ -236,7 +236,7 @@ Propose(node, msg) ==
   /\ msg \notin proposed
   /\ local[node] = InitLocal[node]
   /\ LET incoming ==
-           [carries |-> {msg},
+           [proposals |-> {msg},
             nodesMessages |-> EmptyNodesMessages,
             promises |-> InitPromises]
          out == MergeResult(local[node], node, incoming)
@@ -266,7 +266,7 @@ Next ==
 
 CoreWellFormed(core) ==
   /\ core \in CoreState
-  /\ core.carries \subseteq proposed
+  /\ core.proposals \subseteq proposed
   /\ \A n \in Nodes :
        /\ SeqElems(core.nodesMessages[n].messages) \subseteq proposed
        /\ NoDuplicates(core.nodesMessages[n].messages)

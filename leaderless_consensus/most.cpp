@@ -5,19 +5,23 @@ namespace leaderless_consensus::most {
 constexpr int kVoting = 0;
 constexpr int kCommitted = 1;
 
-struct_fields(MostCarryVote, (int, id), (NodeSet, votes));
+struct_fields(MostProposalVote, (int, id), (NodeSet, votes));
 
-using CarryVotes = std::set<MostCarryVote>;
+using ProposalVotes = std::set<MostProposalVote>;
 
-struct_fields(MostVoteMsg, (int, from), (int, to), (CarrySet, carries), (NodeSet, nodes));
-struct_fields(MostCommitMsg, (int, from), (int, to), (CarrySet, commit));
+struct_fields(MostVoteMsg,
+    (int, from),
+    (int, to),
+    (ProposalSet, proposals),
+    (NodeSet, nodes));
+struct_fields(MostCommitMsg, (int, from), (int, to), (ProposalSet, commit));
 struct_fields(MostNodeState,
     (int, status),
     (NodeSet, nodes),
     (NodeSet, votes),
-    (CarryVotes, carryVotes),
-    (CarrySet, carries),
-    (CarrySet, committed));
+    (ProposalVotes, proposalVotes),
+    (ProposalSet, proposals),
+    (ProposalSet, committed));
 
 using MostNodes = std::map<NodeId, MostNodeState>;
 using MostVoteMessages = std::set<MostVoteMsg>;
@@ -25,7 +29,7 @@ using MostCommitMessages = std::set<MostCommitMsg>;
 
 struct_fields(MostState,
     (NodeSet, alive),
-    (CarrySet, proposed),
+    (ProposalSet, proposed),
     (MostNodes, local),
     (MostVoteMessages, voteMsgs),
     (MostCommitMessages, commitMsgs));
@@ -33,12 +37,12 @@ struct_fields(MostState,
 MostVoteMessages broadcastVote(const MostVoteMessages& messages,
     const NodeSet& alive,
     NodeId from,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& nodes) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
-      result.insert(MostVoteMsg{from, to, carries, nodes});
+      result.insert(MostVoteMsg{from, to, proposals, nodes});
     }
   }
   return result;
@@ -47,7 +51,7 @@ MostVoteMessages broadcastVote(const MostVoteMessages& messages,
 MostCommitMessages broadcastCommit(const MostCommitMessages& messages,
     const NodeSet& alive,
     NodeId from,
-    const CarrySet& commit) {
+    const ProposalSet& commit) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -71,13 +75,13 @@ MostState commit(MostState sys, NodeId node) {
     return sys;
   }
   self.status = kCommitted;
-  self.committed = self.carries;
+  self.committed = self.proposals;
   sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node, self.committed);
   return sys;
 }
 
-NodeSet carryVotesFor(const CarryVotes& carryVotes, MessageId id) {
-  for (auto&& entry : carryVotes) {
+NodeSet proposalVotesFor(const ProposalVotes& proposalVotes, MessageId id) {
+  for (auto&& entry : proposalVotes) {
     if (entry.id == id) {
       return entry.votes;
     }
@@ -85,22 +89,24 @@ NodeSet carryVotesFor(const CarryVotes& carryVotes, MessageId id) {
   return {};
 }
 
-CarryVotes putCarryVotes(CarryVotes carryVotes, MessageId id, const NodeSet& votes) {
-  for (auto it = carryVotes.begin(); it != carryVotes.end(); ++it) {
+ProposalVotes putProposalVotes(ProposalVotes proposalVotes,
+    MessageId id,
+    const NodeSet& votes) {
+  for (auto it = proposalVotes.begin(); it != proposalVotes.end(); ++it) {
     if (it->id == id) {
-      carryVotes.erase(it);
+      proposalVotes.erase(it);
       break;
     }
   }
-  carryVotes.insert(MostCarryVote{id, votes});
-  return carryVotes;
+  proposalVotes.insert(MostProposalVote{id, votes});
+  return proposalVotes;
 }
 
 bool mayCommit(const MostNodeState& state) {
-  for (auto&& entry : state.carryVotes) {
+  for (auto&& entry : state.proposalVotes) {
     auto id = entry.id;
     auto&& votes = entry.votes;
-    if (!state.carries.contains(id)) {
+    if (!state.proposals.contains(id)) {
       continue;
     }
     if (!(2 * votes.size() > state.nodes.size())) {
@@ -120,7 +126,7 @@ struct VoteResult {
 VoteResult processVote(const MostNodeState& state,
     NodeId self,
     NodeId source,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& incomingNodes) {
   if (state.status == kCommitted || !state.nodes.contains(source)) {
     return {false, false, false, state};
@@ -129,29 +135,29 @@ VoteResult processVote(const MostNodeState& state,
   auto changedNodes = state.nodes != incomingNodes;
   auto firstVote = state.votes.empty();
   auto nodes = setIntersection(state.nodes, incomingNodes);
-  auto newCarries = setUnion(state.carries, carries);
+  auto newProposals = setUnion(state.proposals, proposals);
   auto votes = state.votes;
   votes.insert(self);
   votes.insert(source);
   votes = setIntersection(votes, nodes);
 
-  auto carryVotes = state.carryVotes;
-  for (auto&& id : carries) {
-    auto votesFor = carryVotesFor(carryVotes, id);
+  auto proposalVotes = state.proposalVotes;
+  for (auto&& id : proposals) {
+    auto votesFor = proposalVotesFor(proposalVotes, id);
     votesFor.insert(source);
-    carryVotes = putCarryVotes(std::move(carryVotes), id, votesFor);
+    proposalVotes = putProposalVotes(std::move(proposalVotes), id, votesFor);
   }
   if (changedNodes) {
-    CarryVotes filteredCarryVotes;
-    for (auto&& entry : carryVotes) {
-      filteredCarryVotes.insert(
-          MostCarryVote{entry.id, setIntersection(entry.votes, nodes)});
+    ProposalVotes filteredProposalVotes;
+    for (auto&& entry : proposalVotes) {
+      filteredProposalVotes.insert(
+          MostProposalVote{entry.id, setIntersection(entry.votes, nodes)});
     }
-    carryVotes = std::move(filteredCarryVotes);
+    proposalVotes = std::move(filteredProposalVotes);
   }
 
   auto local =
-      MostNodeState{kVoting, nodes, votes, carryVotes, newCarries, state.committed};
+      MostNodeState{kVoting, nodes, votes, proposalVotes, newProposals, state.committed};
   if (firstVote) {
     return {local != state, true, false, local};
   }
@@ -183,7 +189,7 @@ bool canPropose(const MostState& sys, NodeId node, MessageId id) {
 MostState propose(MostState sys, NodeId node, MessageId id) {
   sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
-  auto out = processVote(sys.local.at(node), node, node, CarrySet{id}, nodes);
+  auto out = processVote(sys.local.at(node), node, node, ProposalSet{id}, nodes);
   if (!out.changed) {
     return sys;
   }
@@ -192,8 +198,8 @@ MostState propose(MostState sys, NodeId node, MessageId id) {
     return commit(std::move(sys), node);
   }
   if (out.sendVote) {
-    sys.voteMsgs =
-        broadcastVote(sys.voteMsgs, sys.alive, node, out.local.carries, out.local.nodes);
+    sys.voteMsgs = broadcastVote(
+        sys.voteMsgs, sys.alive, node, out.local.proposals, out.local.nodes);
   }
   return sys;
 }
@@ -204,7 +210,8 @@ bool canDeliverVote(const MostState& sys, const MostVoteMsg& msg) {
 
 MostState deliverVote(MostState sys, const MostVoteMsg& msg) {
   sys.voteMsgs.erase(msg);
-  auto out = processVote(sys.local.at(msg.to), msg.to, msg.from, msg.carries, msg.nodes);
+  auto out =
+      processVote(sys.local.at(msg.to), msg.to, msg.from, msg.proposals, msg.nodes);
   if (!out.changed) {
     return sys;
   }
@@ -214,7 +221,7 @@ MostState deliverVote(MostState sys, const MostVoteMsg& msg) {
   }
   if (out.sendVote) {
     sys.voteMsgs = broadcastVote(
-        sys.voteMsgs, sys.alive, msg.to, out.local.carries, out.local.nodes);
+        sys.voteMsgs, sys.alive, msg.to, out.local.proposals, out.local.nodes);
   }
   return sys;
 }
@@ -222,14 +229,14 @@ MostState deliverVote(MostState sys, const MostVoteMsg& msg) {
 bool canDeliverCommit(const MostState& sys, const MostCommitMsg& msg) {
   return sys.alive.contains(msg.to) &&
          sys.local.at(msg.to).status != kCommitted &&
-         sys.local.at(msg.to).carries == msg.commit;
+         sys.local.at(msg.to).proposals == msg.commit;
 }
 
 MostState deliverCommit(MostState sys, const MostCommitMsg& msg) {
   sys.commitMsgs.erase(msg);
   auto& self = sys.local[msg.to];
   self.status = kCommitted;
-  self.carries = msg.commit;
+  self.proposals = msg.commit;
   self.committed = msg.commit;
   sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, msg.to, msg.commit);
   return sys;
@@ -251,13 +258,13 @@ MostState disconnect(MostState sys, NodeId failed) {
   auto survivors = sys.alive;
   for (auto&& node : survivors) {
     const auto current = sys.local.at(node);
-    if (current.carries.empty()) {
+    if (current.proposals.empty()) {
       sys.local[node].nodes.erase(failed);
       continue;
     }
 
     auto out = processVote(
-        current, node, failed, current.carries, setWithout(current.nodes, failed));
+        current, node, failed, current.proposals, setWithout(current.nodes, failed));
     if (!out.changed) {
       continue;
     }
@@ -266,7 +273,7 @@ MostState disconnect(MostState sys, NodeId failed) {
       sys = commit(std::move(sys), node);
     } else if (out.sendVote) {
       sys.voteMsgs = broadcastVote(
-          sys.voteMsgs, sys.alive, node, out.local.carries, out.local.nodes);
+          sys.voteMsgs, sys.alive, node, out.local.proposals, out.local.nodes);
     }
   }
 
@@ -286,16 +293,16 @@ bool invariant(const MostState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.votes, self.nodes)) {
+    if (!isSubset(self.proposals, sys.proposed) || !isSubset(self.votes, self.nodes)) {
       return false;
     }
-    for (auto&& entry : self.carryVotes) {
-      if (!self.carries.contains(entry.id) || !isSubset(entry.votes, allNodes)) {
+    for (auto&& entry : self.proposalVotes) {
+      if (!self.proposals.contains(entry.id) || !isSubset(entry.votes, allNodes)) {
         return false;
       }
     }
     if (self.status == kCommitted) {
-      if (self.committed != self.carries) {
+      if (self.committed != self.proposals) {
         return false;
       }
     } else if (!self.committed.empty()) {
@@ -304,7 +311,7 @@ bool invariant(const MostState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.proposed)) {
+    if (!isSubset(msg.proposals, sys.proposed)) {
       return false;
     }
   }
@@ -392,7 +399,7 @@ struct Model : IModel {
   Var<MostState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  CarrySet messageIds_ = {10, 11, 12};
+  ProposalSet messageIds_ = {10, 11, 12};
 };
 
 TEST_F(EngineFixture, MostHoldsInvariantAndConverges) {

@@ -7,14 +7,18 @@ constexpr int kMayCommit = 1;
 constexpr int kCannotCommit = 2;
 constexpr int kCompleted = 3;
 
-struct_fields(CalmVoteMsg, (int, from), (int, to), (CarrySet, carries), (NodeSet, nodes));
-struct_fields(CalmCommitMsg, (int, from), (int, to), (CarrySet, commit));
+struct_fields(CalmVoteMsg,
+    (int, from),
+    (int, to),
+    (ProposalSet, proposals),
+    (NodeSet, nodes));
+struct_fields(CalmCommitMsg, (int, from), (int, to), (ProposalSet, commit));
 struct_fields(CalmNodeState,
     (int, status),
     (NodeSet, nodes),
     (NodeSet, voted),
-    (CarrySet, carries),
-    (CarrySet, committed));
+    (ProposalSet, proposals),
+    (ProposalSet, committed));
 
 using CalmNodes = std::map<NodeId, CalmNodeState>;
 using CalmVoteMessages = std::set<CalmVoteMsg>;
@@ -22,7 +26,7 @@ using CalmCommitMessages = std::set<CalmCommitMsg>;
 
 struct_fields(CalmState,
     (NodeSet, alive),
-    (CarrySet, proposed),
+    (ProposalSet, proposed),
     (CalmNodes, local),
     (CalmVoteMessages, voteMsgs),
     (CalmCommitMessages, commitMsgs));
@@ -30,12 +34,12 @@ struct_fields(CalmState,
 CalmVoteMessages broadcastVote(const CalmVoteMessages& messages,
     const NodeSet& alive,
     NodeId from,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& nodes) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
-      result.insert(CalmVoteMsg{from, to, carries, nodes});
+      result.insert(CalmVoteMsg{from, to, proposals, nodes});
     }
   }
   return result;
@@ -44,7 +48,7 @@ CalmVoteMessages broadcastVote(const CalmVoteMessages& messages,
 CalmCommitMessages broadcastCommit(const CalmCommitMessages& messages,
     const NodeSet& alive,
     NodeId from,
-    const CarrySet& commit) {
+    const ProposalSet& commit) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -62,22 +66,22 @@ CalmState makeState(const NodeSet& nodes) {
   return CalmState{nodes, {}, local, {}, {}};
 }
 
-CalmState commit(CalmState sys, NodeId node, const CarrySet& carries) {
+CalmState commit(CalmState sys, NodeId node, const ProposalSet& proposals) {
   auto& self = sys.local[node];
   if (self.status == kCompleted) {
     return sys;
   }
   self.status = kCompleted;
-  self.carries = carries;
-  self.committed = carries;
-  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node, carries);
+  self.proposals = proposals;
+  self.committed = proposals;
+  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node, proposals);
   return sys;
 }
 
 CalmState processVote(CalmState sys,
     NodeId node,
     NodeId source,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& incomingNodes) {
   const auto previous = sys.local.at(node);
   if (previous.status == kCompleted || !previous.nodes.contains(source)) {
@@ -85,11 +89,11 @@ CalmState processVote(CalmState sys,
   }
 
   auto status = previous.status;
-  if (status == kMayCommit && previous.carries != carries) {
+  if (status == kMayCommit && previous.proposals != proposals) {
     status = kCannotCommit;
   }
 
-  auto newCarries = setUnion(previous.carries, carries);
+  auto newProposals = setUnion(previous.proposals, proposals);
   auto newVoted = previous.voted;
   newVoted.insert(source);
   newVoted.insert(node);
@@ -104,11 +108,11 @@ CalmState processVote(CalmState sys,
   }
 
   sys.local[node] =
-      CalmNodeState{status, newNodes, newVoted, newCarries, previous.committed};
+      CalmNodeState{status, newNodes, newVoted, newProposals, previous.committed};
 
   if (newVoted == newNodes) {
     if (status == kMayCommit) {
-      return commit(std::move(sys), node, newCarries);
+      return commit(std::move(sys), node, newProposals);
     }
     sys.local[node].status = kToVote;
   }
@@ -117,7 +121,7 @@ CalmState processVote(CalmState sys,
     sys.local[node].status = kMayCommit;
     const auto& current = sys.local.at(node);
     sys.voteMsgs =
-        broadcastVote(sys.voteMsgs, sys.alive, node, current.carries, current.nodes);
+        broadcastVote(sys.voteMsgs, sys.alive, node, current.proposals, current.nodes);
   }
 
   return sys;
@@ -133,7 +137,7 @@ bool canPropose(const CalmState& sys, NodeId node, MessageId id) {
 CalmState propose(CalmState sys, NodeId node, MessageId id) {
   sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
-  return processVote(std::move(sys), node, node, CarrySet{id}, nodes);
+  return processVote(std::move(sys), node, node, ProposalSet{id}, nodes);
 }
 
 bool canDeliverVote(const CalmState& sys, const CalmVoteMsg& msg) {
@@ -142,13 +146,13 @@ bool canDeliverVote(const CalmState& sys, const CalmVoteMsg& msg) {
 
 CalmState deliverVote(CalmState sys, const CalmVoteMsg& msg) {
   sys.voteMsgs.erase(msg);
-  return processVote(std::move(sys), msg.to, msg.from, msg.carries, msg.nodes);
+  return processVote(std::move(sys), msg.to, msg.from, msg.proposals, msg.nodes);
 }
 
 bool canDeliverCommit(const CalmState& sys, const CalmCommitMsg& msg) {
   return sys.alive.contains(msg.to) &&
          sys.local.at(msg.to).status != kCompleted &&
-         sys.local.at(msg.to).carries == msg.commit;
+         sys.local.at(msg.to).proposals == msg.commit;
 }
 
 CalmState deliverCommit(CalmState sys, const CalmCommitMsg& msg) {
@@ -172,12 +176,12 @@ CalmState disconnect(CalmState sys, NodeId failed) {
   auto survivors = sys.alive;
   for (auto&& node : survivors) {
     const auto current = sys.local.at(node);
-    if (current.carries.empty()) {
+    if (current.proposals.empty()) {
       sys.local[node].nodes.erase(failed);
       continue;
     }
-    sys = processVote(
-        std::move(sys), node, failed, current.carries, setWithout(current.nodes, failed));
+    sys = processVote(std::move(sys), node, failed, current.proposals,
+        setWithout(current.nodes, failed));
   }
 
   return sys;
@@ -191,11 +195,11 @@ bool invariant(const CalmState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.voted, self.nodes)) {
+    if (!isSubset(self.proposals, sys.proposed) || !isSubset(self.voted, self.nodes)) {
       return false;
     }
     if (self.status == kCompleted) {
-      if (self.committed != self.carries) {
+      if (self.committed != self.proposals) {
         return false;
       }
     } else if (!self.committed.empty()) {
@@ -204,7 +208,7 @@ bool invariant(const CalmState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.proposed)) {
+    if (!isSubset(msg.proposals, sys.proposed)) {
       return false;
     }
   }
@@ -286,7 +290,7 @@ struct Model : IModel {
   Var<CalmState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  CarrySet messageIds_ = {10, 11, 12};
+  ProposalSet messageIds_ = {10, 11, 12};
 };
 
 TEST_F(EngineFixture, CalmHoldsInvariantAndConverges) {

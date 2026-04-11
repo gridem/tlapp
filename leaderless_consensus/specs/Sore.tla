@@ -13,17 +13,17 @@ NodeState ==
   [status : {SoreInitial, SoreVoted, SoreCompleted},
    nodes : SUBSET Nodes,
    voted : SUBSET Nodes,
-   carries : SUBSET MessageIds,
+   proposals : SUBSET MessageIds,
    committed : SUBSET MessageIds]
 
-Vote(from, to, carries, nodes) ==
-  [from |-> from, to |-> to, carries |-> carries, nodes |-> nodes]
+Vote(from, to, proposals, nodes) ==
+  [from |-> from, to |-> to, proposals |-> proposals, nodes |-> nodes]
 
 Commit(from, to, commit) ==
   [from |-> from, to |-> to, commit |-> commit]
 
 VoteMessage ==
-  [from : Nodes, to : Nodes, carries : SUBSET MessageIds, nodes : SUBSET Nodes]
+  [from : Nodes, to : Nodes, proposals : SUBSET MessageIds, nodes : SUBSET Nodes]
 
 CommitMessage ==
   [from : Nodes, to : Nodes, commit : SUBSET MessageIds]
@@ -37,7 +37,7 @@ InitLocal ==
     [status |-> SoreInitial,
      nodes |-> Nodes,
      voted |-> {},
-     carries |-> {},
+     proposals |-> {},
      committed |-> {}]]
 
 Init ==
@@ -47,13 +47,13 @@ Init ==
   /\ voteMsgs = {}
   /\ commitMsgs = {}
 
-BroadcastVote(queue, from, carries, nodes, aliveSet) ==
-  queue \cup {Vote(from, to, carries, nodes) : to \in (aliveSet \ {from})}
+BroadcastVote(queue, from, proposals, nodes, aliveSet) ==
+  queue \cup {Vote(from, to, proposals, nodes) : to \in (aliveSet \ {from})}
 
 BroadcastCommit(queue, from, commit, aliveSet) ==
   queue \cup {Commit(from, to, commit) : to \in (aliveSet \ {from})}
 
-SoreVoteResult(state, self, source, carries, incomingNodes) ==
+SoreVoteResult(state, self, source, proposals, incomingNodes) ==
   IF state.status = SoreCompleted \/ source \notin state.nodes
   THEN [changed |-> FALSE,
         local |-> state,
@@ -75,20 +75,20 @@ SoreVoteResult(state, self, source, carries, incomingNodes) ==
           THEN {}
           ELSE state.voted
         voted1 == (voted0 \cup {source, self}) \cap nodes1
-        carries1 == state.carries \cup carries
+        proposals1 == state.proposals \cup proposals
         local1 ==
           [state EXCEPT
             !.status = status1,
             !.nodes = nodes1,
             !.voted = voted1,
-            !.carries = carries1]
+            !.proposals = proposals1]
     IN
       IF voted1 = nodes1
       THEN [changed |-> local1 # state,
             local |-> local1,
             sendVote |-> FALSE,
             sendCommit |-> TRUE,
-            commit |-> carries1]
+            commit |-> proposals1]
       ELSE
         IF status1 = SoreInitial
         THEN [changed |-> TRUE,
@@ -118,12 +118,12 @@ Propose(node, msg) ==
                     ![node].status = SoreCompleted,
                     ![node].nodes = out.local.nodes,
                     ![node].voted = out.local.voted,
-                    ![node].carries = out.commit,
+                    ![node].proposals = out.commit,
                     ![node].committed = out.commit]
             ELSE [local EXCEPT ![node] = out.local]
        /\ voteMsgs' =
             IF out.sendVote
-            THEN BroadcastVote(voteMsgs, node, out.local.carries, out.local.nodes,
+            THEN BroadcastVote(voteMsgs, node, out.local.proposals, out.local.nodes,
                                alive)
             ELSE voteMsgs
        /\ commitMsgs' =
@@ -135,7 +135,7 @@ DeliverVote(msg) ==
   /\ msg \in voteMsgs
   /\ msg.to \in alive
   /\ LET out ==
-           SoreVoteResult(local[msg.to], msg.to, msg.from, msg.carries, msg.nodes)
+           SoreVoteResult(local[msg.to], msg.to, msg.from, msg.proposals, msg.nodes)
      IN
        /\ out.changed
        /\ alive' = alive
@@ -146,12 +146,12 @@ DeliverVote(msg) ==
                     ![msg.to].status = SoreCompleted,
                     ![msg.to].nodes = out.local.nodes,
                     ![msg.to].voted = out.local.voted,
-                    ![msg.to].carries = out.commit,
+                    ![msg.to].proposals = out.commit,
                     ![msg.to].committed = out.commit]
             ELSE [local EXCEPT ![msg.to] = out.local]
        /\ voteMsgs' =
             IF out.sendVote
-            THEN BroadcastVote(voteMsgs \ {msg}, msg.to, out.local.carries,
+            THEN BroadcastVote(voteMsgs \ {msg}, msg.to, out.local.proposals,
                                out.local.nodes, alive)
             ELSE voteMsgs \ {msg}
        /\ commitMsgs' =
@@ -168,22 +168,22 @@ DeliverCommit(msg) ==
   /\ local' =
        [local EXCEPT
          ![msg.to].status = SoreCompleted,
-         ![msg.to].carries = msg.commit,
+         ![msg.to].proposals = msg.commit,
          ![msg.to].committed = msg.commit]
   /\ voteMsgs' = voteMsgs
   /\ commitMsgs' = BroadcastCommit(commitMsgs \ {msg}, msg.to, msg.commit, alive)
 
 DisconnectLocal(state, self, failed) ==
-  IF state.carries = {}
+  IF state.proposals = {}
   THEN [state EXCEPT !.nodes = @ \ {failed}]
   ELSE
     LET out ==
-          SoreVoteResult(state, self, failed, state.carries, state.nodes \ {failed})
+          SoreVoteResult(state, self, failed, state.proposals, state.nodes \ {failed})
     IN
       IF out.sendCommit
       THEN [out.local EXCEPT
               !.status = SoreCompleted,
-              !.carries = out.commit,
+              !.proposals = out.commit,
               !.committed = out.commit]
       ELSE out.local
 
@@ -215,16 +215,16 @@ TypeOK ==
 LocalWellFormed ==
   \A n \in alive :
     /\ local[n].voted \subseteq local[n].nodes
-    /\ local[n].carries \subseteq proposed
+    /\ local[n].proposals \subseteq proposed
     /\ IF local[n].status = SoreCompleted
-       THEN local[n].committed = local[n].carries
+       THEN local[n].committed = local[n].proposals
        ELSE local[n].committed = {}
 
 VoteWellFormed ==
   \A msg \in voteMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ msg.carries \subseteq proposed
+    /\ msg.proposals \subseteq proposed
 
 CommitWellFormed ==
   \A msg \in commitMsgs :

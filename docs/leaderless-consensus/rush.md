@@ -14,7 +14,7 @@ same prefix.
 
 Each node stores:
 
-- `core.carries`: the unordered set of known proposal ids
+- `core.proposals`: the unordered set of known proposal ids
 - `core.nodesMessages`: one `messages + generation` entry per node
 - `core.promises`: promise votes keyed by committed prefix candidate
 - `committed`: the local committed prefix
@@ -36,12 +36,12 @@ Messages are:
 
 1. `Propose(node, id)` is allowed only while that node is still in the exact
    initial local state.
-2. Applying a proposal creates an incoming core with that one new carry and
+2. Proposing a proposal id creates an incoming core with that one new proposal and
    merges it into the receiver's local core.
 3. `mergeState` adopts newer per-node message sequences using:
    - higher generation first
    - lexicographically larger sequence as an equal-generation tie-break
-4. Newly learned carry ids are appended to the receiver's own sequence, and
+4. Newly learned proposal ids are appended to the receiver's own sequence, and
    that local sequence generation is advanced.
 5. Starting from the current committed prefix length, the node scans positions:
    - if a quorum of node sequences has the same id at this position, that id is

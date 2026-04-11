@@ -8,15 +8,15 @@ constexpr int kCommitted = 1;
 struct_fields(FlatVoteMsg,
     (int, from),
     (int, to),
-    (CarrySet, carries),
+    (ProposalSet, proposals),
     (NodeSet, nodes),
     (NodeSet, votes));
 struct_fields(FlatNodeState,
     (int, status),
     (NodeSet, nodes),
     (NodeSet, votes),
-    (CarrySet, carries),
-    (CarrySet, committed));
+    (ProposalSet, proposals),
+    (ProposalSet, committed));
 
 using FlatNodes = std::map<NodeId, FlatNodeState>;
 using FlatVoteMessages = std::set<FlatVoteMsg>;
@@ -24,7 +24,7 @@ using FlatCommitMessages = NodeSet;
 
 struct_fields(FlatState,
     (NodeSet, alive),
-    (CarrySet, proposed),
+    (ProposalSet, proposed),
     (FlatNodes, local),
     (FlatVoteMessages, voteMsgs),
     (FlatCommitMessages, commitMsgs));
@@ -32,7 +32,7 @@ struct_fields(FlatState,
 FlatVoteMessages broadcastVote(const FlatVoteMessages& messages,
     const NodeSet& alive,
     NodeId from,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& nodes,
     const NodeSet& votes) {
   auto result = messages;
@@ -42,7 +42,7 @@ FlatVoteMessages broadcastVote(const FlatVoteMessages& messages,
       for (auto it = result.begin(); it != result.end();) {
         if (it->from == from &&
             it->to == to &&
-            it->carries == carries &&
+            it->proposals == proposals &&
             it->nodes == nodes) {
           if (isSubset(votes, it->votes)) {
             keepNew = false;
@@ -56,7 +56,7 @@ FlatVoteMessages broadcastVote(const FlatVoteMessages& messages,
         ++it;
       }
       if (keepNew) {
-        result.insert(FlatVoteMsg{from, to, carries, nodes, votes});
+        result.insert(FlatVoteMsg{from, to, proposals, nodes, votes});
       }
     }
   }
@@ -97,7 +97,7 @@ FlatState commit(FlatState sys, NodeId node) {
     return sys;
   }
   self.status = kCommitted;
-  self.committed = self.carries;
+  self.committed = self.proposals;
   sys.voteMsgs = purgeVotesTo(sys.voteMsgs, node);
   sys.commitMsgs = setWithout(sys.commitMsgs, node);
   sys.commitMsgs = broadcastCommit(sys, node);
@@ -107,7 +107,7 @@ FlatState commit(FlatState sys, NodeId node) {
 FlatState processVote(FlatState sys,
     NodeId node,
     NodeId source,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& incomingNodes,
     const NodeSet& incomingVotes) {
   const auto previous = sys.local.at(node);
@@ -116,32 +116,32 @@ FlatState processVote(FlatState sys,
   }
 
   auto newNodes = setIntersection(incomingNodes, previous.nodes);
-  auto newCarries = setUnion(previous.carries, carries);
+  auto newProposals = setUnion(previous.proposals, proposals);
   NodeSet newVotes = {node};
 
-  if (newNodes == incomingNodes && newCarries == carries) {
+  if (newNodes == incomingNodes && newProposals == proposals) {
     newVotes = setUnion(newVotes, incomingVotes);
   }
-  if (newNodes == previous.nodes && newCarries == previous.carries) {
+  if (newNodes == previous.nodes && newProposals == previous.proposals) {
     newVotes = setUnion(newVotes, previous.votes);
   }
   newVotes = setIntersection(newVotes, newNodes);
 
   if (newNodes == previous.nodes &&
-      newCarries == previous.carries &&
+      newProposals == previous.proposals &&
       newVotes == previous.votes) {
     return sys;
   }
 
   sys.local[node] =
-      FlatNodeState{kVoting, newNodes, newVotes, newCarries, previous.committed};
+      FlatNodeState{kVoting, newNodes, newVotes, newProposals, previous.committed};
 
   if (newNodes == newVotes) {
     return commit(std::move(sys), node);
   }
 
   sys.voteMsgs =
-      broadcastVote(sys.voteMsgs, sys.alive, node, newCarries, newNodes, newVotes);
+      broadcastVote(sys.voteMsgs, sys.alive, node, newProposals, newNodes, newVotes);
   return sys;
 }
 
@@ -156,7 +156,7 @@ bool canPropose(const FlatState& sys, NodeId node, MessageId id) {
 FlatState propose(FlatState sys, NodeId node, MessageId id) {
   sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
-  return processVote(std::move(sys), node, node, CarrySet{id}, nodes, {});
+  return processVote(std::move(sys), node, node, ProposalSet{id}, nodes, {});
 }
 
 bool canDeliverVote(const FlatState& sys, const FlatVoteMsg& msg) {
@@ -165,7 +165,8 @@ bool canDeliverVote(const FlatState& sys, const FlatVoteMsg& msg) {
 
 FlatState deliverVote(FlatState sys, const FlatVoteMsg& msg) {
   sys.voteMsgs.erase(msg);
-  return processVote(std::move(sys), msg.to, msg.from, msg.carries, msg.nodes, msg.votes);
+  return processVote(
+      std::move(sys), msg.to, msg.from, msg.proposals, msg.nodes, msg.votes);
 }
 
 bool canDeliverCommit(const FlatState& sys, NodeId node) {
@@ -193,11 +194,11 @@ FlatState disconnect(FlatState sys, NodeId failed) {
   auto survivors = sys.alive;
   for (auto&& node : survivors) {
     const auto current = sys.local.at(node);
-    if (current.carries.empty()) {
+    if (current.proposals.empty()) {
       sys.local[node].nodes.erase(failed);
       continue;
     }
-    sys = processVote(std::move(sys), node, failed, current.carries,
+    sys = processVote(std::move(sys), node, failed, current.proposals,
         setWithout(current.nodes, failed), {});
   }
 
@@ -212,11 +213,11 @@ bool invariant(const FlatState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.votes, self.nodes)) {
+    if (!isSubset(self.proposals, sys.proposed) || !isSubset(self.votes, self.nodes)) {
       return false;
     }
     if (self.status == kCommitted) {
-      if (self.committed != self.carries) {
+      if (self.committed != self.proposals) {
         return false;
       }
     } else if (!self.committed.empty()) {
@@ -225,7 +226,7 @@ bool invariant(const FlatState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.proposed) || !isSubset(msg.votes, msg.nodes)) {
+    if (!isSubset(msg.proposals, sys.proposed) || !isSubset(msg.votes, msg.nodes)) {
       return false;
     }
   }
@@ -309,7 +310,7 @@ struct Model : IModel {
   Var<FlatState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  CarrySet messageIds_ = {10, 11, 12};
+  ProposalSet messageIds_ = {10, 11, 12};
 };
 
 TEST_F(EngineFixture, FlatHoldsInvariantAndConverges) {

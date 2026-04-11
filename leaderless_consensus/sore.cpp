@@ -6,14 +6,18 @@ constexpr int kInitial = 0;
 constexpr int kVoted = 1;
 constexpr int kCompleted = 2;
 
-struct_fields(SoreVoteMsg, (int, from), (int, to), (CarrySet, carries), (NodeSet, nodes));
-struct_fields(SoreCommitMsg, (int, from), (int, to), (CarrySet, commit));
+struct_fields(SoreVoteMsg,
+    (int, from),
+    (int, to),
+    (ProposalSet, proposals),
+    (NodeSet, nodes));
+struct_fields(SoreCommitMsg, (int, from), (int, to), (ProposalSet, commit));
 struct_fields(SoreNodeState,
     (int, status),
     (NodeSet, nodes),
     (NodeSet, voted),
-    (CarrySet, carries),
-    (CarrySet, committed));
+    (ProposalSet, proposals),
+    (ProposalSet, committed));
 
 using SoreNodes = std::map<NodeId, SoreNodeState>;
 using SoreVoteMessages = std::set<SoreVoteMsg>;
@@ -21,7 +25,7 @@ using SoreCommitMessages = std::set<SoreCommitMsg>;
 
 struct_fields(SoreState,
     (NodeSet, alive),
-    (CarrySet, proposed),
+    (ProposalSet, proposed),
     (SoreNodes, local),
     (SoreVoteMessages, voteMsgs),
     (SoreCommitMessages, commitMsgs));
@@ -29,12 +33,12 @@ struct_fields(SoreState,
 SoreVoteMessages broadcastVote(const SoreVoteMessages& messages,
     const NodeSet& alive,
     NodeId from,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& nodes) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
-      result.insert(SoreVoteMsg{from, to, carries, nodes});
+      result.insert(SoreVoteMsg{from, to, proposals, nodes});
     }
   }
   return result;
@@ -43,7 +47,7 @@ SoreVoteMessages broadcastVote(const SoreVoteMessages& messages,
 SoreCommitMessages broadcastCommit(const SoreCommitMessages& messages,
     const NodeSet& alive,
     NodeId from,
-    const CarrySet& commit) {
+    const ProposalSet& commit) {
   auto result = messages;
   for (auto&& to : alive) {
     if (to != from) {
@@ -61,15 +65,15 @@ SoreState makeState(const NodeSet& nodes) {
   return SoreState{nodes, {}, local, {}, {}};
 }
 
-SoreState commit(SoreState sys, NodeId node, const CarrySet& carries) {
+SoreState commit(SoreState sys, NodeId node, const ProposalSet& proposals) {
   auto& self = sys.local[node];
   if (self.status == kCompleted) {
     return sys;
   }
   self.status = kCompleted;
-  self.carries = carries;
-  self.committed = carries;
-  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node, carries);
+  self.proposals = proposals;
+  self.committed = proposals;
+  sys.commitMsgs = broadcastCommit(sys.commitMsgs, sys.alive, node, proposals);
   return sys;
 }
 
@@ -77,14 +81,14 @@ struct VoteResult {
   bool changed = false;
   bool sendVote = false;
   bool sendCommit = false;
-  CarrySet commitSet;
+  ProposalSet commitSet;
   SoreNodeState local;
 };
 
 VoteResult processVote(const SoreNodeState& state,
     NodeId self,
     NodeId source,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const NodeSet& incomingNodes) {
   if (state.status == kCompleted || !state.nodes.contains(source)) {
     return {false, false, false, {}, state};
@@ -93,7 +97,7 @@ VoteResult processVote(const SoreNodeState& state,
   auto status = state.status;
   auto nodes = state.nodes;
   auto voted = state.voted;
-  auto newCarries = setUnion(state.carries, carries);
+  auto newProposals = setUnion(state.proposals, proposals);
 
   if (nodes != incomingNodes) {
     status = kInitial;
@@ -105,13 +109,13 @@ VoteResult processVote(const SoreNodeState& state,
   voted.insert(self);
   voted = setIntersection(voted, nodes);
 
-  auto local = SoreNodeState{status, nodes, voted, newCarries, state.committed};
+  auto local = SoreNodeState{status, nodes, voted, newProposals, state.committed};
   if (voted == nodes) {
-    return {local != state, false, true, newCarries, local};
+    return {local != state, false, true, newProposals, local};
   }
   if (status == kInitial) {
     return {true, true, false, {},
-        SoreNodeState{kVoted, nodes, voted, newCarries, state.committed}};
+        SoreNodeState{kVoted, nodes, voted, newProposals, state.committed}};
   }
   return {local != state, false, false, {}, local};
 }
@@ -126,7 +130,7 @@ bool canPropose(const SoreState& sys, NodeId node, MessageId id) {
 SoreState propose(SoreState sys, NodeId node, MessageId id) {
   sys.proposed.insert(id);
   auto nodes = sys.local.at(node).nodes;
-  auto out = processVote(sys.local.at(node), node, node, CarrySet{id}, nodes);
+  auto out = processVote(sys.local.at(node), node, node, ProposalSet{id}, nodes);
   if (!out.changed) {
     return sys;
   }
@@ -135,8 +139,8 @@ SoreState propose(SoreState sys, NodeId node, MessageId id) {
     return commit(std::move(sys), node, out.commitSet);
   }
   if (out.sendVote) {
-    sys.voteMsgs =
-        broadcastVote(sys.voteMsgs, sys.alive, node, out.local.carries, out.local.nodes);
+    sys.voteMsgs = broadcastVote(
+        sys.voteMsgs, sys.alive, node, out.local.proposals, out.local.nodes);
   }
   return sys;
 }
@@ -147,7 +151,8 @@ bool canDeliverVote(const SoreState& sys, const SoreVoteMsg& msg) {
 
 SoreState deliverVote(SoreState sys, const SoreVoteMsg& msg) {
   sys.voteMsgs.erase(msg);
-  auto out = processVote(sys.local.at(msg.to), msg.to, msg.from, msg.carries, msg.nodes);
+  auto out =
+      processVote(sys.local.at(msg.to), msg.to, msg.from, msg.proposals, msg.nodes);
   if (!out.changed) {
     return sys;
   }
@@ -157,7 +162,7 @@ SoreState deliverVote(SoreState sys, const SoreVoteMsg& msg) {
   }
   if (out.sendVote) {
     sys.voteMsgs = broadcastVote(
-        sys.voteMsgs, sys.alive, msg.to, out.local.carries, out.local.nodes);
+        sys.voteMsgs, sys.alive, msg.to, out.local.proposals, out.local.nodes);
   }
   return sys;
 }
@@ -187,13 +192,13 @@ SoreState disconnect(SoreState sys, NodeId failed) {
   auto survivors = sys.alive;
   for (auto&& node : survivors) {
     const auto current = sys.local.at(node);
-    if (current.carries.empty()) {
+    if (current.proposals.empty()) {
       sys.local[node].nodes.erase(failed);
       continue;
     }
 
     auto out = processVote(
-        current, node, failed, current.carries, setWithout(current.nodes, failed));
+        current, node, failed, current.proposals, setWithout(current.nodes, failed));
     if (!out.changed) {
       continue;
     }
@@ -204,7 +209,7 @@ SoreState disconnect(SoreState sys, NodeId failed) {
     }
     if (out.sendVote) {
       sys.voteMsgs = broadcastVote(
-          sys.voteMsgs, sys.alive, node, out.local.carries, out.local.nodes);
+          sys.voteMsgs, sys.alive, node, out.local.proposals, out.local.nodes);
     }
   }
 
@@ -219,11 +224,11 @@ bool invariant(const SoreState& sys) {
 
   for (auto&& node : sys.alive) {
     const auto& self = sys.local.at(node);
-    if (!isSubset(self.carries, sys.proposed) || !isSubset(self.voted, self.nodes)) {
+    if (!isSubset(self.proposals, sys.proposed) || !isSubset(self.voted, self.nodes)) {
       return false;
     }
     if (self.status == kCompleted) {
-      if (self.committed != self.carries) {
+      if (self.committed != self.proposals) {
         return false;
       }
     } else if (!self.committed.empty()) {
@@ -232,7 +237,7 @@ bool invariant(const SoreState& sys) {
   }
 
   for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.carries, sys.proposed)) {
+    if (!isSubset(msg.proposals, sys.proposed)) {
       return false;
     }
   }
@@ -299,7 +304,7 @@ struct Model : IModel {
   Var<SoreState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  CarrySet messageIds_ = {10, 11, 12};
+  ProposalSet messageIds_ = {10, 11, 12};
 };
 
 TEST_F(EngineFixture, SoreFindsCounterexample) {

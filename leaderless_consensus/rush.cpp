@@ -9,7 +9,7 @@ using RushGenerations = std::vector<RushGenerationState>;
 using RushPromises = std::set<RushPromiseState>;
 
 struct_fields(RushCoreState,
-    (CarrySet, carries),
+    (ProposalSet, proposals),
     (RushGenerations, nodesMessages),
     (RushPromises, promises));
 
@@ -37,7 +37,7 @@ using RushStateMessages = std::set<RushStateMsg>;
 
 struct_fields(RushState,
     (NodeSet, alive),
-    (CarrySet, proposed),
+    (ProposalSet, proposed),
     (RushNodes, local),
     (RushStateMessages, stateMsgs));
 
@@ -130,11 +130,11 @@ RushPromises mergePromises(RushPromises left, const RushPromises& right) {
 
 RushPromises normalizePromises(const RushPromises& promises,
     const RushGenerations& nodesMessages,
-    const CarrySet& carries,
+    const ProposalSet& proposals,
     const MessageSeq& committed) {
   RushPromises normalized;
   for (auto&& promise : promises) {
-    if (!itemsAreSubset(promise.prefix, carries) ||
+    if (!itemsAreSubset(promise.prefix, proposals) ||
         !allUnique(promise.prefix) ||
         isPrefix(promise.prefix, committed)) {
       continue;
@@ -190,10 +190,10 @@ MergeResult mergeState(const RushNodeState& state,
     }
   }
 
-  newCore.carries = state.core.carries;
-  for (auto&& id : incoming.carries) {
-    if (!newCore.carries.contains(id)) {
-      newCore.carries.insert(id);
+  newCore.proposals = state.core.proposals;
+  for (auto&& id : incoming.proposals) {
+    if (!newCore.proposals.contains(id)) {
+      newCore.proposals.insert(id);
       auto& selfState = newCore.nodesMessages[self];
       selfState.messages.push_back(id);
       selfState.generation = nextGeneration(selfState.generation, messageCount);
@@ -201,7 +201,7 @@ MergeResult mergeState(const RushNodeState& state,
   }
   newCore.promises =
       normalizePromises(mergePromises(state.core.promises, incoming.promises),
-          newCore.nodesMessages, newCore.carries, state.committed);
+          newCore.nodesMessages, newCore.proposals, state.committed);
 
   auto promiseMessages = state.committed;
   auto commitMessages = state.committed;
@@ -209,7 +209,7 @@ MergeResult mergeState(const RushNodeState& state,
   auto i = state.committed.size();
   auto quorum = majority(nodeCount);
 
-  while (i < newCore.carries.size()) {
+  while (i < newCore.proposals.size()) {
     auto id = majorityId(newCore.nodesMessages, i, quorum);
     if (id >= 0) {
       promiseMessages.push_back(id);
@@ -226,7 +226,7 @@ MergeResult mergeState(const RushNodeState& state,
       }
       newCore.promises = normalizePromises(
           putPromiseVotes(std::move(newCore.promises), promiseMessages, votes),
-          newCore.nodesMessages, newCore.carries, nextCommitted);
+          newCore.nodesMessages, newCore.proposals, nextCommitted);
       commitMessages = nextCommitted;
       ++i;
       continue;
@@ -242,7 +242,7 @@ MergeResult mergeState(const RushNodeState& state,
           newCore.nodesMessages[self].generation =
               nextGeneration(newCore.nodesMessages[self].generation, messageCount);
           newCore.promises = normalizePromises(
-              newCore.promises, newCore.nodesMessages, newCore.carries, commitMessages);
+              newCore.promises, newCore.nodesMessages, newCore.proposals, commitMessages);
         }
       }
       continue;
@@ -271,7 +271,7 @@ bool canPropose(const RushState& sys, NodeId node, MessageId id) {
 RushState propose(RushState sys, NodeId node, MessageId id) {
   sys.proposed.insert(id);
   auto incoming = makeEmptyCore(sys.local.size());
-  incoming.carries.insert(id);
+  incoming.proposals.insert(id);
   auto out = mergeState(
       sys.local.at(node), node, incoming, sys.local.size(), sys.proposed.size());
   if (!out.changed) {
@@ -299,10 +299,10 @@ RushState deliverState(RushState sys, const RushStateMsg& msg) {
 }
 
 bool coreWellFormed(const RushCoreState& core,
-    const CarrySet& proposed,
+    const ProposalSet& proposed,
     const NodeSet& allNodes,
     size_t nodeCount) {
-  if (!isSubset(core.carries, proposed) || core.nodesMessages.size() != nodeCount) {
+  if (!isSubset(core.proposals, proposed) || core.nodesMessages.size() != nodeCount) {
     return false;
   }
 
@@ -415,7 +415,7 @@ struct Model : IModel {
   Var<RushState> sys{"sys"};
 
   NodeSet nodes_ = {0, 1, 2};
-  CarrySet messageIds_ = {10, 11, 12};
+  ProposalSet messageIds_ = {10, 11, 12};
 };
 
 TEST_F(EngineFixture, RushHoldsInvariantAndConverges) {

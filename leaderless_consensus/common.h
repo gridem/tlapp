@@ -27,7 +27,7 @@ using test::EngineFixture;
 using NodeId = int;
 using MessageId = int;
 using NodeSet = std::set<NodeId>;
-using CarrySet = std::set<MessageId>;
+using ProposalSet = std::set<MessageId>;
 using MessageSeq = std::vector<MessageId>;
 
 template <typename T>

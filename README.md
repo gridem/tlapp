@@ -120,9 +120,9 @@ under `leaderless_consensus/`.
 The modeled variants are:
 
 1. `Sore`: naive set-based voting baseline
-2. `Calm`: unanimous carry convergence before commit
+2. `Calm`: unanimous proposal convergence before commit
 3. `Flat`: uniform merge with vote preservation and payload-free commit
-4. `Most`: majority-based carry voting with commit payload propagation
+4. `Most`: majority-based proposal voting with commit payload propagation
 5. `Rush`: the most advanced variant, using ordered prefix commitment with
    generation tracking; the current reduced model omits disconnects, so it does
    not need timeout-based failure handling

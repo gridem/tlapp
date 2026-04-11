@@ -12,13 +12,13 @@ NodeState ==
   [status : {FlatVoting, FlatCommitted},
    nodes : SUBSET Nodes,
    votes : SUBSET Nodes,
-   carries : SUBSET MessageIds,
+   proposals : SUBSET MessageIds,
    committed : SUBSET MessageIds]
 
-Vote(from, to, carries, nodes, votes) ==
+Vote(from, to, proposals, nodes, votes) ==
   [from |-> from,
    to |-> to,
-   carries |-> carries,
+   proposals |-> proposals,
    nodes |-> nodes,
    votes |-> votes]
 
@@ -28,7 +28,7 @@ Commit(from, to) ==
 VoteMessage ==
   [from : Nodes,
    to : Nodes,
-   carries : SUBSET MessageIds,
+   proposals : SUBSET MessageIds,
    nodes : SUBSET Nodes,
    votes : SUBSET Nodes]
 
@@ -41,7 +41,7 @@ InitLocal ==
     [status |-> FlatVoting,
      nodes |-> Nodes,
      votes |-> {},
-     carries |-> {},
+     proposals |-> {},
      committed |-> {}]]
 
 Init ==
@@ -51,20 +51,20 @@ Init ==
   /\ voteMsgs = {}
   /\ commitMsgs = {}
 
-BroadcastVote(queue, from, carries, nodes, votes, aliveSet) ==
+BroadcastVote(queue, from, proposals, nodes, votes, aliveSet) ==
   {m \in queue :
      ~(\E to \in (aliveSet \ {from}) :
          /\ m.from = from
          /\ m.to = to
-         /\ m.carries = carries
+         /\ m.proposals = proposals
          /\ m.nodes = nodes
          /\ m.votes \subseteq votes)} \cup
-  {Vote(from, to, carries, nodes, votes) :
+  {Vote(from, to, proposals, nodes, votes) :
      /\ to \in (aliveSet \ {from})
      /\ ~(\E m \in queue :
             /\ m.from = from
             /\ m.to = to
-            /\ m.carries = carries
+            /\ m.proposals = proposals
             /\ m.nodes = nodes
             /\ votes \subseteq m.votes)}
 
@@ -75,7 +75,7 @@ BroadcastCommit(queue, from, aliveSet, localState) ==
   (queue \ {from}) \cup
   {to \in (aliveSet \ {from}) : localState[to].status # FlatCommitted}
 
-FlatVoteResult(state, self, source, carries, incomingNodes, incomingVotes) ==
+FlatVoteResult(state, self, source, proposals, incomingNodes, incomingVotes) ==
   IF state.status = FlatCommitted \/ source \notin state.nodes
   THEN [changed |-> FALSE,
         local |-> state,
@@ -83,14 +83,14 @@ FlatVoteResult(state, self, source, carries, incomingNodes, incomingVotes) ==
         sendCommit |-> FALSE]
   ELSE
     LET nodes1 == state.nodes \cap incomingNodes
-        carries1 == state.carries \cup carries
+        proposals1 == state.proposals \cup proposals
         votes0 == {self}
         votes1 ==
-          IF nodes1 = incomingNodes /\ carries1 = carries
+          IF nodes1 = incomingNodes /\ proposals1 = proposals
           THEN votes0 \cup incomingVotes
           ELSE votes0
         votes2 ==
-          IF nodes1 = state.nodes /\ carries1 = state.carries
+          IF nodes1 = state.nodes /\ proposals1 = state.proposals
           THEN votes1 \cup state.votes
           ELSE votes1
         votes3 == votes2 \cap nodes1
@@ -98,10 +98,10 @@ FlatVoteResult(state, self, source, carries, incomingNodes, incomingVotes) ==
           [state EXCEPT
             !.nodes = nodes1,
             !.votes = votes3,
-            !.carries = carries1]
+            !.proposals = proposals1]
     IN
       IF /\ nodes1 = state.nodes
-         /\ carries1 = state.carries
+         /\ proposals1 = state.proposals
          /\ votes3 = state.votes
       THEN [changed |-> FALSE,
             local |-> state,
@@ -112,7 +112,7 @@ FlatVoteResult(state, self, source, carries, incomingNodes, incomingVotes) ==
         THEN [changed |-> TRUE,
               local |-> [local1 EXCEPT
                            !.status = FlatCommitted,
-                           !.committed = carries1],
+                           !.committed = proposals1],
               sendVote |-> FALSE,
               sendCommit |-> TRUE]
         ELSE [changed |-> TRUE,
@@ -138,7 +138,7 @@ Propose(node, msg) ==
             IF out.sendCommit
             THEN PurgeVotesTo(voteMsgs, node)
             ELSE IF out.sendVote
-            THEN BroadcastVote(voteMsgs, node, out.local.carries, out.local.nodes,
+            THEN BroadcastVote(voteMsgs, node, out.local.proposals, out.local.nodes,
                                out.local.votes, alive)
             ELSE voteMsgs
        /\ commitMsgs' =
@@ -150,7 +150,7 @@ DeliverVote(msg) ==
   /\ msg \in voteMsgs
   /\ msg.to \in alive
   /\ LET out ==
-           FlatVoteResult(local[msg.to], msg.to, msg.from, msg.carries, msg.nodes,
+           FlatVoteResult(local[msg.to], msg.to, msg.from, msg.proposals, msg.nodes,
                           msg.votes)
          local1 == [local EXCEPT ![msg.to] = out.local]
      IN
@@ -162,7 +162,7 @@ DeliverVote(msg) ==
             IF out.sendCommit
             THEN PurgeVotesTo(voteMsgs \ {msg}, msg.to)
             ELSE IF out.sendVote
-            THEN BroadcastVote(voteMsgs \ {msg}, msg.to, out.local.carries,
+            THEN BroadcastVote(voteMsgs \ {msg}, msg.to, out.local.proposals,
                                out.local.nodes, out.local.votes, alive)
             ELSE voteMsgs \ {msg}
        /\ commitMsgs' =
@@ -177,7 +177,7 @@ DeliverCommit(msg) ==
   /\ LET local1 ==
            [local EXCEPT
              ![msg].status = FlatCommitted,
-             ![msg].committed = local[msg].carries]
+             ![msg].committed = local[msg].proposals]
      IN
   /\ alive' = alive
   /\ proposed' = proposed
@@ -186,21 +186,21 @@ DeliverCommit(msg) ==
   /\ commitMsgs' = BroadcastCommit(commitMsgs \ {msg}, msg, alive, local1)
 
 DisconnectLocal(state, self, failed) ==
-  IF state.carries = {}
+  IF state.proposals = {}
   THEN [state EXCEPT !.nodes = @ \ {failed}]
   ELSE
     LET out ==
-          FlatVoteResult(state, self, failed, state.carries, state.nodes \ {failed},
+          FlatVoteResult(state, self, failed, state.proposals, state.nodes \ {failed},
                          {})
     IN out.local
 
 DisconnectOut(state, self, failed) ==
-  IF state.carries = {}
+  IF state.proposals = {}
   THEN [changed |-> TRUE,
         local |-> [state EXCEPT !.nodes = @ \ {failed}],
         sendVote |-> FALSE,
         sendCommit |-> FALSE]
-  ELSE FlatVoteResult(state, self, failed, state.carries, state.nodes \ {failed}, {})
+  ELSE FlatVoteResult(state, self, failed, state.proposals, state.nodes \ {failed}, {})
 
 RECURSIVE DisconnectBroadcast(_, _, _, _)
 
@@ -209,7 +209,7 @@ DisconnectBroadcast(queue, senders, localAfter, aliveSet) ==
   THEN queue
   ELSE LET sender == CHOOSE n \in senders : TRUE
        IN DisconnectBroadcast(
-            BroadcastVote(queue, sender, localAfter[sender].carries,
+            BroadcastVote(queue, sender, localAfter[sender].proposals,
                           localAfter[sender].nodes, localAfter[sender].votes,
                           aliveSet),
             senders \ {sender},
@@ -238,7 +238,7 @@ Disconnect(failed) ==
              IF n \in committedNow
              THEN [local1[n] EXCEPT
                      !.status = FlatCommitted,
-                     !.committed = local1[n].carries]
+                     !.committed = local1[n].proposals]
              ELSE local1[n]]
          voteBase ==
            {m \in voteMsgs :
@@ -277,16 +277,16 @@ TypeOK ==
 LocalWellFormed ==
   \A n \in alive :
     /\ local[n].votes \subseteq local[n].nodes
-    /\ local[n].carries \subseteq proposed
+    /\ local[n].proposals \subseteq proposed
     /\ IF local[n].status = FlatCommitted
-       THEN local[n].committed = local[n].carries
+       THEN local[n].committed = local[n].proposals
        ELSE local[n].committed = {}
 
 VoteWellFormed ==
   \A msg \in voteMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ msg.carries \subseteq proposed
+    /\ msg.proposals \subseteq proposed
     /\ msg.votes \subseteq msg.nodes
 
 CommitWellFormed ==

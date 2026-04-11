@@ -19,7 +19,7 @@ They are meant to sit between the short status note in
 ## Variants
 
 - [`sore.md`](sore.md): naive set-based voting baseline
-- [`calm.md`](calm.md): unanimous carry convergence before commit
-- [`flat.md`](flat.md): merge-based carry and vote propagation
-- [`most.md`](most.md): majority voting per carry
+- [`calm.md`](calm.md): unanimous proposal convergence before commit
+- [`flat.md`](flat.md): merge-based proposal and vote propagation
+- [`most.md`](most.md): majority voting per proposal
 - [`rush.md`](rush.md): ordered prefix commitment with generations and promises

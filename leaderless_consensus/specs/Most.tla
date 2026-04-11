@@ -8,24 +8,24 @@ ASSUME Cardinality(Nodes) = 3
 MostVoting == "Voting"
 MostCommitted == "Committed"
 
-CarryVotes == [MessageIds -> SUBSET Nodes]
+ProposalVotes == [MessageIds -> SUBSET Nodes]
 
 NodeState ==
   [status : {MostVoting, MostCommitted},
    nodes : SUBSET Nodes,
    votes : SUBSET Nodes,
-   carryVotes : CarryVotes,
-   carries : SUBSET MessageIds,
+   proposalVotes : ProposalVotes,
+   proposals : SUBSET MessageIds,
    committed : SUBSET MessageIds]
 
-Vote(from, to, carries, nodes) ==
-  [from |-> from, to |-> to, carries |-> carries, nodes |-> nodes]
+Vote(from, to, proposals, nodes) ==
+  [from |-> from, to |-> to, proposals |-> proposals, nodes |-> nodes]
 
 Commit(from, to, commit) ==
   [from |-> from, to |-> to, commit |-> commit]
 
 VoteMessage ==
-  [from : Nodes, to : Nodes, carries : SUBSET MessageIds, nodes : SUBSET Nodes]
+  [from : Nodes, to : Nodes, proposals : SUBSET MessageIds, nodes : SUBSET Nodes]
 
 CommitMessage ==
   [from : Nodes, to : Nodes, commit : SUBSET MessageIds]
@@ -34,15 +34,15 @@ VARIABLES alive, proposed, local, voteMsgs, commitMsgs
 
 vars == <<alive, proposed, local, voteMsgs, commitMsgs>>
 
-InitCarryVotes == [m \in MessageIds |-> {}]
+InitProposalVotes == [m \in MessageIds |-> {}]
 
 InitLocal ==
   [n \in Nodes |->
     [status |-> MostVoting,
      nodes |-> Nodes,
      votes |-> {},
-     carryVotes |-> InitCarryVotes,
-     carries |-> {},
+     proposalVotes |-> InitProposalVotes,
+     proposals |-> {},
      committed |-> {}]]
 
 Init ==
@@ -52,17 +52,17 @@ Init ==
   /\ voteMsgs = {}
   /\ commitMsgs = {}
 
-BroadcastVote(queue, from, carries, nodes, aliveSet) ==
-  queue \cup {Vote(from, to, carries, nodes) : to \in (aliveSet \ {from})}
+BroadcastVote(queue, from, proposals, nodes, aliveSet) ==
+  queue \cup {Vote(from, to, proposals, nodes) : to \in (aliveSet \ {from})}
 
 BroadcastCommit(queue, from, commit, aliveSet) ==
   queue \cup {Commit(from, to, commit) : to \in (aliveSet \ {from})}
 
 MayCommit(state) ==
-  \A msg \in state.carries :
-    2 * Cardinality(state.carryVotes[msg]) > Cardinality(state.nodes)
+  \A msg \in state.proposals :
+    2 * Cardinality(state.proposalVotes[msg]) > Cardinality(state.nodes)
 
-MostVoteResult(state, self, source, carries, incomingNodes) ==
+MostVoteResult(state, self, source, proposals, incomingNodes) ==
   IF state.status = MostCommitted \/ source \notin state.nodes
   THEN [changed |-> FALSE,
         local |-> state,
@@ -72,23 +72,23 @@ MostVoteResult(state, self, source, carries, incomingNodes) ==
     LET changedNodes == state.nodes # incomingNodes
         firstVote == state.votes = {}
         nodes1 == state.nodes \cap incomingNodes
-        carries1 == state.carries \cup carries
+        proposals1 == state.proposals \cup proposals
         votes1 == (state.votes \cup {self, source}) \cap nodes1
-        carryVotes1 ==
+        proposalVotes1 ==
           [m \in MessageIds |->
-             IF m \in carries
-             THEN state.carryVotes[m] \cup {source}
-             ELSE state.carryVotes[m]]
-        carryVotes2 ==
+             IF m \in proposals
+             THEN state.proposalVotes[m] \cup {source}
+             ELSE state.proposalVotes[m]]
+        proposalVotes2 ==
           IF changedNodes
-          THEN [m \in MessageIds |-> carryVotes1[m] \cap nodes1]
-          ELSE carryVotes1
+          THEN [m \in MessageIds |-> proposalVotes1[m] \cap nodes1]
+          ELSE proposalVotes1
         local1 ==
           [state EXCEPT
             !.nodes = nodes1,
             !.votes = votes1,
-            !.carryVotes = carryVotes2,
-            !.carries = carries1]
+            !.proposalVotes = proposalVotes2,
+            !.proposals = proposals1]
         local2 ==
           IF changedNodes
           THEN [local1 EXCEPT !.votes = {self}]
@@ -132,25 +132,25 @@ Propose(node, msg) ==
                     ![node].status = MostCommitted,
                     ![node].nodes = out.local.nodes,
                     ![node].votes = out.local.votes,
-                    ![node].carryVotes = out.local.carryVotes,
-                    ![node].carries = out.local.carries,
-                    ![node].committed = out.local.carries]
+                    ![node].proposalVotes = out.local.proposalVotes,
+                    ![node].proposals = out.local.proposals,
+                    ![node].committed = out.local.proposals]
             ELSE [local EXCEPT ![node] = out.local]
        /\ voteMsgs' =
             IF out.sendVote
-            THEN BroadcastVote(voteMsgs, node, out.local.carries, out.local.nodes,
+            THEN BroadcastVote(voteMsgs, node, out.local.proposals, out.local.nodes,
                                alive)
             ELSE voteMsgs
        /\ commitMsgs' =
             IF out.sendCommit
-            THEN BroadcastCommit(commitMsgs, node, out.local.carries, alive)
+            THEN BroadcastCommit(commitMsgs, node, out.local.proposals, alive)
             ELSE commitMsgs
 
 DeliverVote(msg) ==
   /\ msg \in voteMsgs
   /\ msg.to \in alive
   /\ LET out ==
-           MostVoteResult(local[msg.to], msg.to, msg.from, msg.carries, msg.nodes)
+           MostVoteResult(local[msg.to], msg.to, msg.from, msg.proposals, msg.nodes)
      IN
        /\ out.changed
        /\ alive' = alive
@@ -161,46 +161,46 @@ DeliverVote(msg) ==
                     ![msg.to].status = MostCommitted,
                     ![msg.to].nodes = out.local.nodes,
                     ![msg.to].votes = out.local.votes,
-                    ![msg.to].carryVotes = out.local.carryVotes,
-                    ![msg.to].carries = out.local.carries,
-                    ![msg.to].committed = out.local.carries]
+                    ![msg.to].proposalVotes = out.local.proposalVotes,
+                    ![msg.to].proposals = out.local.proposals,
+                    ![msg.to].committed = out.local.proposals]
             ELSE [local EXCEPT ![msg.to] = out.local]
        /\ voteMsgs' =
             IF out.sendVote
-            THEN BroadcastVote(voteMsgs \ {msg}, msg.to, out.local.carries,
+            THEN BroadcastVote(voteMsgs \ {msg}, msg.to, out.local.proposals,
                                out.local.nodes, alive)
             ELSE voteMsgs \ {msg}
        /\ commitMsgs' =
             IF out.sendCommit
-            THEN BroadcastCommit(commitMsgs, msg.to, out.local.carries, alive)
+            THEN BroadcastCommit(commitMsgs, msg.to, out.local.proposals, alive)
             ELSE commitMsgs
 
 DeliverCommit(msg) ==
   /\ msg \in commitMsgs
   /\ msg.to \in alive
   /\ local[msg.to].status # MostCommitted
-  /\ local[msg.to].carries = msg.commit
+  /\ local[msg.to].proposals = msg.commit
   /\ alive' = alive
   /\ proposed' = proposed
   /\ local' =
        [local EXCEPT
          ![msg.to].status = MostCommitted,
-         ![msg.to].carries = msg.commit,
+         ![msg.to].proposals = msg.commit,
          ![msg.to].committed = msg.commit]
   /\ voteMsgs' = voteMsgs
   /\ commitMsgs' = BroadcastCommit(commitMsgs \ {msg}, msg.to, msg.commit, alive)
 
 DisconnectLocal(state, self, failed) ==
-  IF state.carries = {}
+  IF state.proposals = {}
   THEN [state EXCEPT !.nodes = @ \ {failed}]
   ELSE
     LET out ==
-          MostVoteResult(state, self, failed, state.carries, state.nodes \ {failed})
+          MostVoteResult(state, self, failed, state.proposals, state.nodes \ {failed})
     IN
       IF out.sendCommit
       THEN [out.local EXCEPT
               !.status = MostCommitted,
-              !.committed = out.local.carries]
+              !.committed = out.local.proposals]
       ELSE out.local
 
 Disconnect(failed) ==
@@ -231,17 +231,17 @@ TypeOK ==
 LocalWellFormed ==
   \A n \in alive :
     /\ local[n].votes \subseteq local[n].nodes
-    /\ local[n].carries \subseteq proposed
-    /\ \A msg \in MessageIds : local[n].carryVotes[msg] \subseteq Nodes
+    /\ local[n].proposals \subseteq proposed
+    /\ \A msg \in MessageIds : local[n].proposalVotes[msg] \subseteq Nodes
     /\ IF local[n].status = MostCommitted
-       THEN local[n].committed = local[n].carries
+       THEN local[n].committed = local[n].proposals
        ELSE local[n].committed = {}
 
 VoteWellFormed ==
   \A msg \in voteMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ msg.carries \subseteq proposed
+    /\ msg.proposals \subseteq proposed
 
 CommitWellFormed ==
   \A msg \in commitMsgs :

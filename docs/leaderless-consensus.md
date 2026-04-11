@@ -11,9 +11,9 @@ Reference article:
 The source material discusses five variants:
 
 1. `Sore`: naive set-based voting.
-2. `Calm`: unanimous carry convergence before commit.
+2. `Calm`: unanimous proposal convergence before commit.
 3. `Flat`: uniform merge with vote preservation and payload-free commit.
-4. `Most`: majority-based carry voting with commit payload propagation in the current model.
+4. `Most`: majority-based proposal voting with commit payload propagation in the current model.
 5. `Rush`: the most advanced variant, using ordered prefix commitment with
    generation tracking. The current reduced model omits disconnects, so it does
    not need timeout-based failure handling.
@@ -43,10 +43,10 @@ The executable and TLC models use small finite abstractions:
 
 - `MessageIds = {10, 11, 12}` in every module.
 - Every variant uses `Nodes = {0, 1, 2}`.
-- In `Sore`, `Calm`, `Most`, and `Rush`, a pristine node may originate any not-yet-applied proposal id.
+- In `Sore`, `Calm`, `Most`, and `Rush`, a pristine node may originate any not-yet-proposed proposal id.
 - In `Flat`, proposal generation is reduced to one fixed proposal per node: `0 -> 10`, `1 -> 11`, `2 -> 12`.
-- A proposal may be applied only before any vote has been delivered to that node.
-- In `Rush`, the analogous rule is stricter: a proposal may be applied only while the node is still in its initial local state.
+- A proposal may be proposed only before any vote has been delivered to that node.
+- In `Rush`, the analogous rule is stricter: a proposal may be proposed only while the node is still in its initial local state.
 - Broadcast sends to the other live nodes only.
 - The set-based variants model disconnect as an immediate local state update on survivors.
 - `Rush` currently omits disconnect transitions while the ordering model is being reduced.
@@ -56,14 +56,14 @@ The executable and TLC models use small finite abstractions:
 The set-based variants (`Sore`, `Calm`, `Flat`, `Most`) check:
 
 - queued message endpoints stay live
-- carry sets stay within the applied message ids
+- proposal sets stay within the proposed message ids
 - local vote sets stay within the local node set
-- live committed nodes agree on the committed carry set
+- live committed nodes agree on the committed proposal set
 
 `Rush` uses a different safety predicate:
 
 - queued state-message endpoints stay live
-- all carried and committed ids stay within the applied ids
+- all proposed and committed ids stay within the proposed ids
 - committed sequences remain pairwise prefix-comparable
 
 That weaker invariant matches the algorithm's progressive prefix-commit design.
