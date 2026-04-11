@@ -14,7 +14,9 @@ The source material discusses five variants:
 2. `Calm`: unanimous carry convergence before commit.
 3. `Flat`: uniform merge with vote preservation and payload-free commit.
 4. `Most`: majority-based carry voting with commit payload propagation in the current model.
-5. `Rush`: ordered prefix commitment with generation tracking.
+5. `Rush`: the most advanced variant, using ordered prefix commitment with
+   generation tracking. The current reduced model omits disconnects, so it does
+   not need timeout-based failure handling.
 
 All five are now modeled in this repo.
 

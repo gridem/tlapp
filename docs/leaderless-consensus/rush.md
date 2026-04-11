@@ -1,8 +1,8 @@
 # Rush
 
-`Rush` is the ordering-oriented variant. Instead of committing an unordered set,
-it commits a sequence and only requires committed sequences to stay
-prefix-compatible.
+`Rush` is the most advanced variant in this set. Instead of committing an
+unordered set, it commits a sequence and only requires committed sequences to
+stay prefix-compatible.
 
 ## Core Idea
 
@@ -68,7 +68,8 @@ Compared with earlier drafts, the current model also:
 - omits `Disconnect` for now
 
 These changes are aimed at keeping the model finite and reducing avoidable
-state churn.
+state churn. Because disconnects are omitted in the current reduced model, it
+also does not need timeout-based failure handling.
 
 ## Safety Shape
 
