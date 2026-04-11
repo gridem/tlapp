@@ -102,16 +102,38 @@ Current failures in the executable model:
 
 TLC status:
 
-- TLC verification is a work in progress.
-- recent release runs on the current branch tip passed with the current
-  executable liveness checks:
-  - `Calm` safety: about 19.6 seconds, `234780` states, `1367893` transitions
-  - `Calm` liveness: about 18.8 seconds, `214265` states, `1239748` transitions
-  - `Flat` safety: about 180.2 seconds, `770773` states, `8560654` transitions
-  - `Flat` liveness: about 298.5 seconds, `762123` states, `8451112` transitions
-  - `Most`: about 101 seconds, `881776` states, `4033024` transitions
-  - `Rush` safety: about 39.4 seconds, `465187` states, `1607206` transitions
-  - `Rush` liveness: about 75.2 seconds, `465187` states, `1607206` transitions
+- the TLA+ specs were rechecked against the current executable models and updated
+  where they had drifted, notably on disconnect side effects and `Rush`
+  generation handling
+- completed TLC results on the current branch tip:
+  - `Sore` safety: fails, as expected
+  - `Calm` safety: passes
+  - `Calm` liveness: passes
+  - `Flat` safety: passes
+  - `Flat` liveness: passes
+  - `Most` safety: passes
+  - `Most` liveness: passes
+  - `Rush`: TLC parsing and initial state exploration now work, but full TLC
+    safety and liveness runs remain the outstanding heavy case
+
+## Timing Comparison
+
+Recent checks from `build/rel` and TLC:
+
+| Variant | TLA++ safety | TLC safety | TLA++ liveness | TLC liveness |
+| --- | ---: | ---: | ---: | ---: |
+| `Calm` | 21.7s | 8.4s | 30.5s | 22.6s |
+| `Flat` | 182.4s | 46.7s | 296.5s | 161.3s |
+| `Most` | 19.2s | 11.7s | 20.1s | 69.5s |
+| `Rush` | 40.0s | in progress | 75.5s | in progress |
+
+Additional current points:
+
+- `Sore` TLC safety fails in about `1.1s`
+- `Rush` TLC `LiveSpec` now starts cleanly, but did not finish in a reasonable
+  run window
+- `Rush` TLC safety-only also starts cleanly, but remained much slower than the
+  other models in the same run window
 
 ## Commands
 

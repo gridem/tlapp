@@ -65,5 +65,7 @@ the majority-preserving disconnect rule above.
 
 Recent `build/rel` runs:
 
-- safety model: about 19.6 seconds, `234780` states, `1367893` transitions
-- liveness model: about 18.8 seconds, `214265` states, `1239748` transitions
+- executable safety model: about 21.7 seconds
+- executable liveness model: about 30.5 seconds
+- TLC safety: about 8.4 seconds, `568552` generated, `149402` distinct
+- TLC liveness: about 22.6 seconds, `462925` generated, `128887` distinct

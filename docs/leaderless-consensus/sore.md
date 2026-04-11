@@ -54,3 +54,8 @@ does not require those votes to confirm the same proposal set. A node can theref
 commit a union that other completed nodes do not share.
 
 That is why `Sore` is intentionally kept as the expected failing variant.
+
+Recent checks:
+
+- TLC safety fails as expected in about `1.1` seconds (`9899` generated,
+  `6762` distinct)
