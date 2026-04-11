@@ -22,6 +22,7 @@ Planning documents now live under [`plans/`](plans/):
 - [`plans/liveness.md`](plans/liveness.md)
 - [`plans/partial-order-reduction.md`](plans/partial-order-reduction.md)
 - [`plans/rush-state-space.md`](plans/rush-state-space.md)
+- [`plans/rush-tlc-performance.md`](plans/rush-tlc-performance.md)
 
 ## Scope Recommendation
 

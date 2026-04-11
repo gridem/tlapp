@@ -113,8 +113,16 @@ TLC status:
   - `Flat` liveness: passes
   - `Most` safety: passes
   - `Most` liveness: passes
-  - `Rush`: TLC parsing and initial state exploration now work, but full TLC
-    safety and liveness runs remain the outstanding heavy case
+  - `Rush`: still in progress
+    - the checked-in spec starts cleanly, but TLC spends too much time per
+      state in promise normalization and hot-path type checks
+    - a tested spec-only rewrite makes safety complete in about `24.1s`
+      (`522040` generated, `212530` distinct), but that rewrite is not checked
+      in yet
+    - liveness remains the outstanding heavy case because TLC's temporal phase
+      is still much slower than the executable checker
+    - the current improvement plan is documented in
+      [`docs/plans/rush-tlc-performance.md`](plans/rush-tlc-performance.md)
 
 ## Timing Comparison
 
@@ -138,10 +146,10 @@ Additional current points:
 
 - `Sore` executable safety fails as expected in under `0.1s`
 - `Sore` TLC safety fails in about `1.1s`
-- `Rush` TLC `LiveSpec` now starts cleanly, but did not finish in a reasonable
-  run window
-- `Rush` TLC safety-only also starts cleanly, but remained much slower than the
-  other models in the same run window
+- `Rush` TLC `LiveSpec` starts cleanly and remains CPU-active, but did not
+  finish in the observed run window
+- `Rush` TLC safety is slow in the checked-in spec, but a tested local rewrite
+  reduced it to about `24.1s`; that work is tracked in the plan note above
 
 ## Commands
 
