@@ -86,8 +86,8 @@ commit a non-empty prefix.
 
 Recent `build/rel` runs:
 
-- executable safety model: about 28.0 seconds, `465187` states, `1607206` transitions
-- executable liveness model: about 50.5 seconds, `465187` states, `1607206` transitions
+- executable safety model: about 21.5 seconds, `465187` states, `1607206` transitions
+- executable liveness model: about 40.6 seconds, `465187` states, `1607206` transitions
 - TLC safety: in progress; a recent safety-only run started cleanly but remained
   slow after `60` seconds (`372` generated, `270` distinct)
 - TLC liveness: in progress; the current `LiveSpec` now parses and starts

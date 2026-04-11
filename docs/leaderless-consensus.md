@@ -122,10 +122,10 @@ Recent checks from `build/rel` and TLC:
 
 | Variant | TLA++ safety | TLC safety | TLA++ liveness | TLC liveness |
 | --- | ---: | ---: | ---: | ---: |
-| `Calm` | 7.5s | 8.4s | 10.8s | 22.6s |
-| `Flat` | 63.6s | 46.7s | 103.4s | 161.3s |
-| `Most` | 7.7s | 11.7s | 7.8s | 69.5s |
-| `Rush` | 28.0s | in progress | 50.5s | in progress |
+| `Calm` | 5.1s | 8.4s | 7.0s | 22.6s |
+| `Flat` | 44.4s | 46.7s | 72.2s | 161.3s |
+| `Most` | 4.8s | 11.7s | 5.3s | 69.5s |
+| `Rush` | 21.5s | in progress | 40.6s | in progress |
 
 Additional current points:
 
