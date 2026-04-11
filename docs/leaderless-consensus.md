@@ -77,8 +77,10 @@ the TLA+ spec:
   and no further `Propose` action is enabled
 - `Calm` now uses action-level weak fairness on `ProposeAny`,
   and `DeliverAnyVote`
-- `Flat`, `Most`, and `Rush` still use weak fairness on the combined `Next`
-  action
+- `Flat` and `Most` now also use action-level weak fairness on `ProposeAny`
+  and `DeliverAnyVote`
+- `Rush` now uses action-level weak fairness on `ProposeAny` and
+  `DeliverAnyState`
 
 ## Verification Result
 
@@ -97,10 +99,12 @@ Current failures in the executable model:
 TLC status:
 
 - TLC verification is a work in progress.
-- `Calm` and `Most` were rerun with the current liveness property and passed.
-- `Flat` now also carries the same eventual-quiescence liveness property in the
-  executable model and passed a recent release run in about 348 seconds.
-- `Rush` now also carries the same eventual-quiescence liveness property in the executable model and passed a recent release run in about 74 seconds.
+- recent release runs on the current branch tip passed with the current
+  executable liveness checks:
+  - `Calm`: about 30 seconds, `234780` states, `1367893` transitions
+  - `Most`: about 101 seconds, `881776` states, `4033024` transitions
+  - `Rush`: about 74 seconds, `465187` states, `1607206` transitions
+  - `Flat`: about 293 seconds, `770773` states, `8560654` transitions
 
 ## Commands
 

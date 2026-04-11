@@ -260,9 +260,15 @@ DeliverState(msg) ==
                                               committed |-> out.committed]]
        /\ stateMsgs' = BroadcastState(stateMsgs \ {msg}, msg.to, out.core, alive)
 
+ProposeAny ==
+  \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
+
+DeliverAnyState ==
+  \E msg \in stateMsgs : DeliverState(msg)
+
 Next ==
-  \/ \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
-  \/ \E msg \in stateMsgs : DeliverState(msg)
+  \/ ProposeAny
+  \/ DeliverAnyState
 
 CoreWellFormed(core) ==
   /\ core \in CoreState
@@ -318,6 +324,9 @@ Quiescent ==
 Termination == <>Quiescent
 
 Spec == Init /\ [][Next]_vars
-LiveSpec == Spec /\ WF_vars(Next)
+LiveSpec ==
+  /\ Spec
+  /\ WF_vars(ProposeAny)
+  /\ WF_vars(DeliverAnyState)
 
 =============================================================================

@@ -371,21 +371,34 @@ struct Model : IModel {
     return sys == makeState(nodes_);
   }
 
-  Boolean next() override {
+  Boolean proposeAny() {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
         return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
       };
-    }
-    || $E(msg, get_mem(sys, voteMsgs)) {
+    };
+  }
+
+  Boolean deliverAnyVote() {
+    return $E(msg, get_mem(sys, voteMsgs)) {
       return canDeliverVoteExpr(sys, msg) && sys++ == deliverVoteExpr(sys, msg);
-    }
-    || $E(msg, get_mem(sys, commitMsgs)) {
+    };
+  }
+
+  Boolean deliverAnyCommit() {
+    return $E(msg, get_mem(sys, commitMsgs)) {
       return canDeliverCommitExpr(sys, msg) && sys++ == deliverCommitExpr(sys, msg);
-    }
-    || $E(failed, nodes_) {
+    };
+  }
+
+  Boolean disconnectAny() {
+    return $E(failed, nodes_) {
       return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
     };
+  }
+
+  Boolean next() override {
+    return proposeAny() || deliverAnyVote() || deliverAnyCommit() || disconnectAny();
   }
 
   std::optional<Boolean> ensure() override {
@@ -393,7 +406,7 @@ struct Model : IModel {
   }
 
   std::optional<LivenessBoolean> liveness() override {
-    return wf(next()) && eventually(quiescentExpr(sys));
+    return wf(proposeAny()) && wf(deliverAnyVote()) && eventually(quiescentExpr(sys));
   }
 
   Var<MostState> sys{"sys"};

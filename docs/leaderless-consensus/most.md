@@ -57,7 +57,8 @@ the current model also intersects `proposalVotes` with the reduced membership.
 Safety still requires all live committed nodes to agree on the committed proposal set.
 
 Like `Calm`, this model also carries a liveness check: under weak fairness of
-`Next`, the system must eventually reach quiescence.
+`ProposeAny` and `DeliverAnyVote`, the system must eventually reach
+quiescence.
 
 ## Important Nuance
 

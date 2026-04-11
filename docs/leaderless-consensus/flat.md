@@ -68,7 +68,7 @@ replays each survivor's local `proposals` against the smaller node set.
 
 Safety requires all live committed nodes to agree on the committed proposal set.
 
-The current model also checks liveness: under weak fairness of `Next`, the
-system must eventually become quiescent, meaning there are no in-flight vote or
-commit messages and no further `Propose` is still enabled. A recent release run
-with this liveness property passed in about 348 seconds.
+The current model also checks liveness: under weak fairness of `ProposeAny`
+and `DeliverAnyVote`, the system must eventually become quiescent, meaning
+there are no in-flight vote or commit messages and no further `Propose` is
+still enabled.

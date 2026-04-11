@@ -393,15 +393,22 @@ struct Model : IModel {
     return sys == makeState(nodes_);
   }
 
-  Boolean next() override {
+  Boolean proposeAny() {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
         return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
       };
-    }
-    || $E(msg, get_mem(sys, stateMsgs)) {
+    };
+  }
+
+  Boolean deliverAnyState() {
+    return $E(msg, get_mem(sys, stateMsgs)) {
       return canDeliverStateExpr(sys, msg) && sys++ == deliverStateExpr(sys, msg);
     };
+  }
+
+  Boolean next() override {
+    return proposeAny() || deliverAnyState();
   }
 
   std::optional<Boolean> ensure() override {
@@ -409,7 +416,7 @@ struct Model : IModel {
   }
 
   std::optional<LivenessBoolean> liveness() override {
-    return wf(next()) && eventually(quiescentExpr(sys));
+    return wf(proposeAny()) && wf(deliverAnyState()) && eventually(quiescentExpr(sys));
   }
 
   Var<RushState> sys{"sys"};

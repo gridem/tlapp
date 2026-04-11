@@ -79,5 +79,6 @@ progressive-commit structure: later commits may extend earlier ones, but they
 must not branch.
 
 The current executable model also carries a liveness check: under weak fairness
-of `Next`, it must eventually reach a quiescent state with no pending
-state-message traffic and no further `Propose` still enabled.
+of `ProposeAny` and `DeliverAnyState`, it must eventually reach a quiescent
+state with no pending state-message traffic and no further `Propose` still
+enabled.
