@@ -12,6 +12,7 @@
 #include "boolean.h"
 #include "error.h"
 #include "extractor.h"
+#include "flat.h"
 #include "field.h"
 #include "infix.h"
 #include "operation.h"
@@ -26,21 +27,21 @@ using test::EngineFixture;
 
 using NodeId = int;
 using MessageId = int;
-using NodeSet = std::set<NodeId>;
-using ProposalSet = std::set<MessageId>;
+using NodeSet = FlatSet<NodeId>;
+using ProposalSet = FlatSet<MessageId>;
 using MessageSeq = std::vector<MessageId>;
 
 inline const ProposalSet kProposalIds = {10, 11, 12};
 
-template <typename T>
-std::set<T> setUnion(std::set<T> left, const std::set<T>& right) {
+template <typename T_set>
+T_set setUnion(T_set left, const T_set& right) {
   left.insert(right.begin(), right.end());
   return left;
 }
 
-template <typename T>
-std::set<T> setIntersection(const std::set<T>& left, const std::set<T>& right) {
-  std::set<T> result;
+template <typename T_set>
+T_set setIntersection(const T_set& left, const T_set& right) {
+  T_set result;
   for (auto&& item : left) {
     if (right.contains(item)) {
       result.insert(item);
@@ -49,14 +50,14 @@ std::set<T> setIntersection(const std::set<T>& left, const std::set<T>& right) {
   return result;
 }
 
-template <typename T>
-std::set<T> setWithout(std::set<T> set, const T& value) {
+template <typename T_set, typename T_value>
+T_set setWithout(T_set set, const T_value& value) {
   set.erase(value);
   return set;
 }
 
-template <typename T>
-bool isSubset(const std::set<T>& left, const std::set<T>& right) {
+template <typename T_left, typename T_right>
+bool isSubset(const T_left& left, const T_right& right) {
   for (auto&& item : left) {
     if (!right.contains(item)) {
       return false;
@@ -88,7 +89,7 @@ bool isPrefix(const std::vector<T>& prefix, const std::vector<T>& values) {
 }
 
 template <typename T>
-bool itemsAreSubset(const std::vector<T>& values, const std::set<T>& allowed) {
+bool itemsAreSubset(const std::vector<T>& values, const ProposalSet& allowed) {
   for (auto&& value : values) {
     if (!allowed.contains(value)) {
       return false;
@@ -99,7 +100,7 @@ bool itemsAreSubset(const std::vector<T>& values, const std::set<T>& allowed) {
 
 template <typename T>
 bool allUnique(const std::vector<T>& values) {
-  std::set<T> seen;
+  FlatSet<T> seen;
   for (auto&& value : values) {
     if (!seen.insert(value).second) {
       return false;
@@ -108,9 +109,9 @@ bool allUnique(const std::vector<T>& values) {
   return true;
 }
 
-template <typename T_message>
-std::set<T_message> purgeMessages(const std::set<T_message>& messages, NodeId failed) {
-  std::set<T_message> result;
+template <typename T_messages>
+T_messages purgeMessages(const T_messages& messages, NodeId failed) {
+  T_messages result;
   for (auto&& message : messages) {
     if (message.from != failed && message.to != failed) {
       result.insert(message);
@@ -119,8 +120,8 @@ std::set<T_message> purgeMessages(const std::set<T_message>& messages, NodeId fa
   return result;
 }
 
-template <typename T_message>
-bool queueEndpointsAreAlive(const std::set<T_message>& messages, const NodeSet& alive) {
+template <typename T_messages>
+bool queueEndpointsAreAlive(const T_messages& messages, const NodeSet& alive) {
   for (auto&& message : messages) {
     if (!alive.contains(message.from) || !alive.contains(message.to)) {
       return false;

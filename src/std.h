@@ -7,6 +7,7 @@
 #include <tuple>
 #include <vector>
 
+#include "flat.h"
 #include "hash.h"
 #include "macro.h"
 
@@ -27,6 +28,17 @@ tname(T) struct equal_to<unique_ptr<T>> {
 tname(T, ... U) struct hash<vector<T, U...>> {
   size_t operator()(const vector<T, U...>& ts) const noexcept {
     size_t h = 0xbadbed;
+    for (auto&& t : ts) {
+      h <<= 1;
+      h ^= calcHash(t);
+    }
+    return h;
+  }
+};
+
+tname(T, ... U) struct hash<FlatSet<T, U...>> {
+  size_t operator()(const FlatSet<T, U...>& ts) const noexcept {
+    size_t h = 0x4badbed;
     for (auto&& t : ts) {
       h <<= 1;
       h ^= calcHash(t);
@@ -59,6 +71,17 @@ tname(F, S) struct hash<pair<F, S>> {
 tname(K, V, ... U) struct hash<map<K, V, U...>> {
   size_t operator()(const map<K, V, U...>& ts) const noexcept {
     size_t h = 0x6badbed;
+    for (auto&& t : ts) {
+      h <<= 1;
+      h ^= calcHash(t);
+    }
+    return h;
+  }
+};
+
+tname(K, V, ... U) struct hash<FlatMap<K, V, U...>> {
+  size_t operator()(const FlatMap<K, V, U...>& ts) const noexcept {
+    size_t h = 0x5badbed;
     for (auto&& t : ts) {
       h <<= 1;
       h ^= calcHash(t);

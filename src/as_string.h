@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "flat.h"
 #include "macro.h"
 
 tname(T) std::string asString(const T& t) {
@@ -85,6 +86,8 @@ tname(T) std::string containerAsString(const T& container,
 CONTAINER_AS_STRING(std::vector, "[", "]")
 CONTAINER_AS_STRING(std::set, "(", ")")
 CONTAINER_AS_STRING(std::map, "{", "}")
+CONTAINER_AS_STRING(FlatSet, "(", ")")
+CONTAINER_AS_STRING(FlatMap, "{", "}")
 
 #define SINGLE_AS_STRING(D_type)                             \
   tname(... T) std::string asString(const D_type<T...>& t) { \

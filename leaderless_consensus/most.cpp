@@ -7,7 +7,7 @@ constexpr int kCommitted = 1;
 
 struct_fields(MostProposalVote, (int, id), (NodeSet, votes));
 
-using ProposalVotes = std::set<MostProposalVote>;
+using ProposalVotes = FlatSet<MostProposalVote>;
 
 struct_fields(MostVoteMsg,
     (int, from),
@@ -23,9 +23,9 @@ struct_fields(MostNodeState,
     (ProposalSet, proposals),
     (ProposalSet, committed));
 
-using MostNodes = std::map<NodeId, MostNodeState>;
-using MostVoteMessages = std::set<MostVoteMsg>;
-using MostCommitMessages = std::set<MostCommitMsg>;
+using MostNodes = FlatMap<NodeId, MostNodeState>;
+using MostVoteMessages = FlatSet<MostVoteMsg>;
+using MostCommitMessages = FlatSet<MostCommitMsg>;
 
 struct_fields(MostState,
     (NodeSet, alive),

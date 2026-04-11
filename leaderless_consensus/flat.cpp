@@ -18,8 +18,8 @@ struct_fields(FlatNodeState,
     (ProposalSet, proposals),
     (ProposalSet, committed));
 
-using FlatNodes = std::map<NodeId, FlatNodeState>;
-using FlatVoteMessages = std::set<FlatVoteMsg>;
+using FlatNodes = FlatMap<NodeId, FlatNodeState>;
+using FlatVoteMessages = FlatSet<FlatVoteMsg>;
 using FlatCommitMessages = NodeSet;
 
 struct_fields(FlatState,

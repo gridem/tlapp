@@ -6,7 +6,7 @@ struct_fields(RushGenerationState, (MessageSeq, messages), (int, generation));
 struct_fields(RushPromiseState, (MessageSeq, prefix), (NodeSet, votes));
 
 using RushGenerations = std::vector<RushGenerationState>;
-using RushPromises = std::set<RushPromiseState>;
+using RushPromises = FlatSet<RushPromiseState>;
 
 struct_fields(RushCoreState,
     (ProposalSet, proposals),
@@ -32,8 +32,8 @@ namespace leaderless_consensus::rush {
 struct_fields(RushNodeState, (RushCoreState, core), (MessageSeq, committed));
 struct_fields(RushStateMsg, (int, from), (int, to), (RushCoreState, core));
 
-using RushNodes = std::map<NodeId, RushNodeState>;
-using RushStateMessages = std::set<RushStateMsg>;
+using RushNodes = FlatMap<NodeId, RushNodeState>;
+using RushStateMessages = FlatSet<RushStateMsg>;
 
 struct_fields(RushState,
     (NodeSet, alive),
@@ -158,7 +158,7 @@ bool shouldUseIncoming(const RushGenerationState& current,
 }
 
 MessageId majorityId(const RushGenerations& generations, size_t index, int quorum) {
-  std::map<MessageId, int> counts;
+  FlatMap<MessageId, int> counts;
   for (auto&& entry : generations) {
     if (index < entry.messages.size()) {
       auto id = entry.messages[index];

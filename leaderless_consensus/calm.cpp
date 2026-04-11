@@ -20,9 +20,9 @@ struct_fields(CalmNodeState,
     (ProposalSet, proposals),
     (ProposalSet, committed));
 
-using CalmNodes = std::map<NodeId, CalmNodeState>;
-using CalmVoteMessages = std::set<CalmVoteMsg>;
-using CalmCommitMessages = std::set<CalmCommitMsg>;
+using CalmNodes = FlatMap<NodeId, CalmNodeState>;
+using CalmVoteMessages = FlatSet<CalmVoteMsg>;
+using CalmCommitMessages = FlatSet<CalmCommitMsg>;
 
 struct_fields(CalmState,
     (NodeSet, alive),

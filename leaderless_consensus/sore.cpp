@@ -19,9 +19,9 @@ struct_fields(SoreNodeState,
     (ProposalSet, proposals),
     (ProposalSet, committed));
 
-using SoreNodes = std::map<NodeId, SoreNodeState>;
-using SoreVoteMessages = std::set<SoreVoteMsg>;
-using SoreCommitMessages = std::set<SoreCommitMsg>;
+using SoreNodes = FlatMap<NodeId, SoreNodeState>;
+using SoreVoteMessages = FlatSet<SoreVoteMsg>;
+using SoreCommitMessages = FlatSet<SoreCommitMsg>;
 
 struct_fields(SoreState,
     (NodeSet, alive),
