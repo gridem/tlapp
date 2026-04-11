@@ -62,5 +62,6 @@
 ## Notes
 - `scripts/perf*.sh` assume a specific build output path (`.build/RelWithDebInfo`). Adjust or mirror that layout if you need to use them.
 - When reporting benchmark numbers, build and run from a `RelWithDebInfo` tree and keep the build type consistent across before/after comparisons.
+- When reporting model-check, sample, or benchmark runs, include the exact command, the build tree used, and the most useful final details available from the run. Prefer runtime, pass/fail status, and key engine stats such as total states, transitions, processed, queued, drain, or notable progress checkpoints when those counters are available.
 - Keep environment-specific package paths out of repo CMake files; prefer passing them explicitly at configure time.
 - Keep Markdown links portable. Prefer repo-relative links in `docs/` and avoid absolute filesystem paths in checked-in documentation.
