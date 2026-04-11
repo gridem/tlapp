@@ -1,4 +1,4 @@
-#include "common.h"
+#include "model_common.h"
 
 namespace leaderless_consensus::flat {
 
@@ -73,10 +73,10 @@ FlatVoteMessages purgeVotesTo(const FlatVoteMessages& messages, NodeId to) {
   return result;
 }
 
-FlatCommitMessages broadcastCommit(const FlatState& sys, NodeId from) {
-  auto result = setWithout(sys.commitMsgs, from);
-  for (auto&& to : sys.alive) {
-    if (to != from && sys.local.at(to).status != kCommitted) {
+FlatCommitMessages broadcastCommit(const FlatState& state, NodeId from) {
+  auto result = setWithout(state.commitMsgs, from);
+  for (auto&& to : state.alive) {
+    if (to != from && state.local.at(to).status != kCommitted) {
       result.insert(to);
     }
   }
@@ -91,28 +91,28 @@ FlatState makeState(const NodeSet& nodes) {
   return FlatState{nodes, {}, local, {}, {}};
 }
 
-FlatState commit(FlatState sys, NodeId node) {
-  auto& self = sys.local[node];
+FlatState commit(FlatState state, NodeId node) {
+  auto& self = state.local[node];
   if (self.status == kCommitted) {
-    return sys;
+    return state;
   }
   self.status = kCommitted;
   self.committed = self.proposals;
-  sys.voteMsgs = purgeVotesTo(sys.voteMsgs, node);
-  sys.commitMsgs = setWithout(sys.commitMsgs, node);
-  sys.commitMsgs = broadcastCommit(sys, node);
-  return sys;
+  state.voteMsgs = purgeVotesTo(state.voteMsgs, node);
+  state.commitMsgs = setWithout(state.commitMsgs, node);
+  state.commitMsgs = broadcastCommit(state, node);
+  return state;
 }
 
-FlatState processVote(FlatState sys,
+FlatState processVote(FlatState state,
     NodeId node,
     NodeId source,
     const ProposalSet& proposals,
     const NodeSet& incomingNodes,
     const NodeSet& incomingVotes) {
-  const auto previous = sys.local.at(node);
+  const auto previous = state.local.at(node);
   if (previous.status == kCommitted || !previous.nodes.contains(source)) {
-    return sys;
+    return state;
   }
 
   auto newNodes = setIntersection(incomingNodes, previous.nodes);
@@ -130,98 +130,86 @@ FlatState processVote(FlatState sys,
   if (newNodes == previous.nodes &&
       newProposals == previous.proposals &&
       newVotes == previous.votes) {
-    return sys;
+    return state;
   }
 
-  sys.local[node] =
+  state.local[node] =
       FlatNodeState{kVoting, newNodes, newVotes, newProposals, previous.committed};
 
   if (newNodes == newVotes) {
-    return commit(std::move(sys), node);
+    return commit(std::move(state), node);
   }
 
-  sys.voteMsgs =
-      broadcastVote(sys.voteMsgs, sys.alive, node, newProposals, newNodes, newVotes);
-  return sys;
+  state.voteMsgs =
+      broadcastVote(state.voteMsgs, state.alive, node, newProposals, newNodes, newVotes);
+  return state;
 }
 
-bool canPropose(const FlatState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) &&
-         !sys.proposed.contains(id) &&
+bool canPropose(const FlatState& state, NodeId node, MessageId id) {
+  return state.alive.contains(node) &&
+         !state.proposed.contains(id) &&
          id == node + 10 &&
-         sys.local.at(node).votes.empty() &&
-         sys.local.at(node).status != kCommitted;
+         state.local.at(node).votes.empty() &&
+         state.local.at(node).status != kCommitted;
 }
 
-FlatState propose(FlatState sys, NodeId node, MessageId id) {
-  sys.proposed.insert(id);
-  auto nodes = sys.local.at(node).nodes;
-  return processVote(std::move(sys), node, node, ProposalSet{id}, nodes, {});
+FlatState propose(FlatState state, NodeId node, MessageId id) {
+  state.proposed.insert(id);
+  auto nodes = state.local.at(node).nodes;
+  return processVote(std::move(state), node, node, ProposalSet{id}, nodes, {});
 }
 
-bool canDeliverVote(const FlatState& sys, const FlatVoteMsg& msg) {
-  return sys.alive.contains(msg.to);
+bool canDeliverVote(const FlatState& state, const FlatVoteMsg& msg) {
+  return state.alive.contains(msg.to);
 }
 
-FlatState deliverVote(FlatState sys, const FlatVoteMsg& msg) {
-  sys.voteMsgs.erase(msg);
+FlatState deliverVote(FlatState state, const FlatVoteMsg& msg) {
+  state.voteMsgs.erase(msg);
   return processVote(
-      std::move(sys), msg.to, msg.from, msg.proposals, msg.nodes, msg.votes);
+      std::move(state), msg.to, msg.from, msg.proposals, msg.nodes, msg.votes);
 }
 
-bool canDeliverCommit(const FlatState& sys, NodeId node) {
-  return sys.alive.contains(node) && sys.local.at(node).status != kCommitted;
+bool canDeliverCommit(const FlatState& state, NodeId node) {
+  return state.alive.contains(node) && state.local.at(node).status != kCommitted;
 }
 
-FlatState deliverCommit(FlatState sys, NodeId node) {
-  sys.commitMsgs.erase(node);
-  return commit(std::move(sys), node);
+FlatState deliverCommit(FlatState state, NodeId node) {
+  state.commitMsgs.erase(node);
+  return commit(std::move(state), node);
 }
 
-bool canDisconnect(const FlatState& sys, NodeId failed) {
-  return sys.alive.contains(failed);
-}
-
-size_t quorumSize(const FlatState& sys) {
-  return sys.local.size() / 2 + 1;
-}
-
-bool canLiveDisconnect(const FlatState& sys, NodeId failed) {
-  return canDisconnect(sys, failed) && sys.alive.size() - 1 >= quorumSize(sys);
-}
-
-FlatState disconnect(FlatState sys, NodeId failed) {
-  if (!sys.alive.contains(failed)) {
-    return sys;
+FlatState disconnect(FlatState state, NodeId failed) {
+  if (!state.alive.contains(failed)) {
+    return state;
   }
 
-  sys.alive.erase(failed);
-  sys.voteMsgs = purgeMessages(sys.voteMsgs, failed);
-  sys.commitMsgs.erase(failed);
+  state.alive.erase(failed);
+  state.voteMsgs = purgeMessages(state.voteMsgs, failed);
+  state.commitMsgs.erase(failed);
 
-  auto survivors = sys.alive;
+  auto survivors = state.alive;
   for (auto&& node : survivors) {
-    const auto current = sys.local.at(node);
+    const auto current = state.local.at(node);
     if (current.proposals.empty()) {
-      sys.local[node].nodes.erase(failed);
+      state.local[node].nodes.erase(failed);
       continue;
     }
-    sys = processVote(std::move(sys), node, failed, current.proposals,
+    state = processVote(std::move(state), node, failed, current.proposals,
         setWithout(current.nodes, failed), {});
   }
 
-  return sys;
+  return state;
 }
 
-bool invariant(const FlatState& sys) {
-  if (!queueEndpointsAreAlive(sys.voteMsgs, sys.alive) ||
-      !isSubset(sys.commitMsgs, sys.alive)) {
+bool invariant(const FlatState& state) {
+  if (!queueEndpointsAreAlive(state.voteMsgs, state.alive) ||
+      !isSubset(state.commitMsgs, state.alive)) {
     return false;
   }
 
-  for (auto&& node : sys.alive) {
-    const auto& self = sys.local.at(node);
-    if (!isSubset(self.proposals, sys.proposed) || !isSubset(self.votes, self.nodes)) {
+  for (auto&& node : state.alive) {
+    const auto& self = state.local.at(node);
+    if (!isSubset(self.proposals, state.proposed) || !isSubset(self.votes, self.nodes)) {
       return false;
     }
     if (self.status == kCommitted) {
@@ -233,19 +221,19 @@ bool invariant(const FlatState& sys) {
     }
   }
 
-  for (auto&& msg : sys.voteMsgs) {
-    if (!isSubset(msg.proposals, sys.proposed) || !isSubset(msg.votes, msg.nodes)) {
+  for (auto&& msg : state.voteMsgs) {
+    if (!isSubset(msg.proposals, state.proposed) || !isSubset(msg.votes, msg.nodes)) {
       return false;
     }
   }
 
-  for (auto&& left : sys.alive) {
-    const auto& committedLeft = sys.local.at(left);
+  for (auto&& left : state.alive) {
+    const auto& committedLeft = state.local.at(left);
     if (committedLeft.status != kCommitted) {
       continue;
     }
-    for (auto&& right : sys.alive) {
-      const auto& committedRight = sys.local.at(right);
+    for (auto&& right : state.alive) {
+      const auto& committedRight = state.local.at(right);
       if (committedRight.status == kCommitted &&
           committedLeft.committed != committedRight.committed) {
         return false;
@@ -256,13 +244,8 @@ bool invariant(const FlatState& sys) {
   return true;
 }
 
-bool commitHappened(const FlatState& sys) {
-  for (auto&& [node, local] : sys.local) {
-    if (local.status == kCommitted && !local.committed.empty()) {
-      return true;
-    }
-  }
-  return false;
+bool commitHappened(const FlatState& state) {
+  return commitHappenedWithStatus(state, kCommitted);
 }
 
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::flat::canPropose)
@@ -271,40 +254,42 @@ DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::flat::canDeliverVot
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::flat::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::flat::canDeliverCommit)
 DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::flat::deliverCommit)
-DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::flat::canDisconnect)
-DEFINE_ALGORITHM(canLiveDisconnectExpr, ::leaderless_consensus::flat::canLiveDisconnect)
+DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::canDisconnect<FlatState>)
+DEFINE_ALGORITHM(canLiveDisconnectExpr,
+    ::leaderless_consensus::canLiveDisconnect<FlatState>)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::flat::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::flat::invariant)
 DEFINE_ALGORITHM(commitHappenedExpr, ::leaderless_consensus::flat::commitHappened)
 
 struct BaseModel : IModel {
   Boolean init() override {
-    return sys == makeState(nodes_);
+    return state == makeState(nodes_);
   }
 
   Boolean proposeAny() {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
+        return canProposeExpr(state, node, id) && state++ == proposeExpr(state, node, id);
       };
     };
   }
 
   Boolean deliverAnyVote() {
-    return $E(msg, get_mem(sys, voteMsgs)) {
-      return canDeliverVoteExpr(sys, msg) && sys++ == deliverVoteExpr(sys, msg);
+    return $E(msg, get_mem(state, voteMsgs)) {
+      return canDeliverVoteExpr(state, msg) && state++ == deliverVoteExpr(state, msg);
     };
   }
 
   Boolean deliverAnyCommit() {
-    return $E(node, get_mem(sys, commitMsgs)) {
-      return canDeliverCommitExpr(sys, node) && sys++ == deliverCommitExpr(sys, node);
+    return $E(node, get_mem(state, commitMsgs)) {
+      return canDeliverCommitExpr(state, node) &&
+             state++ == deliverCommitExpr(state, node);
     };
   }
 
   Boolean disconnectAny() {
     return $E(failed, nodes_) {
-      return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
+      return canDisconnectExpr(state, failed) && state++ == disconnectExpr(state, failed);
     };
   }
 
@@ -313,10 +298,10 @@ struct BaseModel : IModel {
   }
 
   std::optional<Boolean> ensure() override {
-    return invariantExpr(sys);
+    return invariantExpr(state);
   }
 
-  Var<FlatState> sys{"sys"};
+  Var<FlatState> state{"state"};
 
   NodeSet nodes_ = {0, 1, 2};
   ProposalSet messageIds_ = kProposalIds;
@@ -325,7 +310,7 @@ struct BaseModel : IModel {
 struct SafetyModel : BaseModel {
   Boolean disconnectAny() {
     return $E(failed, nodes_) {
-      return canDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
+      return canDisconnectExpr(state, failed) && state++ == disconnectExpr(state, failed);
     };
   }
 
@@ -337,7 +322,8 @@ struct SafetyModel : BaseModel {
 struct LivenessModel : BaseModel {
   Boolean disconnectAny() {
     return $E(failed, nodes_) {
-      return canLiveDisconnectExpr(sys, failed) && sys++ == disconnectExpr(sys, failed);
+      return canLiveDisconnectExpr(state, failed) &&
+             state++ == disconnectExpr(state, failed);
     };
   }
 
@@ -348,7 +334,7 @@ struct LivenessModel : BaseModel {
   std::optional<LivenessBoolean> liveness() override {
     return weakFairness(proposeAny()) &&
            weakFairness(deliverAnyVote()) &&
-           eventually(commitHappenedExpr(sys));
+           eventually(commitHappenedExpr(state));
   }
 };
 

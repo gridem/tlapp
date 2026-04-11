@@ -1,4 +1,4 @@
-#include "common.h"
+#include "model_common.h"
 
 namespace leaderless_consensus::calm {
 
@@ -134,10 +134,6 @@ bool canPropose(const CalmState& state, NodeId node, MessageId id) {
          state.local.at(node).status != kCompleted;
 }
 
-size_t quorumSize(const CalmState& state) {
-  return state.local.size() / 2 + 1;
-}
-
 CalmState propose(CalmState state, NodeId node, MessageId id) {
   state.proposed.insert(id);
   auto nodes = state.local.at(node).nodes;
@@ -162,14 +158,6 @@ bool canDeliverCommit(const CalmState& state, const CalmCommitMsg& msg) {
 CalmState deliverCommit(CalmState state, const CalmCommitMsg& msg) {
   state.commitMsgs.erase(msg);
   return commit(std::move(state), msg.to, msg.commit);
-}
-
-bool canDisconnect(const CalmState& state, NodeId failed) {
-  return state.alive.contains(failed);
-}
-
-bool canLiveDisconnect(const CalmState& state, NodeId failed) {
-  return canDisconnect(state, failed) && state.alive.size() - 1 >= quorumSize(state);
 }
 
 CalmState disconnect(CalmState state, NodeId failed) {
@@ -239,12 +227,7 @@ bool invariant(const CalmState& state) {
 }
 
 bool commitHappened(const CalmState& state) {
-  for (auto&& [node, local] : state.local) {
-    if (local.status == kCompleted && !local.committed.empty()) {
-      return true;
-    }
-  }
-  return false;
+  return commitHappenedWithStatus(state, kCompleted);
 }
 
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::calm::canPropose)
@@ -253,8 +236,9 @@ DEFINE_ALGORITHM(canDeliverVoteExpr, ::leaderless_consensus::calm::canDeliverVot
 DEFINE_ALGORITHM(deliverVoteExpr, ::leaderless_consensus::calm::deliverVote)
 DEFINE_ALGORITHM(canDeliverCommitExpr, ::leaderless_consensus::calm::canDeliverCommit)
 DEFINE_ALGORITHM(deliverCommitExpr, ::leaderless_consensus::calm::deliverCommit)
-DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::calm::canDisconnect)
-DEFINE_ALGORITHM(canLiveDisconnectExpr, ::leaderless_consensus::calm::canLiveDisconnect)
+DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::canDisconnect<CalmState>)
+DEFINE_ALGORITHM(canLiveDisconnectExpr,
+    ::leaderless_consensus::canLiveDisconnect<CalmState>)
 DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::calm::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::calm::invariant)
 DEFINE_ALGORITHM(commitHappenedExpr, ::leaderless_consensus::calm::commitHappened)

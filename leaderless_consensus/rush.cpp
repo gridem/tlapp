@@ -1,4 +1,4 @@
-#include "common.h"
+#include "model_common.h"
 
 namespace leaderless_consensus::rush {
 
@@ -262,40 +262,40 @@ MergeResult mergeState(const RushNodeState& state,
   return {true, newCore, committed};
 }
 
-bool canPropose(const RushState& sys, NodeId node, MessageId id) {
-  return sys.alive.contains(node) &&
-         !sys.proposed.contains(id) &&
-         sys.local.at(node) == RushNodeState{makeEmptyCore(sys.local.size()), {}};
+bool canPropose(const RushState& state, NodeId node, MessageId id) {
+  return state.alive.contains(node) &&
+         !state.proposed.contains(id) &&
+         state.local.at(node) == RushNodeState{makeEmptyCore(state.local.size()), {}};
 }
 
-RushState propose(RushState sys, NodeId node, MessageId id) {
-  sys.proposed.insert(id);
-  auto incoming = makeEmptyCore(sys.local.size());
+RushState propose(RushState state, NodeId node, MessageId id) {
+  state.proposed.insert(id);
+  auto incoming = makeEmptyCore(state.local.size());
   incoming.proposals.insert(id);
   auto out = mergeState(
-      sys.local.at(node), node, incoming, sys.local.size(), sys.proposed.size());
+      state.local.at(node), node, incoming, state.local.size(), state.proposed.size());
   if (!out.changed) {
-    return sys;
+    return state;
   }
-  sys.local[node] = RushNodeState{out.core, out.committed};
-  sys.stateMsgs = broadcastState(sys.stateMsgs, sys.alive, node, out.core);
-  return sys;
+  state.local[node] = RushNodeState{out.core, out.committed};
+  state.stateMsgs = broadcastState(state.stateMsgs, state.alive, node, out.core);
+  return state;
 }
 
-bool canDeliverState(const RushState& sys, const RushStateMsg& msg) {
-  return sys.alive.contains(msg.to);
+bool canDeliverState(const RushState& state, const RushStateMsg& msg) {
+  return state.alive.contains(msg.to);
 }
 
-RushState deliverState(RushState sys, const RushStateMsg& msg) {
-  sys.stateMsgs.erase(msg);
-  auto out = mergeState(
-      sys.local.at(msg.to), msg.to, msg.core, sys.local.size(), sys.proposed.size());
+RushState deliverState(RushState state, const RushStateMsg& msg) {
+  state.stateMsgs.erase(msg);
+  auto out = mergeState(state.local.at(msg.to), msg.to, msg.core, state.local.size(),
+      state.proposed.size());
   if (!out.changed) {
-    return sys;
+    return state;
   }
-  sys.local[msg.to] = RushNodeState{out.core, out.committed};
-  sys.stateMsgs = broadcastState(sys.stateMsgs, sys.alive, msg.to, out.core);
-  return sys;
+  state.local[msg.to] = RushNodeState{out.core, out.committed};
+  state.stateMsgs = broadcastState(state.stateMsgs, state.alive, msg.to, out.core);
+  return state;
 }
 
 bool coreWellFormed(const RushCoreState& core,
@@ -326,32 +326,32 @@ bool coreWellFormed(const RushCoreState& core,
   return true;
 }
 
-bool invariant(const RushState& sys) {
-  if (!queueEndpointsAreAlive(sys.stateMsgs, sys.alive)) {
+bool invariant(const RushState& state) {
+  if (!queueEndpointsAreAlive(state.stateMsgs, state.alive)) {
     return false;
   }
 
   NodeSet allNodes;
-  for (auto&& [node, _] : sys.local) {
+  for (auto&& [node, _] : state.local) {
     allNodes.insert(node);
   }
 
-  for (auto&& [node, state] : sys.local) {
-    if (!coreWellFormed(state.core, sys.proposed, allNodes, sys.local.size()) ||
-        !itemsAreSubset(state.committed, sys.proposed) ||
-        !allUnique(state.committed)) {
+  for (auto&& [node, local] : state.local) {
+    if (!coreWellFormed(local.core, state.proposed, allNodes, state.local.size()) ||
+        !itemsAreSubset(local.committed, state.proposed) ||
+        !allUnique(local.committed)) {
       return false;
     }
   }
 
-  for (auto&& msg : sys.stateMsgs) {
-    if (!coreWellFormed(msg.core, sys.proposed, allNodes, sys.local.size())) {
+  for (auto&& msg : state.stateMsgs) {
+    if (!coreWellFormed(msg.core, state.proposed, allNodes, state.local.size())) {
       return false;
     }
   }
 
-  for (auto&& [left, leftState] : sys.local) {
-    for (auto&& [right, rightState] : sys.local) {
+  for (auto&& [left, leftState] : state.local) {
+    for (auto&& [right, rightState] : state.local) {
       if (!isPrefix(leftState.committed, rightState.committed) &&
           !isPrefix(rightState.committed, leftState.committed)) {
         return false;
@@ -362,13 +362,8 @@ bool invariant(const RushState& sys) {
   return true;
 }
 
-bool commitHappened(const RushState& sys) {
-  for (auto&& [node, local] : sys.local) {
-    if (!local.committed.empty()) {
-      return true;
-    }
-  }
-  return false;
+bool commitHappened(const RushState& state) {
+  return commitHappenedAnyNonEmpty(state);
 }
 
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::rush::canPropose)
@@ -380,20 +375,20 @@ DEFINE_ALGORITHM(commitHappenedExpr, ::leaderless_consensus::rush::commitHappene
 
 struct BaseModel : IModel {
   Boolean init() override {
-    return sys == makeState(nodes_);
+    return state == makeState(nodes_);
   }
 
   Boolean proposeAny() {
     return $E(node, nodes_) {
       return $E(id, messageIds_) {
-        return canProposeExpr(sys, node, id) && sys++ == proposeExpr(sys, node, id);
+        return canProposeExpr(state, node, id) && state++ == proposeExpr(state, node, id);
       };
     };
   }
 
   Boolean deliverAnyState() {
-    return $E(msg, get_mem(sys, stateMsgs)) {
-      return canDeliverStateExpr(sys, msg) && sys++ == deliverStateExpr(sys, msg);
+    return $E(msg, get_mem(state, stateMsgs)) {
+      return canDeliverStateExpr(state, msg) && state++ == deliverStateExpr(state, msg);
     };
   }
 
@@ -402,10 +397,10 @@ struct BaseModel : IModel {
   }
 
   std::optional<Boolean> ensure() override {
-    return invariantExpr(sys);
+    return invariantExpr(state);
   }
 
-  Var<RushState> sys{"sys"};
+  Var<RushState> state{"state"};
 
   NodeSet nodes_ = {0, 1, 2};
   ProposalSet messageIds_ = kProposalIds;
@@ -425,7 +420,7 @@ struct LivenessModel : BaseModel {
   std::optional<LivenessBoolean> liveness() override {
     return weakFairness(proposeAny()) &&
            weakFairness(deliverAnyState()) &&
-           eventually(commitHappenedExpr(sys));
+           eventually(commitHappenedExpr(state));
   }
 };
 
