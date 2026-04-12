@@ -117,13 +117,35 @@
 <blockquote>
 <p>For <code>Rush</code>, equality would be the wrong invariant. The correct safety property is that committed prefixes do not branch.</p>
 </blockquote>
+<p>The implemented safety checks are more concrete than that summary:</p>
+<ul>
+<li>For the set-based variants, queued message endpoints must still be live.</li>
+<li>For the set-based variants, local proposal sets and commit payloads must stay within the global <code>proposed</code> set.</li>
+<li>For the set-based variants, local vote sets must stay within the local membership view.</li>
+<li>For <code>Most</code>, per-proposal support must refer only to locally known proposals and only to valid nodes.</li>
+<li>For <code>Rush</code>, queued state-message endpoints must stay live.</li>
+<li>For <code>Rush</code>, every proposal id appearing in local cores, state messages, promises, or committed prefixes must stay within the global <code>proposed</code> set.</li>
+<li>For <code>Rush</code>, promise votes must stay within <code>support(prefix)</code>.</li>
+<li>For the set-based variants, all live committed nodes must agree on the committed proposal set.</li>
+<li>For <code>Rush</code>, every pair of committed prefixes must be prefix-comparable.</li>
+</ul>
 <p>The liveness checks are intentionally positive. The current question is not “does the system become idle?” but “does commit happen?”</p>
 <p>More concretely:</p>
 <ul>
 <li><code>Calm</code>, <code>Flat</code>, and <code>Most</code> require that some node eventually commits a non-empty proposal set.</li>
 <li><code>Rush</code> requires that some node eventually commits a non-empty prefix.</li>
 </ul>
-<p>Fairness is action-level rather than a coarse <code>WF(Next)</code> rule. That gives a more meaningful progress assumption because it talks directly about proposal and delivery actions.</p>
+<p>Fairness is action-level rather than a coarse whole-transition rule.</p>
+<ul>
+<li>In the executable TLA++ models, it is expressed directly through <code>weakFairness(...)</code> on the relevant action groups.</li>
+<li>For <code>Calm</code>, <code>Flat</code>, and <code>Most</code>, the liveness shape is <code>weakFairness(proposeAny()) &amp;&amp; weakFairness(deliverAnyVote()) &amp;&amp; eventually(commitHappenedExpr(state))</code>.</li>
+<li>For <code>Rush</code>, the liveness shape is <code>weakFairness(proposeAny()) &amp;&amp; weakFairness(deliverAnyState()) &amp;&amp; eventually(commitHappenedExpr(state))</code>.</li>
+<li><code>proposeAny()</code> means there exists some node and some proposal id such that a <code>Propose(node, id)</code> step is currently enabled and can be taken.</li>
+<li><code>deliverAnyState()</code> means there exists some in-flight <code>Rush</code> state message such that a <code>DeliverState(msg)</code> step is currently enabled and can be taken.</li>
+<li><code>commitHappenedExpr(state)</code> is the success predicate checked by <code>eventually(...)</code>: in the set-based variants it means some node has committed a non-empty proposal set, and in <code>Rush</code> it means some node has committed a non-empty prefix.</li>
+<li><code>weakFairness(action)</code> means the checker does not allow that action to stay continuously enabled forever without eventually taking a step of that kind.</li>
+<li><code>eventually(commitHappenedExpr(state))</code> adds the positive success condition: some node must actually commit, not merely keep the system active.</li>
+</ul>
 
 <h2 id="verification-results">Verification Results</h2>
 <p>The current results are structurally clean:</p>

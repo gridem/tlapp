@@ -58,10 +58,24 @@ disconnect.
 
 Safety requires all live completed nodes to have the same committed proposal set.
 
-The current model also checks liveness: under weak fairness of `ProposeAny`
-and `DeliverAnyVote`, some node must eventually commit a non-empty proposal
-set. That liveness check is evaluated in a separate liveness model that uses
+The implemented safety checks also require:
+
+- queued vote and commit message endpoints stay live
+- local `proposals` and commit payloads stay within the global `proposed` set
+- local `voted` stays within the local `nodes` view
+
+The current model also checks liveness in a separate liveness model that uses
 the majority-preserving disconnect rule above.
+
+- In the executable TLA++ model, the liveness form is
+  `weakFairness(proposeAny()) && weakFairness(deliverAnyVote()) &&
+  eventually(commitHappenedExpr(state))`.
+- `weakFairness(proposeAny())` means proposal work cannot stay continuously
+  enabled forever without eventually taking a propose step.
+- `weakFairness(deliverAnyVote())` means vote delivery cannot stay continuously
+  enabled forever without eventually taking a vote-delivery step.
+- `eventually(commitHappenedExpr(state))` means some node must eventually
+  commit a non-empty proposal set.
 
 Recent `build/rel` runs:
 

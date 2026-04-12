@@ -145,6 +145,18 @@ The set-based variants check agreement on committed proposal sets. `Rush` checks
 > For `Rush`, equality would be the wrong invariant. The correct safety
 > property is that committed prefixes do not branch.
 
+The implemented safety checks are more concrete than that summary:
+
+- For the set-based variants, queued message endpoints must still be live.
+- For the set-based variants, local proposal sets and commit payloads must stay within the global `proposed` set.
+- For the set-based variants, local vote sets must stay within the local membership view.
+- For `Most`, per-proposal support must refer only to locally known proposals and only to valid nodes.
+- For `Rush`, queued state-message endpoints must stay live.
+- For `Rush`, every proposal id appearing in local cores, state messages, promises, or committed prefixes must stay within the global `proposed` set.
+- For `Rush`, promise votes must stay within `support(prefix)`.
+- For the set-based variants, all live committed nodes must agree on the committed proposal set.
+- For `Rush`, every pair of committed prefixes must be prefix-comparable.
+
 The liveness checks are intentionally positive. The current question is not "does the system become idle?" but "does commit happen?"
 
 More concretely:
@@ -152,7 +164,16 @@ More concretely:
 - `Calm`, `Flat`, and `Most` require that some node eventually commits a non-empty proposal set.
 - `Rush` requires that some node eventually commits a non-empty prefix.
 
-Fairness is action-level rather than a coarse `WF(Next)` rule. That gives a more meaningful progress assumption because it talks directly about proposal and delivery actions.
+Fairness is action-level rather than a coarse whole-transition rule.
+
+- In the executable TLA++ models, it is expressed directly through `weakFairness(...)` on the relevant action groups.
+- For `Calm`, `Flat`, and `Most`, the liveness shape is `weakFairness(proposeAny()) && weakFairness(deliverAnyVote()) && eventually(commitHappenedExpr(state))`.
+- For `Rush`, the liveness shape is `weakFairness(proposeAny()) && weakFairness(deliverAnyState()) && eventually(commitHappenedExpr(state))`.
+- `proposeAny()` means there exists some node and some proposal id such that a `Propose(node, id)` step is currently enabled and can be taken.
+- `deliverAnyState()` means there exists some in-flight `Rush` state message such that a `DeliverState(msg)` step is currently enabled and can be taken.
+- `commitHappenedExpr(state)` is the success predicate checked by `eventually(...)`: in the set-based variants it means some node has committed a non-empty proposal set, and in `Rush` it means some node has committed a non-empty prefix.
+- `weakFairness(action)` means the checker does not allow that action to stay continuously enabled forever without eventually taking a step of that kind.
+- `eventually(commitHappenedExpr(state))` adds the positive success condition: some node must actually commit, not merely keep the system active.
 
 ## Verification Results
 

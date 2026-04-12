@@ -82,11 +82,32 @@ pair of committed sequences is prefix-comparable. That matches the intended
 progressive-commit structure: later commits may extend earlier ones, but they
 must not branch.
 
+The implemented safety checks also require:
+
+- queued state-message endpoints stay live
+- every proposal id in local cores, state messages, promise prefixes, and
+  committed prefixes stays within the global `proposed` set
+- local sequences and promise prefixes contain no duplicates
+- promise votes stay within `support(prefix)`
+
 The current executable model also carries a liveness check in a separate
 liveness model. The safety and liveness models use the same transition
-relation, since `Rush` omits `Disconnect` by design. Under weak fairness of
-`ProposeAny` and `DeliverAnyState`, some node must eventually commit a
-non-empty prefix.
+relation, since `Rush` omits `Disconnect` by design.
+
+- In the executable TLA++ model, the liveness form is
+  `weakFairness(proposeAny()) && weakFairness(deliverAnyState()) &&
+  eventually(commitHappenedExpr(state))`.
+- `proposeAny()` means there exists some node and some proposal id such that a
+  `Propose(node, id)` step is currently enabled and can be taken.
+- `weakFairness(proposeAny())` means proposal work cannot stay continuously
+  enabled forever without eventually taking a propose step.
+- `deliverAnyState()` means there exists some in-flight state message such that
+  a `DeliverState(msg)` step is currently enabled and can be taken.
+- `weakFairness(deliverAnyState())` means state delivery cannot stay
+  continuously enabled forever without eventually taking a state-delivery step.
+- `commitHappenedExpr(state)` means some node has committed a non-empty prefix.
+- `eventually(commitHappenedExpr(state))` means that commit condition must
+  eventually become true.
 
 Recent `build/rel` runs:
 

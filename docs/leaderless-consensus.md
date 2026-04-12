@@ -74,11 +74,15 @@ The set-based variants (`Sore`, `Calm`, `Flat`, `Most`) check:
 - proposal sets stay within the proposed message ids
 - local vote sets stay within the local node set
 - live committed nodes agree on the committed proposal set
+- commit payloads stay within the proposed message ids
 
 `Rush` uses a different safety predicate:
 
 - queued state-message endpoints stay live
 - all proposed and committed ids stay within the proposed ids
+- all ids inside local cores, state messages, and promise prefixes stay within
+  the proposed ids
+- promise votes stay within `support(prefix)`
 - committed sequences remain pairwise prefix-comparable
 
 That weaker invariant matches the algorithm's progressive prefix-commit design.
@@ -100,6 +104,23 @@ the TLA+ spec:
 - `Calm`, `Flat`, and `Most` use action-level weak fairness on `ProposeAny`
   and `DeliverAnyVote`
 - `Rush` uses action-level weak fairness on `ProposeAny` and `DeliverAnyState`
+
+In the executable TLA++ models:
+
+- fairness is written directly through `weakFairness(...)` on the action groups
+- set-based liveness uses `weakFairness(proposeAny()) &&
+  weakFairness(deliverAnyVote())`
+- `Rush` liveness uses `weakFairness(proposeAny()) &&
+  weakFairness(deliverAnyState())`
+- `proposeAny()` means there exists some node and some proposal id such that a
+  `Propose(node, id)` step is currently enabled and can be taken
+- `deliverAnyState()` means there exists some in-flight `Rush` state message
+  such that a `DeliverState(msg)` step is currently enabled and can be taken
+- `weakFairness(action)` means the checker does not allow that action to stay
+  continuously enabled forever without eventually taking a step of that kind
+- the separate `eventually(...)` clause adds the positive success condition
+  that some node must actually commit; in code that is checked through
+  `commitHappenedExpr(state)`
 
 ## Verification Result
 
