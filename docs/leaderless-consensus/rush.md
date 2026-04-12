@@ -68,8 +68,8 @@ Compared with earlier drafts, the current model also:
 - omits `Disconnect` for now
 
 These changes are aimed at keeping the model finite and reducing avoidable
-state churn. Because disconnects are omitted in the current reduced model, it
-also does not need timeout-based failure handling. That gives it a structural
+state churn. `Rush` omits `Disconnect` by design, so it also does not need
+timeout-based failure handling. That gives it a structural
 robustness advantage over timeout-driven designs: progress is not gated on
 waiting for timeout expiry. It is reasonable to expect better tail-latency
 behavior from that design choice, but the checked models do not prove an
@@ -84,9 +84,9 @@ must not branch.
 
 The current executable model also carries a liveness check in a separate
 liveness model. The safety and liveness models use the same transition
-relation, since disconnect is already omitted in the reduced model. Under weak
-fairness of `ProposeAny` and `DeliverAnyState`, some node must eventually
-commit a non-empty prefix.
+relation, since `Rush` omits `Disconnect` by design. Under weak fairness of
+`ProposeAny` and `DeliverAnyState`, some node must eventually commit a
+non-empty prefix.
 
 Recent `build/rel` runs:
 

@@ -100,7 +100,7 @@
 </ul>
 <p>The algorithm grows commitment one position at a time. If a quorum of node sequences has the same id at the next uncommitted position, the candidate prefix can be extended. Support for that prefix is recomputed from current node sequences, promise votes are intersected with that support, and a quorum condition decides whether the prefix is committed.</p>
 <p>If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks.</p>
-<p>The current reduced <code>Rush</code> model omits disconnect. That is intentional. The ordering logic is already the most expensive and subtle part of the family, and the current design does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.</p>
+<p><code>Rush</code> omits disconnect by design. The ordering logic is already the most expensive and subtle part of the family, and the current design does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.</p>
 
 <h2 id="message-semantics">Message Semantics</h2>
 <p>The variants can also be understood by the amount of meaning they place into messages.</p>
@@ -153,7 +153,7 @@
 <p>After that, the source files and the detailed GitHub notes read much more naturally because the design ladder is already clear.</p>
 
 <h2 id="visual-walkthroughs">Visual Walkthroughs</h2>
-<p>The single-file HTML version embeds the two visual walkthroughs directly so the post can stand on its own without external files.</p>
+<p>The article includes two visual walkthroughs.</p>
 
 <h3 id="set-based-trace-walkthrough">Set-Based Trace Walkthrough</h3>
 <p>The first walkthrough covers the set-based variants. It shows one compact state block with three aligned node cards and the in-flight queues under the same step header. The holding variants end with all nodes committed to the same proposal set. <code>Sore</code> ends at the first violating state, with the disagreement marked explicitly in red.</p>

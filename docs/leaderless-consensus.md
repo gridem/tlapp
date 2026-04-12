@@ -15,10 +15,10 @@ The source material discusses five variants:
 3. `Flat`: uniform merge with vote preservation and payload-free commit.
 4. `Most`: majority-based proposal voting with commit payload propagation in the current model.
 5. `Rush`: the most advanced variant, using ordered prefix commitment with
-   generation tracking. The current reduced model omits disconnects, so it does
-   not need timeout-based failure handling. That gives it a structural
-   robustness advantage over timeout-driven designs, although the checked
-   models do not prove an absolute p99 latency bound.
+   generation tracking. It omits disconnects by design, so it does not need
+   timeout-based failure handling. That gives it a structural robustness
+   advantage over timeout-driven designs, although the checked models do not
+   prove an absolute p99 latency bound.
 
 All five are now modeled in this repo.
 
@@ -64,7 +64,7 @@ The executable and TLC models use small finite abstractions:
 - In `Rush`, the analogous rule is stricter: a proposal may be proposed only while the node is still in its initial local state.
 - Broadcast sends to the other live nodes only.
 - The set-based variants model disconnect as an immediate local state update on survivors.
-- `Rush` currently omits disconnect transitions while the ordering model is being reduced.
+- `Rush` omits disconnect transitions by design.
 
 ## Safety Checks
 
@@ -94,9 +94,9 @@ the TLA+ spec:
 - `Flat` also uses separate safety and liveness models: safety keeps the full
   disconnect space, while liveness requires some node to commit a non-empty
   proposal set under majority-preserving disconnects
-- `Rush` uses separate safety and liveness models over the same reduced
-  no-disconnect transition relation, and liveness requires some node to commit
-  a non-empty prefix
+- `Rush` uses separate safety and liveness models over the same no-disconnect
+  transition relation, and liveness requires some node to commit a non-empty
+  prefix
 - `Calm`, `Flat`, and `Most` use action-level weak fairness on `ProposeAny`
   and `DeliverAnyVote`
 - `Rush` uses action-level weak fairness on `ProposeAny` and `DeliverAnyState`
@@ -109,7 +109,8 @@ Executable TLA++ sample on the current branch tip:
 - `Calm`: holds under the current finite model, including the liveness check
 - `Flat`: holds under the current reduced executable model, including the liveness check
 - `Most`: holds under the current finite model, including the liveness check
-- `Rush`: holds under the current reduced executable model, including the liveness check
+- `Rush`: the most advanced checked variant, using timeout-free prefix-based
+  live consensus
 
 Current failures in the executable model:
 

@@ -125,7 +125,7 @@ The algorithm grows commitment one position at a time. If a quorum of node seque
 
 If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks.
 
-The current reduced `Rush` model omits disconnect. That is intentional. The ordering logic is already the most expensive and subtle part of the family, and the current design does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.
+`Rush` omits disconnect by design. The ordering logic is already the most expensive and subtle part of the family, and the current design does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.
 
 ## Message Semantics
 
@@ -189,7 +189,7 @@ After that, the source files and the detailed GitHub notes read much more natura
 
 ## Visual Walkthroughs
 
-The HTML article includes two inline interactive sections so the blog-post version can stand on its own as a single file.
+The article includes two visual walkthroughs.
 
 ### Set-Based Trace Walkthrough
 
