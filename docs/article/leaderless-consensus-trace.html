@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Leaderless Consensus Trace Player</title>
+<style>
+  :root {
+    --bg: #f4efe5;
+    --panel: rgba(255, 253, 248, 0.94);
+    --ink: #1f2937;
+    --muted: #5b6572;
+    --line: #d8cfbf;
+    --accent: #0f766e;
+    --accent-2: #1d4ed8;
+    --accent-3: #a16207;
+    --danger: #b91c1c;
+    --shadow: 0 14px 32px rgba(38, 32, 20, 0.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 16px/1.45 Georgia, "Iowan Old Style", serif;
+    background:
+      radial-gradient(circle at top left, #fff6da 0, transparent 28rem),
+      radial-gradient(circle at top right, #f7ede0 0, transparent 30rem),
+      linear-gradient(180deg, #f4efe5, #ebe4d8);
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 36px 18px 72px;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(2rem, 5vw, 3.1rem);
+    line-height: 1.02;
+  }
+  h2, h3 {
+    margin: 0 0 10px;
+  }
+  .sub {
+    max-width: 760px;
+    color: var(--muted);
+    margin: 0 0 22px;
+  }
+  .stack {
+    display: grid;
+    gap: 16px;
+  }
+  .tabs,
+  .controls,
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .toolbar {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  button {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: #fffdf8;
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 9px 14px;
+    font: inherit;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  button.active {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  input[type="range"] {
+    width: min(320px, 100%);
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
+  .meta-chip {
+    border: 1px solid #e7dfd1;
+    background: #fffaf1;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .step-title {
+    font-size: 1.4rem;
+    line-height: 1.1;
+  }
+  .step-copy {
+    color: var(--muted);
+    margin: 0;
+  }
+  .problem-banner {
+    display: none;
+    border: 1px solid #efb3b3;
+    border-radius: 16px;
+    background: #fff1f1;
+    color: #8b1e1e;
+    padding: 12px 14px;
+    font-weight: 600;
+  }
+  .problem-banner.show {
+    display: block;
+  }
+  .nodes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    align-items: stretch;
+  }
+  .node-card {
+    border: 1px solid #e8dfd0;
+    border-radius: 18px;
+    background: #fffdf9;
+    padding: 14px;
+    height: 100%;
+  }
+  .node-card.problem {
+    border-color: #efb3b3;
+    background: #fff8f8;
+    box-shadow: inset 0 0 0 1px #efb3b3;
+  }
+  .node-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .status {
+    font-size: 12px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #efe7d7;
+    color: #695f4b;
+  }
+  .status.completed,
+  .status.committed {
+    background: #dcf6e6;
+    color: #14532d;
+  }
+  .status.maycommit {
+    background: #e8f0ff;
+    color: #1e40af;
+  }
+  .state-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .field {
+    border-top: 1px solid #f1eadf;
+    padding-top: 10px;
+  }
+  .label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .chips,
+  .mini-cards,
+  .messages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    min-width: 38px;
+    text-align: center;
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid #dcd5c8;
+    background: #f7f1e7;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  .chip.commit {
+    background: #dff7e6;
+    border-color: #96d5a6;
+    color: #14532d;
+    font-weight: 700;
+  }
+  .chip.problem {
+    background: #ffe5e5;
+    border-color: #efb3b3;
+    color: #8b1e1e;
+    font-weight: 700;
+  }
+  .chip.vote {
+    background: #e8f0ff;
+    border-color: #b6cdfb;
+    color: #1d4ed8;
+  }
+  .chip.empty {
+    color: var(--muted);
+    background: #faf8f3;
+  }
+  .node-dots {
+    display: flex;
+    gap: 8px;
+  }
+  .node-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid #d9d2c5;
+    display: grid;
+    place-items: center;
+    font: 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #f8f4ec;
+    color: #7b6e58;
+  }
+  .node-dot.on {
+    background: #dff7e6;
+    border-color: #96d5a6;
+    color: #14532d;
+    font-weight: 700;
+  }
+  .support-card {
+    border: 1px solid #eadfce;
+    border-radius: 14px;
+    background: #fffaf1;
+    padding: 10px 12px;
+    min-width: 120px;
+  }
+  .support-card .chips,
+  .support-card .node-dots {
+    margin-top: 6px;
+  }
+  .queues {
+    display: grid;
+    gap: 12px;
+  }
+  .queue-card {
+    border: 1px solid #e8dfd0;
+    border-radius: 18px;
+    background: #fffdf9;
+    padding: 14px;
+  }
+  .message-card {
+    border: 1px solid #e8dfd0;
+    border-radius: 16px;
+    background: #fffaf1;
+    padding: 10px 12px;
+    min-width: 180px;
+  }
+  .message-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .message-kind {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .message-body {
+    display: grid;
+    gap: 8px;
+  }
+  .field-inline {
+    display: grid;
+    gap: 5px;
+  }
+  .note {
+    color: var(--muted);
+    margin: 0;
+  }
+  @media (max-width: 900px) {
+    .nodes {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 720px) {
+    .node-head,
+    .message-head {
+      align-items: start;
+      flex-direction: column;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Leaderless Consensus Trace Player</h1>
+    <p class="sub">
+      Compact, illustrative traces for the set-based variants. The active step is shown first.
+      Local state is rendered as sets, support markers, and message cards instead of text dumps.
+    </p>
+
+    <div class="toolbar">
+      <div class="tabs" id="tabs"></div>
+      <div class="controls">
+        <button id="prevBtn">Previous</button>
+        <input id="slider" type="range" min="0" max="0" value="0" />
+        <button id="nextBtn">Next</button>
+      </div>
+    </div>
+
+    <div class="stack">
+      <section class="panel">
+        <div class="meta">
+          <div class="meta-chip" id="variantName">Calm</div>
+          <div class="meta-chip" id="stepCounter">1 / 1</div>
+          <div class="meta-chip" id="commitShape">Stable set commit</div>
+        </div>
+        <h2 class="step-title" id="stepTitle">Node State</h2>
+        <p class="step-copy" id="stepText"></p>
+        <div class="problem-banner" id="problemBanner"></div>
+        <div class="nodes" id="nodes"></div>
+        <div class="queues" style="margin-top: 14px;">
+          <div class="queue-card">
+            <h3>Vote / State Queue</h3>
+            <div class="messages" id="voteQueue"></div>
+          </div>
+          <div class="queue-card">
+            <h3>Commit Queue</h3>
+            <div class="messages" id="commitQueue"></div>
+          </div>
+        </div>
+        <p class="note" id="variantNote"></p>
+      </section>
+
+    </div>
+  </div>
+
+<script>
+const DATA = {
+  Sore: {
+    commitShape: "Unsafe local set commit",
+    note: "Sore is the negative baseline. It commits when every node in the current view has voted, even if those votes do not certify the same proposal set.",
+    steps: [
+      {
+        title: "Initial state",
+        text: "All three nodes are live and empty. No votes or commits are in flight.",
+        nodes: {
+          0: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [],
+        commitQueue: []
+      },
+      {
+        title: "Propose(0, 10)",
+        text: "Node 0 proposes 10, records a self-vote, and broadcasts that proposal.",
+        nodes: {
+          0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "Propose(1, 11)",
+        text: "Node 1 independently proposes 11, so the system now has two incompatible local proposal sets in flight.",
+        nodes: {
+          0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(0 -> 2)",
+        text: "Node 2 learns proposal 10 first and starts voting with node 0 and itself.",
+        nodes: {
+          0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voted", proposals: "{10}", voted: "{0,2}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2})",
+          "Vote(2 -> 0, proposals={10}, nodes={0,1,2})",
+          "Vote(2 -> 1, proposals={10}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(1 -> 2)",
+        text: "Node 2 learns proposal 11 too, sees votes from every node in its current view, and commits {10,11}.",
+        nodes: {
+          0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(2 -> 0, proposals={10}, nodes={0,1,2})",
+          "Vote(2 -> 1, proposals={10}, nodes={0,1,2})"
+        ],
+        commitQueue: [
+          "Commit(2 -> 0, commit={10,11})",
+          "Commit(2 -> 1, commit={10,11})"
+        ]
+      },
+      {
+        title: "Disconnect(1)",
+        text: "Node 1 disconnects. Node 0 recomputes its membership view to {0,2}, clears prior voting progress, but still knows only proposal 10.",
+        nodes: {
+          0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,2}", committed: "{}" },
+          1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 2, proposals={10}, nodes={0,2})",
+          "Vote(2 -> 0, proposals={10}, nodes={0,1,2})"
+        ],
+        commitQueue: [
+          "Commit(2 -> 0, commit={10,11})"
+        ]
+      },
+      {
+        title: "DeliverVote(2 -> 0)",
+        text: "Node 0 now has votes from every node in its reduced view and commits only {10}, while node 2 has already committed {10,11}.",
+        problem: {
+          text: "Safety violation: live completed nodes disagree. Node 0 commits {10}, while node 2 commits {10,11}.",
+          nodes: ["0", "2"]
+        },
+        nodes: {
+          0: { status: "Completed", proposals: "{10}", voted: "{0,2}", nodes: "{0,2}", committed: "{10}" },
+          1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 2, proposals={10}, nodes={0,2})"
+        ],
+        commitQueue: [
+          "Commit(0 -> 2, commit={10})",
+          "Commit(2 -> 0, commit={10,11})"
+        ]
+      }
+    ]
+  },
+  Calm: {
+    commitShape: "Stable set commit",
+    note: "Calm commits only after a stable full pass over the current membership view.",
+    steps: [
+      {
+        title: "Initial state",
+        text: "All three nodes are live and empty. No votes or commits are in flight.",
+        nodes: {
+          0: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [],
+        commitQueue: []
+      },
+      {
+        title: "Propose(0, 10)",
+        text: "Node 0 proposes proposal 10, records a self-vote, enters the commit-eligible phase, and broadcasts its current proposal set and node view.",
+        nodes: {
+          0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "Propose(1, 11)",
+        text: "Node 1 independently proposes proposal 11. Calm now has two concurrent proposal sets, so the later stable pass must converge on their union rather than on a single id.",
+        nodes: {
+          0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "MayCommit", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2})",
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(0 -> 2)",
+        text: "Node 2 first learns proposal 10, records votes from node 0 and itself, and starts a tentative stable pass for {10}.",
+        nodes: {
+          0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "MayCommit", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "MayCommit", proposals: "{10}", voted: "{0,2}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2})",
+          "Vote(2 -> 0, proposals={10}, nodes={0,1,2})",
+          "Vote(2 -> 1, proposals={10}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(1 -> 2)",
+        text: "Node 2 then learns proposal 11 as well. That invalidates the earlier tentative pass and restarts the process on the merged proposal set {10,11}.",
+        nodes: {
+          0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "MayCommit", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "MayCommit", proposals: "{10,11}", voted: "{1,2}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(2 -> 0, proposals={10,11}, nodes={0,1,2})",
+          "Vote(2 -> 1, proposals={10,11}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "Stable pass completes on {10,11}",
+        text: "Further vote deliveries complete the restarted passes, and the whole cluster ends committed to the merged proposal set {10,11}.",
+        nodes: {
+          0: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" },
+          1: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" },
+          2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }
+        },
+        voteQueue: [],
+        commitQueue: []
+      }
+    ]
+  },
+  Flat: {
+    commitShape: "Merged set commit",
+    note: "Flat preserves proposal, node, and vote summaries directly in vote messages, so intermediate states are richer and more expensive.",
+    steps: [
+      {
+        title: "Propose(0, 10)",
+        text: "Node 0 proposes 10. Flat immediately starts with an explicit vote payload that carries proposals, nodes, and votes.",
+        nodes: {
+          0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2}, votes={0})",
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "Propose(1, 11)",
+        text: "Node 1 independently proposes 11. The system now has two concurrent summaries that will later be merged by receivers.",
+        nodes: {
+          0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voting", proposals: "{11}", votes: "{1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2}, votes={0})",
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2}, votes={1})",
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2}, votes={1})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(0 -> 1)",
+        text: "Node 1 merges node 0's summary with its own. The result keeps both proposals and merges vote support where compatible.",
+        nodes: {
+          0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})",
+          "Vote(1 -> 0, proposals={10,11}, nodes={0,1,2}, votes={0,1})",
+          "Vote(1 -> 2, proposals={10,11}, nodes={0,1,2}, votes={0,1})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(1 -> 2)",
+        text: "Node 2 now receives a merged summary rather than just a raw proposal. This is the key operational difference from Calm.",
+        nodes: {
+          0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{10,11}", votes: "{1,2}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})",
+          "Vote(1 -> 0, proposals={10,11}, nodes={0,1,2}, votes={0,1})",
+          "Vote(2 -> 0, proposals={10,11}, nodes={0,1,2}, votes={1,2})",
+          "Vote(2 -> 1, proposals={10,11}, nodes={0,1,2}, votes={1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(2 -> 0)",
+        text: "Node 0 receives enough merged support to complete voting over the current node set and commits the proposal set.",
+        nodes: {
+          0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" },
+          1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{10,11}", votes: "{1,2}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(1 -> 0, proposals={10,11}, nodes={0,1,2}, votes={0,1})",
+          "Vote(2 -> 1, proposals={10,11}, nodes={0,1,2}, votes={1,2})"
+        ],
+        commitQueue: [
+          "CommitTo(1)",
+          "CommitTo(2)"
+        ]
+      },
+      {
+        title: "Commit delivery completes",
+        text: "The explicit commit fan-out converges and all nodes end committed to the same proposal set.",
+        nodes: {
+          0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" },
+          1: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" },
+          2: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }
+        },
+        voteQueue: [],
+        commitQueue: []
+      }
+    ]
+  },
+  Most: {
+    commitShape: "Per-proposal majority commit",
+    note: "Most separates aggregate local voting from proposal-specific support. A node commits only when every local proposal has majority support.",
+    steps: [
+      {
+        title: "Propose(0, 10) and Propose(1, 11)",
+        text: "Nodes 0 and 1 propose independently. Their vote messages carry proposal sets and node views, while proposalVotes is reconstructed locally.",
+        nodes: {
+          0: { status: "Voting", proposals: "{10}", votes: "{0}", proposalVotes: "{10:{0}}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voting", proposals: "{11}", votes: "{1}", proposalVotes: "{11:{1}}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{}", votes: "{}", proposalVotes: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 1, proposals={10}, nodes={0,1,2})",
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(0 -> 1)",
+        text: "Node 1 now knows both proposals. It records participation from self and source and also updates proposal-specific support sets.",
+        nodes: {
+          0: { status: "Voting", proposals: "{10}", votes: "{0}", proposalVotes: "{10:{0}}", nodes: "{0,1,2}", committed: "{}" },
+          1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", proposalVotes: "{10:{0,1},11:{1}}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{}", votes: "{}", proposalVotes: "{}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(0 -> 2, proposals={10}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 0, proposals={10,11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={10,11}, nodes={0,1,2})"
+        ],
+        commitQueue: []
+      },
+      {
+        title: "DeliverVote(1 -> 0) with merged proposals",
+        text: "Node 0 reaches full local participation and also sees majority support for each local proposal. That is the decisive difference from simpler vote-set checks.",
+        nodes: {
+          0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" },
+          1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", proposalVotes: "{10:{0,1},11:{1}}", nodes: "{0,1,2}", committed: "{}" },
+          2: { status: "Voting", proposals: "{10}", votes: "{0,2}", proposalVotes: "{10:{0,2}}", nodes: "{0,1,2}", committed: "{}" }
+        },
+        voteQueue: [
+          "Vote(1 -> 2, proposals={11}, nodes={0,1,2})",
+          "Vote(1 -> 2, proposals={10,11}, nodes={0,1,2})"
+        ],
+        commitQueue: [
+          "Commit(0 -> 1, commit={10,11})",
+          "Commit(0 -> 2, commit={10,11})"
+        ]
+      },
+      {
+        title: "Commit delivery completes",
+        text: "Commit dissemination completes and every node finishes with the same committed proposal set.",
+        nodes: {
+          0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" },
+          1: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" },
+          2: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" }
+        },
+        voteQueue: [],
+        commitQueue: []
+      }
+    ]
+  }
+};
+
+const tabs = document.getElementById("tabs");
+const nodes = document.getElementById("nodes");
+const voteQueue = document.getElementById("voteQueue");
+const commitQueue = document.getElementById("commitQueue");
+const variantName = document.getElementById("variantName");
+const commitShape = document.getElementById("commitShape");
+const stepCounter = document.getElementById("stepCounter");
+const stepTitle = document.getElementById("stepTitle");
+const stepText = document.getElementById("stepText");
+const problemBanner = document.getElementById("problemBanner");
+const variantNote = document.getElementById("variantNote");
+const slider = document.getElementById("slider");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+
+let currentVariant = "Calm";
+let currentStep = 0;
+
+function parseSet(text) {
+  const inner = text.replace(/^\{|\}$/g, "").trim();
+  return inner ? inner.split(",").map(x => x.trim()) : [];
+}
+
+function parseProposalVotes(text) {
+  const matches = [...text.matchAll(/(\d+):\{([^}]*)\}/g)];
+  return matches.map(([, proposal, voters]) => ({
+    proposal,
+    voters: voters ? voters.split(",").map(x => x.trim()).filter(Boolean) : []
+  }));
+}
+
+function chipList(items, extraClass = "", empty = "empty") {
+  if (!items.length) {
+    return `<div class="chips"><span class="chip empty">${empty}</span></div>`;
+  }
+  return `<div class="chips">${items.map(item => `<span class="chip ${extraClass}">${item}</span>`).join("")}</div>`;
+}
+
+function nodeDots(items) {
+  const active = new Set(items.map(String));
+  return `
+    <div class="node-dots">
+      ${["0", "1", "2"].map(id => `<span class="node-dot${active.has(id) ? " on" : ""}">${id}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderField(key, value, isProblemField = false) {
+  if (key === "proposalVotes") {
+    const parts = parseProposalVotes(value);
+    if (!parts.length) {
+      return `
+        <div class="field">
+          <span class="label">proposalVotes</span>
+          ${chipList([], "", "empty")}
+        </div>
+      `;
+    }
+    return `
+      <div class="field">
+        <span class="label">proposalVotes</span>
+        <div class="mini-cards">
+          ${parts.map(part => `
+            <div class="support-card">
+              <span class="label">proposal ${part.proposal}</span>
+              ${nodeDots(part.voters)}
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  if (key === "nodes" || key === "votes" || key === "voted") {
+    return `
+      <div class="field">
+        <span class="label">${key}</span>
+        ${nodeDots(parseSet(value))}
+      </div>
+    `;
+  }
+
+  if (key === "proposals" || key === "committed") {
+    return `
+      <div class="field">
+        <span class="label">${key}</span>
+        ${chipList(parseSet(value), key === "committed" ? (isProblemField ? "problem" : "commit") : "")}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="field">
+      <span class="label">${key}</span>
+      ${chipList([value])}
+    </div>
+  `;
+}
+
+function renderNodes(step) {
+  nodes.innerHTML = "";
+  const problemNodes = new Set((step.problem?.nodes || []).map(String));
+  Object.entries(step.nodes).forEach(([id, state]) => {
+    const statusClass = state.status.toLowerCase();
+    const isProblemNode = problemNodes.has(String(id));
+    const card = document.createElement("div");
+    card.className = "node-card" + (isProblemNode ? " problem" : "");
+    card.innerHTML = `
+      <div class="node-head">
+        <h3>Node ${id}</h3>
+        <span class="status ${statusClass}">${state.status}</span>
+      </div>
+      <div class="state-grid">
+        ${Object.entries(state).filter(([key]) => key !== "status").map(([key, value]) => renderField(key, value, isProblemNode && key === "committed")).join("")}
+      </div>
+    `;
+    nodes.appendChild(card);
+  });
+}
+
+function parseVoteMessage(text) {
+  const match = text.match(/^Vote\((\d+) -> (\d+),\s*(.*)\)$/);
+  if (!match) return null;
+  const [, from, to, rest] = match;
+  const proposals = rest.match(/proposals=(\{[^}]*\})/);
+  const nodeSet = rest.match(/nodes=(\{[^}]*\})/);
+  const votes = rest.match(/votes=(\{[^}]*\})/);
+  return {
+    kind: "Vote",
+    from,
+    to,
+    proposals: proposals ? proposals[1] : "{}",
+    nodes: nodeSet ? nodeSet[1] : "{}",
+    votes: votes ? votes[1] : null
+  };
+}
+
+function parseCommitMessage(text) {
+  const direct = text.match(/^Commit\((\d+) -> (\d+),\s*commit=(\{[^}]*\})\)$/);
+  if (direct) {
+    return { kind: "Commit", from: direct[1], to: direct[2], commit: direct[3] };
+  }
+  const collapsed = text.match(/^CommitTo\((\d+)\)$/);
+  if (collapsed) {
+    return { kind: "Commit", from: "quorum", to: collapsed[1], commit: "{}" };
+  }
+  return null;
+}
+
+function renderQueueCard(item, type) {
+  if (type === "vote") {
+    const msg = parseVoteMessage(item);
+    if (!msg) return `<div class="message-card"><div class="message-head">${item}</div></div>`;
+    return `
+      <div class="message-card">
+        <div class="message-head">
+          <span>${msg.from} -> ${msg.to}</span>
+          <span class="message-kind">${msg.kind}</span>
+        </div>
+        <div class="message-body">
+          <div class="field-inline">
+            <span class="label">proposals</span>
+            ${chipList(parseSet(msg.proposals))}
+          </div>
+          <div class="field-inline">
+            <span class="label">nodes</span>
+            ${nodeDots(parseSet(msg.nodes))}
+          </div>
+          ${msg.votes ? `
+            <div class="field-inline">
+              <span class="label">votes</span>
+              ${nodeDots(parseSet(msg.votes))}
+            </div>
+          ` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  const msg = parseCommitMessage(item);
+  if (!msg) return `<div class="message-card"><div class="message-head">${item}</div></div>`;
+  return `
+    <div class="message-card">
+      <div class="message-head">
+        <span>${msg.from} -> ${msg.to}</span>
+        <span class="message-kind">${msg.kind}</span>
+      </div>
+      <div class="message-body">
+        <div class="field-inline">
+          <span class="label">commit</span>
+          ${chipList(parseSet(msg.commit), "commit", msg.commit === "{}" ? "implicit" : "empty")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderQueue(container, items, type) {
+  if (!items.length) {
+    container.innerHTML = '<span class="chip empty">no in-flight messages</span>';
+    return;
+  }
+  container.innerHTML = items.map(item => renderQueueCard(item, type)).join("");
+}
+
+function renderTabs() {
+  tabs.innerHTML = "";
+  Object.keys(DATA).forEach(name => {
+    const btn = document.createElement("button");
+    btn.textContent = name;
+    btn.className = name === currentVariant ? "active" : "";
+    btn.onclick = () => {
+      currentVariant = name;
+      currentStep = 0;
+      render();
+    };
+    tabs.appendChild(btn);
+  });
+}
+
+function render() {
+  const variant = DATA[currentVariant];
+  const step = variant.steps[currentStep];
+  variantName.textContent = currentVariant;
+  commitShape.textContent = variant.commitShape;
+  stepCounter.textContent = `step ${currentStep + 1} / ${variant.steps.length}`;
+  stepTitle.textContent = step.title;
+  stepText.textContent = step.text;
+  if (step.problem) {
+    problemBanner.textContent = step.problem.text;
+    problemBanner.className = "problem-banner show";
+  } else {
+    problemBanner.textContent = "";
+    problemBanner.className = "problem-banner";
+  }
+  variantNote.textContent = variant.note;
+  slider.max = String(variant.steps.length - 1);
+  slider.value = String(currentStep);
+  prevBtn.disabled = currentStep === 0;
+  nextBtn.disabled = currentStep === variant.steps.length - 1;
+  renderTabs();
+  renderNodes(step);
+  renderQueue(voteQueue, step.voteQueue, "vote");
+  renderQueue(commitQueue, step.commitQueue, "commit");
+}
+
+slider.addEventListener("input", e => {
+  currentStep = Number(e.target.value);
+  render();
+});
+prevBtn.addEventListener("click", () => {
+  if (currentStep > 0) {
+    currentStep--;
+    render();
+  }
+});
+nextBtn.addEventListener("click", () => {
+  const max = DATA[currentVariant].steps.length - 1;
+  if (currentStep < max) {
+    currentStep++;
+    render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>

@@ -69,7 +69,11 @@ Compared with earlier drafts, the current model also:
 
 These changes are aimed at keeping the model finite and reducing avoidable
 state churn. Because disconnects are omitted in the current reduced model, it
-also does not need timeout-based failure handling.
+also does not need timeout-based failure handling. That gives it a structural
+robustness advantage over timeout-driven designs: progress is not gated on
+waiting for timeout expiry. It is reasonable to expect better tail-latency
+behavior from that design choice, but the checked models do not prove an
+absolute p99 bound.
 
 ## Safety Shape
 

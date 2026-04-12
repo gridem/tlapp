@@ -1,0 +1,923 @@
+<h1 id="leaderless-consensus-family-verification">Leaderless Consensus Family Verification</h1>
+<h2 id="introduction">Introduction</h2>
+<p>This article explains the leaderless consensus models as one algorithm family. It presents the progression from an intentionally naive protocol to stronger set- and prefix-based designs, with emphasis on the problem each variant addresses, the object it commits, and the safety and liveness properties established by the executable TLA++ models.</p>
+<p>This work is a continuation of the earlier article <a href="https://gridem.blogspot.com/2016/05/replicated-object-part-7-masterless.html">Replicated object, part 7: masterless</a>. The difference is that the earlier text described the ideas, while this effort carries them into checked finite models with explicit safety proofs and separate liveness checks.</p>
+<p>The implementation is available at <a href="https://github.com/gridem/tlapp">github.com/gridem/tlapp</a>, and the detailed variant notes live at <a href="https://github.com/gridem/tlapp/tree/main/docs/leaderless-consensus">github.com/gridem/tlapp/tree/main/docs/leaderless-consensus</a>.</p>
+<!--more-->
+
+<h2 id="problem">Problem</h2>
+<p>The common problem is leaderless replication of client proposals. There is no master responsible for ordering updates. Any node may introduce a proposal locally, and the cluster must converge through peer-to-peer communication.</p>
+<p>The current models are intentionally small:</p>
+<ul>
+<li><code>Nodes = {0, 1, 2}</code></li>
+<li><code>MessageIds = {10, 11, 12}</code></li>
+</ul>
+<p>This is not a simplification for convenience only. The small domain makes full state exploration practical and keeps the verification focused on protocol semantics instead of payload volume.</p>
+<p>The variants split into two families:</p>
+<ul>
+<li><code>Sore</code>, <code>Calm</code>, <code>Flat</code>, and <code>Most</code> try to agree on a committed proposal set.</li>
+<li><code>Rush</code> tries to agree on a committed sequence prefix.</li>
+</ul>
+
+<h2 id="common-model-frame">Common Model Frame</h2>
+<p>The executable TLA++ models explore all enabled transitions nondeterministically. They are not simulating one chosen fair execution. They are enumerating all reachable combinations of local state, message queues, and enabled actions.</p>
+<p>In practice that means the following actions are explored whenever enabled:</p>
+<ul>
+<li><code>Propose</code></li>
+<li>message delivery</li>
+<li><code>Disconnect</code> for the variants that include failures</li>
+</ul>
+<p>The explored state has two layers:</p>
+<ul>
+<li>engine-level global state, which includes the in-flight message queues, the current live/disconnected set where applicable, and the global proposed set</li>
+<li>per-node local state, which includes each node's protocol-specific fields</li>
+</ul>
+<p>So queue contents are part of the global engine state, not part of any one node's local state. Two executions with identical per-node contents but different in-flight messages are different reachable states.</p>
+<p>Every model also has a global <code>proposed</code> set. That is the set of proposal ids that have already entered the system. In the current finite models:</p>
+<ul>
+<li><code>Sore</code>, <code>Calm</code>, <code>Most</code>, and <code>Rush</code> allow a pristine node to propose any not-yet-proposed id.</li>
+<li><code>Flat</code> reduces proposal generation to one fixed proposal per node: <code>0 -&gt; 10</code>, <code>1 -&gt; 11</code>, <code>2 -&gt; 12</code>.</li>
+</ul>
+<p>The set-based variants use majority logic over a current node view or live set. With three nodes, quorum is two. That is why majority-preserving liveness models allow at most one disconnect.</p>
+<p>The TLA++ work also separates safety and liveness where that improves clarity. Safety and liveness do not ask the same question, so they should not always use the same environment assumptions.</p>
+
+<h2 id="algorithm-family">Algorithm Family</h2>
+<p>The five variants form a progression from a naive baseline to an ordered prefix protocol.</p>
+
+<h3 id="sore">Sore</h3>
+<p><code>Sore</code> is the intentionally naive failure case. Each node tracks which peers it has heard from, which proposals it knows, and whether it is already committed. The rule is simple: accumulate votes and commit once the local condition says so.</p>
+<p>This simplicity is exactly why it is useful as a learning example. <code>Sore</code> finds a counterexample and demonstrates why stronger convergence rules are needed. It is not a protocol that should be treated as a usable starting point for production design. It is illustrative only. The production-oriented variants in this family are the ones that hold both safety and liveness in the checked models.</p>
+<p>One concrete counterexample is short:</p>
+<ol>
+<li><code>Propose(0, 10)</code></li>
+<li><code>Propose(1, 11)</code></li>
+<li><code>DeliverVote(0 -&gt; 2)</code></li>
+<li><code>DeliverVote(1 -&gt; 2)</code></li>
+<li><code>Disconnect(1)</code></li>
+<li><code>DeliverVote(2 -&gt; 0)</code></li>
+</ol>
+<p>After step 4, node <code>2</code> has already committed <code>{10, 11}</code>. After step 5, node <code>0</code> shrinks its current membership view to <code>{0, 2}</code>. After step 6, node <code>0</code> has votes from every node in that reduced view and commits only <code>{10}</code>.</p>
+<p>That is the whole bug in one trace: <code>Sore</code> commits when every node in the current view has voted, but it does not require those votes to certify the same proposal set. A membership change can therefore make a weaker local commit condition look complete even though another live completed node has already committed a larger set.</p>
+
+<h3 id="calm">Calm</h3>
+<p><code>Calm</code> introduces a stronger notion of stability. A node distinguishes between:</p>
+<ul>
+<li>still voting,</li>
+<li>eligible to commit,</li>
+<li>and no longer eligible because conflicting evidence arrived.</li>
+</ul>
+<p>The core rule is that a node must complete a full pass over its current membership view while its proposal set stays stable in the commit-eligible phase. If proposals change or the membership view changes, that pass is no longer valid and the node must start another one.</p>
+<p>This is the first variant that holds both safety and liveness in the current finite model.</p>
+
+<h3 id="flat">Flat</h3>
+<p><code>Flat</code> preserves more information in flight. Each vote message carries:</p>
+<ul>
+<li><code>proposals</code></li>
+<li><code>nodes</code></li>
+<li><code>votes</code></li>
+</ul>
+<p>When a node processes a vote, it merges the incoming and local proposal sets, node views, and vote support. That makes the protocol more merge-driven and less phase-driven than <code>Calm</code>.</p>
+<p>The practical consequence is that <code>Flat</code> is much heavier to explore. It preserves richer summaries, produces more distinct in-flight message states, and has a larger reachable graph. The current reduced model still holds, but it is materially more expensive than <code>Calm</code>.</p>
+
+<h3 id="most">Most</h3>
+<p><code>Most</code> moves from whole-pass stability to majority support tracked per proposal. In addition to the aggregate local vote set, a node tracks for each proposal id which nodes currently count as supporting that proposal.</p>
+<p>Commit requires two things:</p>
+<ul>
+<li>the local vote set must cover the current local membership view,</li>
+<li>every locally known proposal must have majority support.</li>
+</ul>
+<p>The important nuance is that per-proposal support is independent data. It cannot be derived safely from the aggregate vote set alone.</p>
+<p>One important modeling correction in the final TLA++ model was to make commit messages carry the explicit committed proposal set. Without that payload, a receiver could finalize its own current proposal set instead of the sender's committed one.</p>
+
+<h3 id="rush">Rush</h3>
+<p><code>Rush</code> is the most advanced variant. It does not commit an unordered set. It commits a sequence and requires committed sequences to remain prefix-compatible.</p>
+<p>Each node tracks:</p>
+<ul>
+<li>an unordered set of known proposal ids,</li>
+<li>one ordered message sequence per node, each with a generation,</li>
+<li>promise votes for candidate prefixes,</li>
+<li>and its own committed prefix.</li>
+</ul>
+<p>The algorithm grows commitment one position at a time. If a quorum of node sequences has the same id at the next uncommitted position, the candidate prefix can be extended. Support for that prefix is recomputed from current node sequences, promise votes are intersected with that support, and a quorum condition decides whether the prefix is committed.</p>
+<p>If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks.</p>
+<p>The current reduced <code>Rush</code> model omits disconnect. That is intentional. The ordering logic is already the most expensive and subtle part of the family, and the current design does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.</p>
+
+<h2 id="message-semantics">Message Semantics</h2>
+<p>The variants can also be understood by the amount of meaning they place into messages.</p>
+<ul>
+<li><code>Sore</code> and <code>Calm</code> mostly exchange known proposals and the current node view.</li>
+<li><code>Flat</code> adds explicit vote support into vote messages.</li>
+<li><code>Calm</code> and <code>Most</code> use commit messages that carry the committed proposal set explicitly.</li>
+<li><code>Rush</code> gossips a full core state in each state message.</li>
+</ul>
+<p>This matters directly for state-space size. Richer messages make local reconstruction easier, but they also create more distinct in-flight states for the checker.</p>
+
+<h2 id="safety-and-liveness">Safety and Liveness</h2>
+<p>The set-based variants check agreement on committed proposal sets. <code>Rush</code> checks prefix compatibility instead of equality, because a later committed sequence may extend an earlier one without violating correctness.</p>
+<blockquote>
+<p>For <code>Rush</code>, equality would be the wrong invariant. The correct safety property is that committed prefixes do not branch.</p>
+</blockquote>
+<p>The liveness checks are intentionally positive. The current question is not “does the system become idle?” but “does commit happen?”</p>
+<p>More concretely:</p>
+<ul>
+<li><code>Calm</code>, <code>Flat</code>, and <code>Most</code> require that some node eventually commits a non-empty proposal set.</li>
+<li><code>Rush</code> requires that some node eventually commits a non-empty prefix.</li>
+</ul>
+<p>Fairness is action-level rather than a coarse <code>WF(Next)</code> rule. That gives a more meaningful progress assumption because it talks directly about proposal and delivery actions.</p>
+
+<h2 id="verification-results">Verification Results</h2>
+<p>The current results are structurally clean:</p>
+<ul>
+<li><code>Sore</code> fails, as expected.</li>
+<li><code>Calm</code>, <code>Flat</code>, and <code>Most</code> hold in the current finite models.</li>
+<li><code>Rush</code> is the most advanced checked variant, using timeout-free prefix-based live consensus.</li>
+</ul>
+<p>That statement should be read precisely. The result is not an informal argument that these variants “seem right.” The result is that, within the current finite abstractions, the safety invariants were model-checked and the liveness properties were checked separately under explicit fairness assumptions.</p>
+<p>This article focuses on the executable TLA++ side. That is the main engineering loop for this work: it is fast enough to refine the algorithms, rerun the full finite checks, and validate design corrections such as disconnect behavior, commit payload propagation, and <code>Rush</code> generation and promise handling.</p>
+
+<h2 id="performance-lessons">Performance Lessons</h2>
+<p>Two practical engineering lessons came out of this work.</p>
+<p>First, shared data-structure changes matter. Moving from tree-based containers to shared flat and inplace containers improved the leaderless-consensus models while keeping the algorithms readable. That is the right optimization boundary.</p>
+<p>Second, not every low-level optimization is worth keeping. An inline-storage replacement for <code>Value</code> was benchmarked and then removed. The gain over the simpler <code>unique_ptr</code> design was small, while the complexity cost was real.</p>
+<blockquote>
+<p>A negative optimization experiment is still useful if it sharpens the design boundary.</p>
+</blockquote>
+
+<h2 id="reading-order">Reading Order</h2>
+<p>A practical way to study the family is:</p>
+<ol>
+<li>start from <code>Sore</code> as the naive baseline,</li>
+<li>then move through <code>Calm</code>, <code>Flat</code>, and <code>Most</code> as the set-based progression,</li>
+<li>and finish with <code>Rush</code> as the ordered prefix model.</li>
+</ol>
+<p>After that, the source files and the detailed GitHub notes read much more naturally because the design ladder is already clear.</p>
+
+<h2 id="visual-walkthroughs">Visual Walkthroughs</h2>
+<p>The single-file HTML version embeds the two visual walkthroughs directly so the post can stand on its own without external files.</p>
+
+<h3 id="set-based-trace-walkthrough">Set-Based Trace Walkthrough</h3>
+<p>The first walkthrough covers the set-based variants. It shows one compact state block with three aligned node cards and the in-flight queues under the same step header. The holding variants end with all nodes committed to the same proposal set. <code>Sore</code> ends at the first violating state, with the disagreement marked explicitly in red.</p>
+
+<style>
+  .lcw-wrap {
+    margin: 20px 0 28px;
+    color: #1f2937;
+    font: 16px/1.45 Georgia, "Iowan Old Style", serif;
+  }
+  .lcw-wrap * { box-sizing: border-box; }
+  .lcw-stack { display: grid; gap: 16px; }
+  .lcw-tabs, .lcw-controls, .lcw-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lcw-toolbar {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .lcw-wrap button {
+    appearance: none;
+    border: 1px solid #d8cfbf;
+    background: #fffdf8;
+    color: #1f2937;
+    border-radius: 999px;
+    padding: 9px 14px;
+    font: inherit;
+    cursor: pointer;
+  }
+  .lcw-wrap button.active {
+    background: #1f2937;
+    color: #fff;
+    border-color: #1f2937;
+  }
+  .lcw-wrap input[type="range"] { width: min(320px, 100%); }
+  .lcw-panel {
+    background: rgba(255, 253, 248, 0.94);
+    border: 1px solid #d8cfbf;
+    border-radius: 22px;
+    padding: 18px;
+  }
+  .lcw-chip {
+    border: 1px solid #e7dfd1;
+    background: #fffaf1;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .lcw-title {
+    margin: 0 0 10px;
+    font-size: 1.4rem;
+    line-height: 1.1;
+  }
+  .lcw-copy, .lcw-note {
+    color: #5b6572;
+    margin: 0;
+  }
+  .lcw-problem {
+    display: none;
+    border: 1px solid #efb3b3;
+    border-radius: 16px;
+    background: #fff1f1;
+    color: #8b1e1e;
+    padding: 12px 14px;
+    font-weight: 600;
+  }
+  .lcw-problem.show { display: block; }
+  .lcw-nodes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    align-items: stretch;
+  }
+  .lcw-node {
+    border: 1px solid #e8dfd0;
+    border-radius: 18px;
+    background: #fffdf9;
+    padding: 14px;
+    height: 100%;
+  }
+  .lcw-node.problem {
+    border-color: #efb3b3;
+    background: #fff8f8;
+    box-shadow: inset 0 0 0 1px #efb3b3;
+  }
+  .lcw-node-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .lcw-status {
+    font-size: 12px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #efe7d7;
+    color: #695f4b;
+  }
+  .lcw-status.completed, .lcw-status.committed {
+    background: #dcf6e6;
+    color: #14532d;
+  }
+  .lcw-status.maycommit {
+    background: #e8f0ff;
+    color: #1e40af;
+  }
+  .lcw-state { display: grid; gap: 10px; }
+  .lcw-field {
+    border-top: 1px solid #f1eadf;
+    padding-top: 10px;
+  }
+  .lcw-label {
+    display: block;
+    font-size: 11px;
+    color: #5b6572;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .lcw-chips, .lcw-mini, .lcw-messages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lcw-token {
+    min-width: 38px;
+    text-align: center;
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid #dcd5c8;
+    background: #f7f1e7;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  .lcw-token.commit {
+    background: #dff7e6;
+    border-color: #96d5a6;
+    color: #14532d;
+    font-weight: 700;
+  }
+  .lcw-token.problem {
+    background: #ffe5e5;
+    border-color: #efb3b3;
+    color: #8b1e1e;
+    font-weight: 700;
+  }
+  .lcw-token.empty {
+    color: #5b6572;
+    background: #faf8f3;
+  }
+  .lcw-dots { display: flex; gap: 8px; }
+  .lcw-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid #d9d2c5;
+    display: grid;
+    place-items: center;
+    font: 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #f8f4ec;
+    color: #7b6e58;
+  }
+  .lcw-dot.on {
+    background: #dff7e6;
+    border-color: #96d5a6;
+    color: #14532d;
+    font-weight: 700;
+  }
+  .lcw-support {
+    border: 1px solid #eadfce;
+    border-radius: 14px;
+    background: #fffaf1;
+    padding: 10px 12px;
+    min-width: 120px;
+  }
+  .lcw-queues { display: grid; gap: 12px; }
+  .lcw-queue {
+    border: 1px solid #e8dfd0;
+    border-radius: 18px;
+    background: #fffdf9;
+    padding: 14px;
+  }
+  .lcw-message {
+    border: 1px solid #e8dfd0;
+    border-radius: 16px;
+    background: #fffaf1;
+    padding: 10px 12px;
+    min-width: 180px;
+  }
+  .lcw-message-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  .lcw-message-kind {
+    color: #5b6572;
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .lcw-message-body, .lcw-inline {
+    display: grid;
+    gap: 8px;
+  }
+
+  .lrw-wrap {
+    margin: 20px 0 28px;
+    color: #1d2733;
+    font: 16px/1.45 Georgia, "Iowan Old Style", serif;
+  }
+  .lrw-wrap * { box-sizing: border-box; }
+  .lrw-toolbar, .lrw-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lrw-toolbar {
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .lrw-wrap button {
+    appearance: none;
+    border: 1px solid #d4ddcf;
+    background: #fbfdf8;
+    color: #1d2733;
+    border-radius: 999px;
+    padding: 9px 14px;
+    font: inherit;
+    cursor: pointer;
+  }
+  .lrw-wrap input[type="range"] { width: min(320px, 100%); }
+  .lrw-stack { display: grid; gap: 16px; }
+  .lrw-panel {
+    background: rgba(251, 253, 248, 0.95);
+    border: 1px solid #d4ddcf;
+    border-radius: 22px;
+    padding: 18px;
+  }
+  .lrw-chip {
+    border: 1px solid #dde6d7;
+    background: #fcfefb;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .lrw-title {
+    margin: 0 0 10px;
+    font-size: 1.4rem;
+    line-height: 1.1;
+  }
+  .lrw-copy, .lrw-note {
+    color: #5b6672;
+    margin: 0;
+  }
+  .lrw-sequences {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .lrw-node {
+    border: 1px solid #dde6d7;
+    border-radius: 18px;
+    background: #fcfefb;
+    padding: 14px;
+  }
+  .lrw-node-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .lrw-gen {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #35528d;
+  }
+  .lrw-body {
+    display: grid;
+    gap: 10px;
+  }
+  .lrw-field {
+    border-top: 1px solid #e8eee4;
+    padding-top: 10px;
+  }
+  .lrw-label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #5b6672;
+    margin-bottom: 6px;
+  }
+  .lrw-tokens, .lrw-dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lrw-token {
+    min-width: 38px;
+    text-align: center;
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid #dde5da;
+    background: #f2f7ef;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  .lrw-token.prefix {
+    background: linear-gradient(180deg, #d8f5df, #c5edd0);
+    border-color: #9ad0aa;
+    color: #0f5132;
+    font-weight: 700;
+  }
+  .lrw-token.commit {
+    background: #eef4ff;
+    border-color: #b7cdf7;
+    color: #1d4ed8;
+    font-weight: 700;
+  }
+  .lrw-token.support {
+    background: #dff7e6;
+    border-color: #96d5a6;
+    color: #14532d;
+    font-weight: 700;
+  }
+  .lrw-token.off {
+    background: #f5f7f4;
+    border-color: #dde5da;
+    color: #7a8777;
+  }
+  .lrw-token.empty {
+    color: #5b6672;
+    background: #fafcf9;
+  }
+  .lrw-promise-grid {
+    display: grid;
+    gap: 8px;
+  }
+  .lrw-promise {
+    border: 1px solid #e1e8dc;
+    border-radius: 14px;
+    background: #f8fbf7;
+    padding: 10px;
+  }
+
+  @media (max-width: 900px) {
+    .lcw-nodes,
+    .lrw-sequences {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 720px) {
+    .lcw-node-head,
+    .lcw-message-head,
+    .lrw-node-head {
+      align-items: start;
+      flex-direction: column;
+    }
+  }
+</style>
+
+<div class="lcw-wrap" id="lcw-set-trace">
+  <div class="lcw-toolbar">
+    <div class="lcw-tabs" id="lcw-tabs"></div>
+    <div class="lcw-controls">
+      <button id="lcw-prev">Previous</button>
+      <input id="lcw-slider" type="range" min="0" max="0" value="0" />
+      <button id="lcw-next">Next</button>
+    </div>
+  </div>
+  <div class="lcw-stack">
+    <section class="lcw-panel">
+      <div class="lcw-meta">
+        <div class="lcw-chip" id="lcw-variant">Calm</div>
+        <div class="lcw-chip" id="lcw-step">1 / 1</div>
+        <div class="lcw-chip" id="lcw-shape">Stable set commit</div>
+      </div>
+      <h4 class="lcw-title" id="lcw-title">Node State</h4>
+      <p class="lcw-copy" id="lcw-text"></p>
+      <div class="lcw-problem" id="lcw-problem"></div>
+      <div class="lcw-nodes" id="lcw-nodes"></div>
+      <div class="lcw-queues" style="margin-top:14px;">
+        <div class="lcw-queue">
+          <h4>Vote / State Queue</h4>
+          <div class="lcw-messages" id="lcw-vote-queue"></div>
+        </div>
+        <div class="lcw-queue">
+          <h4>Commit Queue</h4>
+          <div class="lcw-messages" id="lcw-commit-queue"></div>
+        </div>
+      </div>
+      <p class="lcw-note" id="lcw-note"></p>
+    </section>
+  </div>
+</div>
+
+<h3 id="rush-prefix-walkthrough">Rush Prefix Walkthrough</h3>
+<p>The second walkthrough is separate because <code>Rush</code> does not agree on an unordered set. It shows the per-node ordered sequences, the candidate prefix, the committed prefix, support, and promise votes inside the same node cards.</p>
+
+<div class="lrw-wrap" id="lrw-rush">
+  <div class="lrw-toolbar">
+    <button id="lrw-prev">Previous</button>
+    <input id="lrw-slider" type="range" min="0" max="0" value="0" />
+    <button id="lrw-next">Next</button>
+    <span class="lrw-chip" id="lrw-step">step 1 / 1</span>
+  </div>
+  <div class="lrw-stack">
+    <section class="lrw-panel">
+      <div class="lrw-meta">
+        <span class="lrw-chip">Rush</span>
+        <span class="lrw-chip">ordered prefix commitment</span>
+      </div>
+      <h4 class="lrw-title" id="lrw-title">Per-Node Sequences</h4>
+      <p class="lrw-copy" id="lrw-text"></p>
+      <div class="lrw-sequences" id="lrw-sequences"></div>
+      <p class="lrw-note">
+        Each node card shows its own sequence, the current candidate prefix,
+        the committed prefix, whether that node is in <code>support(prefix)</code>
+        and <code>promise.votes(prefix)</code>, and the active promises as seen
+        from that node.
+      </p>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const DATA = {
+    Sore: {
+      commitShape: "Unsafe local set commit",
+      note: "Sore is the negative baseline. It commits when every node in the current view has voted, even if those votes do not certify the same proposal set.",
+      steps: [
+        { title: "Initial state", text: "All three nodes are live and empty. No votes or commits are in flight.",
+          nodes: { 0: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: [], commitQueue: [] },
+        { title: "Propose(0, 10)", text: "Node 0 proposes 10, records a self-vote, and broadcasts that proposal.",
+          nodes: { 0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(0 -> 2, proposals={10}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "Propose(1, 11)", text: "Node 1 independently proposes 11, so the system now has two incompatible local proposal sets in flight.",
+          nodes: { 0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Initial", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(0 -> 2, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(1 -> 2, proposals={11}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "DeliverVote(0 -> 2)", text: "Node 2 learns proposal 10 first and starts voting with node 0 and itself.",
+          nodes: { 0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voted", proposals: "{10}", voted: "{0,2}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(1 -> 2, proposals={11}, nodes={0,1,2})","Vote(2 -> 0, proposals={10}, nodes={0,1,2})","Vote(2 -> 1, proposals={10}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "DeliverVote(1 -> 2)", text: "Node 2 learns proposal 11 too, sees votes from every node in its current view, and commits {10,11}.",
+          nodes: { 0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(2 -> 0, proposals={10}, nodes={0,1,2})","Vote(2 -> 1, proposals={10}, nodes={0,1,2})"],
+          commitQueue: ["Commit(2 -> 0, commit={10,11})","Commit(2 -> 1, commit={10,11})"] },
+        { title: "Disconnect(1)", text: "Node 1 disconnects. Node 0 recomputes its membership view to {0,2}, clears prior voting progress, but still knows only proposal 10.",
+          nodes: { 0: { status: "Voted", proposals: "{10}", voted: "{0}", nodes: "{0,2}", committed: "{}" }, 1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" } },
+          voteQueue: ["Vote(0 -> 2, proposals={10}, nodes={0,2})","Vote(2 -> 0, proposals={10}, nodes={0,1,2})"],
+          commitQueue: ["Commit(2 -> 0, commit={10,11})"] },
+        { title: "DeliverVote(2 -> 0)", text: "Node 0 now has votes from every node in its reduced view and commits only {10}, while node 2 has already committed {10,11}.",
+          problem: { text: "Safety violation: live completed nodes disagree. Node 0 commits {10}, while node 2 commits {10,11}.", nodes: ["0", "2"] },
+          nodes: { 0: { status: "Completed", proposals: "{10}", voted: "{0,2}", nodes: "{0,2}", committed: "{10}" }, 1: { status: "Voted", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" } },
+          voteQueue: ["Vote(0 -> 2, proposals={10}, nodes={0,2})"],
+          commitQueue: ["Commit(0 -> 2, commit={10})","Commit(2 -> 0, commit={10,11})"] }
+      ]
+    },
+    Calm: {
+      commitShape: "Stable set commit",
+      note: "Calm commits only after a stable full pass over the current membership view.",
+      steps: [
+        { title: "Initial state", text: "All three nodes are live and empty. No votes or commits are in flight.",
+          nodes: { 0: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: [], commitQueue: [] },
+        { title: "Propose(0, 10)", text: "Node 0 proposes proposal 10, records a self-vote, enters the commit-eligible phase, and broadcasts its current proposal set and node view.",
+          nodes: { 0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(0 -> 2, proposals={10}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "Propose(1, 11)", text: "Node 1 independently proposes proposal 11. Calm now has two concurrent proposal sets, so the later stable pass must converge on their union rather than on a single id.",
+          nodes: { 0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "MayCommit", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "ToVote", proposals: "{}", voted: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 2, proposals={10}, nodes={0,1,2})","Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(1 -> 2, proposals={11}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "DeliverVote(0 -> 2)", text: "Node 2 first learns proposal 10, records votes from node 0 and itself, and starts a tentative stable pass for {10}.",
+          nodes: { 0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "MayCommit", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "MayCommit", proposals: "{10}", voted: "{0,2}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(1 -> 2, proposals={11}, nodes={0,1,2})","Vote(2 -> 0, proposals={10}, nodes={0,1,2})","Vote(2 -> 1, proposals={10}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "DeliverVote(1 -> 2)", text: "Node 2 then learns proposal 11 as well. That invalidates the earlier tentative pass and restarts the process on the merged proposal set {10,11}.",
+          nodes: { 0: { status: "MayCommit", proposals: "{10}", voted: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "MayCommit", proposals: "{11}", voted: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "MayCommit", proposals: "{10,11}", voted: "{1,2}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(2 -> 0, proposals={10,11}, nodes={0,1,2})","Vote(2 -> 1, proposals={10,11}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "Stable pass completes on {10,11}", text: "Further vote deliveries complete the restarted passes, and the whole cluster ends committed to the merged proposal set {10,11}.",
+          nodes: { 0: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }, 1: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }, 2: { status: "Completed", proposals: "{10,11}", voted: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" } },
+          voteQueue: [], commitQueue: [] }
+      ]
+    },
+    Flat: {
+      commitShape: "Merged set commit",
+      note: "Flat preserves proposal, node, and vote summaries directly in vote messages, so intermediate states are richer and more expensive.",
+      steps: [
+        { title: "Propose(0, 10)", text: "Node 0 proposes 10. Flat immediately starts with an explicit vote payload that carries proposals, nodes, and votes.",
+          nodes: { 0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2}, votes={0})","Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})"], commitQueue: [] },
+        { title: "Propose(1, 11)", text: "Node 1 independently proposes 11. The system now has two concurrent summaries that will later be merged by receivers.",
+          nodes: { 0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voting", proposals: "{11}", votes: "{1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2}, votes={0})","Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})","Vote(1 -> 0, proposals={11}, nodes={0,1,2}, votes={1})","Vote(1 -> 2, proposals={11}, nodes={0,1,2}, votes={1})"], commitQueue: [] },
+        { title: "DeliverVote(0 -> 1)", text: "Node 1 merges node 0's summary with its own. The result keeps both proposals and merges vote support where compatible.",
+          nodes: { 0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{}", votes: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})","Vote(1 -> 0, proposals={10,11}, nodes={0,1,2}, votes={0,1})","Vote(1 -> 2, proposals={10,11}, nodes={0,1,2}, votes={0,1})"], commitQueue: [] },
+        { title: "DeliverVote(1 -> 2)", text: "Node 2 now receives a merged summary rather than just a raw proposal. This is the key operational difference from Calm.",
+          nodes: { 0: { status: "Voting", proposals: "{10}", votes: "{0}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{10,11}", votes: "{1,2}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 2, proposals={10}, nodes={0,1,2}, votes={0})","Vote(1 -> 0, proposals={10,11}, nodes={0,1,2}, votes={0,1})","Vote(2 -> 0, proposals={10,11}, nodes={0,1,2}, votes={1,2})","Vote(2 -> 1, proposals={10,11}, nodes={0,1,2}, votes={1,2})"], commitQueue: [] },
+        { title: "DeliverVote(2 -> 0)", text: "Node 0 receives enough merged support to complete voting over the current node set and commits the proposal set.",
+          nodes: { 0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }, 1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{10,11}", votes: "{1,2}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(1 -> 0, proposals={10,11}, nodes={0,1,2}, votes={0,1})","Vote(2 -> 1, proposals={10,11}, nodes={0,1,2}, votes={1,2})"], commitQueue: ["CommitTo(1)","CommitTo(2)"] },
+        { title: "Commit delivery completes", text: "The explicit commit fan-out converges and all nodes end committed to the same proposal set.",
+          nodes: { 0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }, 1: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" }, 2: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", nodes: "{0,1,2}", committed: "{10,11}" } },
+          voteQueue: [], commitQueue: [] }
+      ]
+    },
+    Most: {
+      commitShape: "Per-proposal majority commit",
+      note: "Most separates aggregate local voting from proposal-specific support. A node commits only when every local proposal has majority support.",
+      steps: [
+        { title: "Propose(0, 10) and Propose(1, 11)", text: "Nodes 0 and 1 propose independently. Their vote messages carry proposal sets and node views, while proposalVotes is reconstructed locally.",
+          nodes: { 0: { status: "Voting", proposals: "{10}", votes: "{0}", proposalVotes: "{10:{0}}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voting", proposals: "{11}", votes: "{1}", proposalVotes: "{11:{1}}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{}", votes: "{}", proposalVotes: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 1, proposals={10}, nodes={0,1,2})","Vote(0 -> 2, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(1 -> 2, proposals={11}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "DeliverVote(0 -> 1)", text: "Node 1 now knows both proposals. It records participation from self and source and also updates proposal-specific support sets.",
+          nodes: { 0: { status: "Voting", proposals: "{10}", votes: "{0}", proposalVotes: "{10:{0}}", nodes: "{0,1,2}", committed: "{}" }, 1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", proposalVotes: "{10:{0,1},11:{1}}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{}", votes: "{}", proposalVotes: "{}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(0 -> 2, proposals={10}, nodes={0,1,2})","Vote(1 -> 0, proposals={11}, nodes={0,1,2})","Vote(1 -> 2, proposals={11}, nodes={0,1,2})","Vote(1 -> 0, proposals={10,11}, nodes={0,1,2})","Vote(1 -> 2, proposals={10,11}, nodes={0,1,2})"], commitQueue: [] },
+        { title: "DeliverVote(1 -> 0) with merged proposals", text: "Node 0 reaches full local participation and also sees majority support for each local proposal. That is the decisive difference from simpler vote-set checks.",
+          nodes: { 0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" }, 1: { status: "Voting", proposals: "{10,11}", votes: "{0,1}", proposalVotes: "{10:{0,1},11:{1}}", nodes: "{0,1,2}", committed: "{}" }, 2: { status: "Voting", proposals: "{10}", votes: "{0,2}", proposalVotes: "{10:{0,2}}", nodes: "{0,1,2}", committed: "{}" } },
+          voteQueue: ["Vote(1 -> 2, proposals={11}, nodes={0,1,2})","Vote(1 -> 2, proposals={10,11}, nodes={0,1,2})"], commitQueue: ["Commit(0 -> 1, commit={10,11})","Commit(0 -> 2, commit={10,11})"] },
+        { title: "Commit delivery completes", text: "Commit dissemination completes and every node finishes with the same committed proposal set.",
+          nodes: { 0: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" }, 1: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" }, 2: { status: "Committed", proposals: "{10,11}", votes: "{0,1,2}", proposalVotes: "{10:{0,1},11:{0,1}}", nodes: "{0,1,2}", committed: "{10,11}" } },
+          voteQueue: [], commitQueue: [] }
+      ]
+    }
+  };
+
+  const tabs = document.getElementById("lcw-tabs");
+  const nodes = document.getElementById("lcw-nodes");
+  const voteQueue = document.getElementById("lcw-vote-queue");
+  const commitQueue = document.getElementById("lcw-commit-queue");
+  const variantName = document.getElementById("lcw-variant");
+  const commitShape = document.getElementById("lcw-shape");
+  const stepCounter = document.getElementById("lcw-step");
+  const stepTitle = document.getElementById("lcw-title");
+  const stepText = document.getElementById("lcw-text");
+  const problemBanner = document.getElementById("lcw-problem");
+  const variantNote = document.getElementById("lcw-note");
+  const slider = document.getElementById("lcw-slider");
+  const prevBtn = document.getElementById("lcw-prev");
+  const nextBtn = document.getElementById("lcw-next");
+
+  let currentVariant = "Sore";
+  let currentStep = 0;
+
+  function parseSet(text) {
+    const inner = text.replace(/^\{|\}$/g, "").trim();
+    return inner ? inner.split(",").map(x => x.trim()) : [];
+  }
+  function parseProposalVotes(text) {
+    const matches = [...text.matchAll(/(\d+):\{([^}]*)\}/g)];
+    return matches.map(([, proposal, voters]) => ({
+      proposal,
+      voters: voters ? voters.split(",").map(x => x.trim()).filter(Boolean) : []
+    }));
+  }
+  function chipList(items, extraClass = "", empty = "empty") {
+    if (!items.length) return `<div class="lcw-chips"><span class="lcw-token empty">${empty}</span></div>`;
+    return `<div class="lcw-chips">${items.map(item => `<span class="lcw-token ${extraClass}">${item}</span>`).join("")}</div>`;
+  }
+  function nodeDots(items) {
+    const active = new Set(items.map(String));
+    return `<div class="lcw-dots">${["0","1","2"].map(id => `<span class="lcw-dot${active.has(id) ? " on" : ""}">${id}</span>`).join("")}</div>`;
+  }
+  function renderField(key, value, isProblemField = false) {
+    if (key === "proposalVotes") {
+      const parts = parseProposalVotes(value);
+      if (!parts.length) return `<div class="lcw-field"><span class="lcw-label">proposalVotes</span>${chipList([], "", "empty")}</div>`;
+      return `<div class="lcw-field"><span class="lcw-label">proposalVotes</span><div class="lcw-mini">${parts.map(part => `<div class="lcw-support"><span class="lcw-label">proposal ${part.proposal}</span>${nodeDots(part.voters)}</div>`).join("")}</div></div>`;
+    }
+    if (key === "nodes" || key === "votes" || key === "voted") {
+      return `<div class="lcw-field"><span class="lcw-label">${key}</span>${nodeDots(parseSet(value))}</div>`;
+    }
+    if (key === "proposals" || key === "committed") {
+      return `<div class="lcw-field"><span class="lcw-label">${key}</span>${chipList(parseSet(value), key === "committed" ? (isProblemField ? "problem" : "commit") : "")}</div>`;
+    }
+    return `<div class="lcw-field"><span class="lcw-label">${key}</span>${chipList([value])}</div>`;
+  }
+  function renderNodes(step) {
+    nodes.innerHTML = "";
+    const problemNodes = new Set((step.problem?.nodes || []).map(String));
+    Object.entries(step.nodes).forEach(([id, state]) => {
+      const statusClass = state.status.toLowerCase();
+      const isProblemNode = problemNodes.has(String(id));
+      const card = document.createElement("div");
+      card.className = "lcw-node" + (isProblemNode ? " problem" : "");
+      card.innerHTML = `<div class="lcw-node-head"><h4>Node ${id}</h4><span class="lcw-status ${statusClass}">${state.status}</span></div><div class="lcw-state">${Object.entries(state).filter(([key]) => key !== "status").map(([key, value]) => renderField(key, value, isProblemNode && key === "committed")).join("")}</div>`;
+      nodes.appendChild(card);
+    });
+  }
+  function parseVoteMessage(text) {
+    const match = text.match(/^Vote\((\d+) -> (\d+),\s*(.*)\)$/);
+    if (!match) return null;
+    const [, from, to, rest] = match;
+    const proposals = rest.match(/proposals=(\{[^}]*\})/);
+    const nodeSet = rest.match(/nodes=(\{[^}]*\})/);
+    const votes = rest.match(/votes=(\{[^}]*\})/);
+    return { kind: "Vote", from, to, proposals: proposals ? proposals[1] : "{}", nodes: nodeSet ? nodeSet[1] : "{}", votes: votes ? votes[1] : null };
+  }
+  function parseCommitMessage(text) {
+    const direct = text.match(/^Commit\((\d+) -> (\d+),\s*commit=(\{[^}]*\})\)$/);
+    if (direct) return { kind: "Commit", from: direct[1], to: direct[2], commit: direct[3] };
+    const collapsed = text.match(/^CommitTo\((\d+)\)$/);
+    if (collapsed) return { kind: "Commit", from: "quorum", to: collapsed[1], commit: "{}" };
+    return null;
+  }
+  function renderQueueCard(item, type) {
+    if (type === "vote") {
+      const msg = parseVoteMessage(item);
+      if (!msg) return `<div class="lcw-message"><div class="lcw-message-head">${item}</div></div>`;
+      return `<div class="lcw-message"><div class="lcw-message-head"><span>${msg.from} -> ${msg.to}</span><span class="lcw-message-kind">${msg.kind}</span></div><div class="lcw-message-body"><div class="lcw-inline"><span class="lcw-label">proposals</span>${chipList(parseSet(msg.proposals))}</div><div class="lcw-inline"><span class="lcw-label">nodes</span>${nodeDots(parseSet(msg.nodes))}</div>${msg.votes ? `<div class="lcw-inline"><span class="lcw-label">votes</span>${nodeDots(parseSet(msg.votes))}</div>` : ""}</div></div>`;
+    }
+    const msg = parseCommitMessage(item);
+    if (!msg) return `<div class="lcw-message"><div class="lcw-message-head">${item}</div></div>`;
+    return `<div class="lcw-message"><div class="lcw-message-head"><span>${msg.from} -> ${msg.to}</span><span class="lcw-message-kind">${msg.kind}</span></div><div class="lcw-message-body"><div class="lcw-inline"><span class="lcw-label">commit</span>${chipList(parseSet(msg.commit), "commit", msg.commit === "{}" ? "implicit" : "empty")}</div></div></div>`;
+  }
+  function renderQueue(container, items, type) {
+    if (!items.length) {
+      container.innerHTML = '<span class="lcw-token empty">no in-flight messages</span>';
+      return;
+    }
+    container.innerHTML = items.map(item => renderQueueCard(item, type)).join("");
+  }
+  function renderTabs() {
+    tabs.innerHTML = "";
+    Object.keys(DATA).forEach(name => {
+      const btn = document.createElement("button");
+      btn.textContent = name;
+      btn.className = name === currentVariant ? "active" : "";
+      btn.onclick = () => { currentVariant = name; currentStep = 0; render(); };
+      tabs.appendChild(btn);
+    });
+  }
+  function render() {
+    const variant = DATA[currentVariant];
+    const step = variant.steps[currentStep];
+    variantName.textContent = currentVariant;
+    commitShape.textContent = variant.commitShape;
+    stepCounter.textContent = `step ${currentStep + 1} / ${variant.steps.length}`;
+    stepTitle.textContent = step.title;
+    stepText.textContent = step.text;
+    if (step.problem) {
+      problemBanner.textContent = step.problem.text;
+      problemBanner.className = "lcw-problem show";
+    } else {
+      problemBanner.textContent = "";
+      problemBanner.className = "lcw-problem";
+    }
+    variantNote.textContent = variant.note;
+    slider.max = String(variant.steps.length - 1);
+    slider.value = String(currentStep);
+    prevBtn.disabled = currentStep === 0;
+    nextBtn.disabled = currentStep === variant.steps.length - 1;
+    renderTabs();
+    renderNodes(step);
+    renderQueue(voteQueue, step.voteQueue, "vote");
+    renderQueue(commitQueue, step.commitQueue, "commit");
+  }
+  slider.addEventListener("input", e => { currentStep = Number(e.target.value); render(); });
+  prevBtn.addEventListener("click", () => { if (currentStep > 0) { currentStep--; render(); } });
+  nextBtn.addEventListener("click", () => { const max = DATA[currentVariant].steps.length - 1; if (currentStep < max) { currentStep++; render(); } });
+  render();
+})();
+
+(() => {
+  const STEPS = [
+    { title: "Initial state", text: "All node sequences are empty and no promises exist.", candidate: "[]", committed: "[]", support: "{}", votes: "{}", sequences: { 0: { generation: 0, items: [] }, 1: { generation: 0, items: [] }, 2: { generation: 0, items: [] } }, promises: [] },
+    { title: "Propose(0, 10)", text: "Node 0 appends proposal 10 to its own sequence and bumps generation.", candidate: "[10]", committed: "[]", support: "{0}", votes: "{}", sequences: { 0: { generation: 1, items: [10] }, 1: { generation: 0, items: [] }, 2: { generation: 0, items: [] } }, promises: [] },
+    { title: "Propose(1, 10)", text: "Node 1 independently appends the same proposal id. The candidate prefix [10] now has support from two nodes.", candidate: "[10]", committed: "[]", support: "{0,1}", votes: "{1}", sequences: { 0: { generation: 1, items: [10] }, 1: { generation: 1, items: [10] }, 2: { generation: 0, items: [] } }, promises: ["prefix=[10], votes={1}"] },
+    { title: "DeliverState(1 -> 2)", text: "Node 2 learns a core that starts with 10. That extends support(prefix), but promise votes are still tracked separately.", candidate: "[10]", committed: "[]", support: "{0,1,2}", votes: "{1,2}", sequences: { 0: { generation: 1, items: [10] }, 1: { generation: 1, items: [10] }, 2: { generation: 1, items: [10] } }, promises: ["prefix=[10], votes={1,2}"] },
+    { title: "Quorum prefix recognized", text: "A quorum of sequences agrees on the next id and the promise votes also reach quorum. Node 2 can now commit prefix [10].", candidate: "[10]", committed: "[10]", support: "{0,1,2}", votes: "{1,2}", sequences: { 0: { generation: 1, items: [10] }, 1: { generation: 1, items: [10] }, 2: { generation: 1, items: [10] } }, promises: ["prefix=[10], votes={1,2}"] },
+    { title: "Append a second item", text: "Node 0 appends 11 to its local sequence. The committed prefix remains [10] because the next position does not yet have quorum.", candidate: "[10]", committed: "[10]", support: "{0,1,2}", votes: "{1,2}", sequences: { 0: { generation: 2, items: [10, 11] }, 1: { generation: 1, items: [10] }, 2: { generation: 1, items: [10] } }, promises: ["prefix=[10], votes={1,2}"] },
+    { title: "Second-position quorum emerges", text: "Node 1 also appends 11. The candidate prefix becomes [10,11] and support for the longer prefix reaches quorum.", candidate: "[10,11]", committed: "[10]", support: "{0,1}", votes: "{0,1}", sequences: { 0: { generation: 2, items: [10, 11] }, 1: { generation: 2, items: [10, 11] }, 2: { generation: 1, items: [10] } }, promises: ["prefix=[10], votes={1,2}","prefix=[10,11], votes={0,1}"] },
+    { title: "Commit extends to [10,11]", text: "With quorum support and quorum promise votes for the longer prefix, the committed prefix can extend from [10] to [10,11].", candidate: "[10,11]", committed: "[10,11]", support: "{0,1}", votes: "{0,1}", sequences: { 0: { generation: 2, items: [10, 11] }, 1: { generation: 2, items: [10, 11] }, 2: { generation: 1, items: [10] } }, promises: ["prefix=[10,11], votes={0,1}"] }
+  ];
+
+  const sequencesEl = document.getElementById("lrw-sequences");
+  const titleEl = document.getElementById("lrw-title");
+  const textEl = document.getElementById("lrw-text");
+  const stepLabel = document.getElementById("lrw-step");
+  const slider = document.getElementById("lrw-slider");
+  const prevBtn = document.getElementById("lrw-prev");
+  const nextBtn = document.getElementById("lrw-next");
+  let index = 0;
+
+  function parseSeq(text) {
+    const inner = text.replace(/^\[|\]$/g, "").trim();
+    return inner ? inner.split(",").map(x => x.trim()) : [];
+  }
+  function parseSet(text) {
+    const inner = text.replace(/^\{|\}$/g, "").trim();
+    return inner ? inner.split(",").map(x => x.trim()) : [];
+  }
+  function tokenList(items, klass = "", emptyLabel = "empty") {
+    if (!items.length) return `<span class="lrw-token empty">${emptyLabel}</span>`;
+    return items.map(item => `<span class="lrw-token ${klass}">${item}</span>`).join("");
+  }
+  function parsePromise(text) {
+    const match = text.match(/^prefix=(\[[^\]]*\]),\s*votes=(\{[^}]*\})$/);
+    if (!match) return { prefix: [], votes: [] };
+    return { prefix: parseSeq(match[1]), votes: parseSet(match[2]) };
+  }
+  function renderSequences(step) {
+    sequencesEl.innerHTML = "";
+    const candidate = parseSeq(step.candidate);
+    const committed = parseSeq(step.committed);
+    const support = new Set(parseSet(step.support).map(String));
+    const votes = new Set(parseSet(step.votes).map(String));
+    const promises = step.promises.map(parsePromise);
+    Object.entries(step.sequences).forEach(([node, seq]) => {
+      const tokens = seq.items.length ? seq.items.map((item, i) => {
+        const matchesCandidate = i < candidate.length && candidate[i] === String(item);
+        const matchesCommitted = i < committed.length && committed[i] === String(item);
+        const klass = matchesCommitted ? "commit" : (matchesCandidate ? "prefix" : "");
+        return `<span class="lrw-token ${klass}">${item}</span>`;
+      }).join("") : '<span class="lrw-token empty">empty</span>';
+      const card = document.createElement("div");
+      card.className = "lrw-node";
+      card.innerHTML = `
+        <div class="lrw-node-head"><h4>Node ${node}</h4><span class="lrw-gen">gen ${seq.generation}</span></div>
+        <div class="lrw-body">
+          <div class="lrw-field"><span class="lrw-label">sequence</span><div class="lrw-tokens">${tokens}</div></div>
+          <div class="lrw-field"><span class="lrw-label">candidate prefix</span><div class="lrw-tokens">${tokenList(candidate, "prefix")}</div></div>
+          <div class="lrw-field"><span class="lrw-label">committed prefix</span><div class="lrw-tokens">${tokenList(committed, "commit")}</div></div>
+          <div class="lrw-field"><span class="lrw-label">node state</span><div class="lrw-tokens"><span class="lrw-token ${support.has(String(node)) ? "support" : "off"}">${support.has(String(node)) ? "support" : "no-support"}</span><span class="lrw-token ${votes.has(String(node)) ? "commit" : "off"}">${votes.has(String(node)) ? "promise-vote" : "no-vote"}</span></div></div>
+          <div class="lrw-field"><span class="lrw-label">active promises</span><div class="lrw-promise-grid">${promises.length ? promises.map(promise => `<div class="lrw-promise"><span class="lrw-label">prefix</span><div class="lrw-tokens">${tokenList(promise.prefix, "prefix")}</div><div class="lrw-tokens" style="margin-top:8px;"><span class="lrw-token ${promise.votes.includes(String(node)) ? "commit" : "off"}">${promise.votes.includes(String(node)) ? "voted" : "not-voted"}</span></div></div>`).join("") : '<span class="lrw-token empty">no active promises</span>'}</div></div>
+        </div>`;
+      sequencesEl.appendChild(card);
+    });
+  }
+  function render() {
+    const step = STEPS[index];
+    titleEl.textContent = step.title;
+    textEl.textContent = step.text;
+    stepLabel.textContent = `step ${index + 1} / ${STEPS.length}`;
+    slider.max = String(STEPS.length - 1);
+    slider.value = String(index);
+    prevBtn.disabled = index === 0;
+    nextBtn.disabled = index === STEPS.length - 1;
+    renderSequences(step);
+  }
+  slider.addEventListener("input", e => { index = Number(e.target.value); render(); });
+  prevBtn.addEventListener("click", () => { if (index > 0) { index--; render(); } });
+  nextBtn.addEventListener("click", () => { if (index < STEPS.length - 1) { index++; render(); } });
+  render();
+})();
+</script>
+
+<h2 id="conclusions">Conclusions</h2>
+<p>This work now contains a compact but meaningful ladder of leaderless consensus models:</p>
+<ul>
+<li>one expected failure: <code>Sore</code></li>
+<li>three set-agreement variants that currently hold: <code>Calm</code>, <code>Flat</code>, <code>Most</code></li>
+<li>one most-advanced prefix-commit variant: <code>Rush</code>, using timeout-free prefix-based live consensus</li>
+</ul>
+<p>The result is useful both algorithmically and operationally. The protocol family is explicit, the verification assumptions are documented, and the performance behavior of the executable TLA++ models is measured rather than guessed.</p>
+<p>More importantly, this is not just a rewrite of an older article. It is a continuation of that effort with a much stronger standard of evidence: finite-model safety proofs, explicit liveness checks, and repeated alignment between the executable and declarative specifications.</p>

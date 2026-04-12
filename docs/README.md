@@ -12,7 +12,9 @@ design plans.
 - [`leaderless-consensus.md`](leaderless-consensus.md): overview and status of
   the leaderless consensus models
 - [`leaderless-consensus/`](leaderless-consensus/README.md): per-algorithm
-  explanations for the leaderless consensus models
+  explanations, article, and post material for the leaderless consensus models
+- [`article/`](article/README.md): article-style long-form material and
+  publishable drafts
 
 ## Design Plans
 

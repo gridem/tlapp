@@ -5,6 +5,16 @@ These notes explain the current finite models in
 They are meant to sit between the short status note in
 [`../leaderless-consensus.md`](../leaderless-consensus.md) and the source code.
 
+Additional narrative material:
+
+- [`../article/leaderless-consensus.md`](../article/leaderless-consensus.md):
+  Markdown article describing the algorithm family, verification shape, and
+  lessons learned
+- [`../article/leaderless-consensus.html`](../article/leaderless-consensus.html):
+  HTML blog-post version of the same article
+- [`../article/leaderless-consensus-short.md`](../article/leaderless-consensus-short.md):
+  short professional post
+
 ## Common Model Frame
 
 - `Nodes = {0, 1, 2}`.

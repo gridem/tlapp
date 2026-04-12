@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rush Prefix Visualizer</title>
+<style>
+  :root {
+    --bg: #eef2ec;
+    --panel: rgba(251, 253, 248, 0.95);
+    --ink: #1d2733;
+    --muted: #5b6672;
+    --line: #d4ddcf;
+    --accent: #166534;
+    --accent-2: #1d4ed8;
+    --accent-3: #a16207;
+    --shadow: 0 14px 32px rgba(26, 38, 23, 0.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 16px/1.45 Georgia, "Iowan Old Style", serif;
+    background:
+      radial-gradient(circle at top left, #f5ffeb 0, transparent 26rem),
+      radial-gradient(circle at bottom right, #edf6ff 0, transparent 28rem),
+      linear-gradient(180deg, #eef2ec, #e4ebe1);
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 36px 18px 72px;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(2rem, 5vw, 3.1rem);
+    line-height: 1.02;
+  }
+  h2, h3 {
+    margin: 0 0 10px;
+  }
+  .sub {
+    max-width: 760px;
+    color: var(--muted);
+    margin: 0 0 22px;
+  }
+  .toolbar,
+  .meta,
+  .chips,
+  .promise-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .toolbar {
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  button {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: #fbfdf8;
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 9px 14px;
+    font: inherit;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  input[type="range"] {
+    width: min(320px, 100%);
+  }
+  .stack {
+    display: grid;
+    gap: 16px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
+  .meta-chip {
+    border: 1px solid #dde6d7;
+    background: #fcfefb;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .step-title {
+    font-size: 1.4rem;
+    line-height: 1.1;
+  }
+  .step-copy,
+  .note {
+    color: var(--muted);
+    margin: 0;
+  }
+  .sequences {
+    display: grid;
+    gap: 12px;
+  }
+  .sequences {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .seq-card,
+  .promise-card {
+    border: 1px solid #dde6d7;
+    border-radius: 18px;
+    background: #fcfefb;
+    padding: 14px;
+  }
+  .label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .seq-body {
+    display: grid;
+    gap: 10px;
+  }
+  .seq-field {
+    border-top: 1px solid #e8eee4;
+    padding-top: 10px;
+  }
+  .promise-grid {
+    display: grid;
+    gap: 8px;
+  }
+  .promise-inline {
+    border: 1px solid #e1e8dc;
+    border-radius: 14px;
+    background: #f8fbf7;
+    padding: 10px;
+  }
+  .token {
+    min-width: 38px;
+    text-align: center;
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid #dde5da;
+    background: #f2f7ef;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  .token.prefix {
+    background: linear-gradient(180deg, #d8f5df, #c5edd0);
+    border-color: #9ad0aa;
+    color: #0f5132;
+    font-weight: 700;
+  }
+  .token.commit {
+    background: #eef4ff;
+    border-color: #b7cdf7;
+    color: #1d4ed8;
+    font-weight: 700;
+  }
+  .token.support {
+    background: #dff7e6;
+    border-color: #96d5a6;
+    color: #14532d;
+    font-weight: 700;
+  }
+  .token.off {
+    background: #f5f7f4;
+    border-color: #dde5da;
+    color: #7a8777;
+  }
+  .token.empty {
+    color: var(--muted);
+    background: #fafcf9;
+  }
+  .seq-head,
+  .promise-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .gen {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #35528d;
+  }
+  .node-dots {
+    display: flex;
+    gap: 8px;
+  }
+  .node-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid #d9e1d6;
+    display: grid;
+    place-items: center;
+    font: 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #f4f7f2;
+    color: #768174;
+  }
+  .node-dot.on {
+    background: #dff7e6;
+    border-color: #96d5a6;
+    color: #14532d;
+    font-weight: 700;
+  }
+  .promise-body {
+    display: grid;
+    gap: 10px;
+  }
+  @media (max-width: 760px) {
+    .sequences {
+      grid-template-columns: 1fr;
+    }
+    .seq-head,
+    .promise-head {
+      align-items: start;
+      flex-direction: column;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Rush Prefix Visualizer</h1>
+    <p class="sub">
+      A compact view of `Rush`. The active step is shown first, then the candidate prefix,
+      committed prefix, support set, promise votes, and per-node ordered sequences.
+    </p>
+
+    <div class="toolbar">
+      <button id="prevBtn">Previous</button>
+      <input id="slider" type="range" min="0" max="0" value="0" />
+      <button id="nextBtn">Next</button>
+      <span class="meta-chip" id="stepLabel"></span>
+    </div>
+
+    <div class="stack">
+      <section class="panel">
+        <div class="meta">
+          <span class="meta-chip">Rush</span>
+          <span class="meta-chip">ordered prefix commitment</span>
+        </div>
+        <h2 class="step-title" id="title">Per-Node Sequences</h2>
+        <p class="step-copy" id="text"></p>
+        <div class="sequences" id="sequences"></div>
+        <p class="note">
+          Each node card shows its own sequence, the current candidate prefix,
+          the committed prefix, whether that node is currently in
+          `support(prefix)` and `promise.votes(prefix)`, and the active
+          promises as seen from that node.
+        </p>
+      </section>
+
+    </div>
+  </div>
+
+<script>
+const STEPS = [
+  {
+    title: "Initial state",
+    text: "All node sequences are empty and no promises exist.",
+    candidate: "[]",
+    committed: "[]",
+    support: "{}",
+    votes: "{}",
+    sequences: {
+      0: { generation: 0, items: [] },
+      1: { generation: 0, items: [] },
+      2: { generation: 0, items: [] }
+    },
+    promises: []
+  },
+  {
+    title: "Propose(0, 10)",
+    text: "Node 0 appends proposal 10 to its own sequence and bumps generation.",
+    candidate: "[10]",
+    committed: "[]",
+    support: "{0}",
+    votes: "{}",
+    sequences: {
+      0: { generation: 1, items: [10] },
+      1: { generation: 0, items: [] },
+      2: { generation: 0, items: [] }
+    },
+    promises: []
+  },
+  {
+    title: "Propose(1, 10)",
+    text: "Node 1 independently appends the same proposal id. The candidate prefix [10] now has support from two nodes.",
+    candidate: "[10]",
+    committed: "[]",
+    support: "{0,1}",
+    votes: "{1}",
+    sequences: {
+      0: { generation: 1, items: [10] },
+      1: { generation: 1, items: [10] },
+      2: { generation: 0, items: [] }
+    },
+    promises: [
+      "prefix=[10], votes={1}"
+    ]
+  },
+  {
+    title: "DeliverState(1 -> 2)",
+    text: "Node 2 learns a core that starts with 10. That extends support(prefix), but promise votes are still tracked separately.",
+    candidate: "[10]",
+    committed: "[]",
+    support: "{0,1,2}",
+    votes: "{1,2}",
+    sequences: {
+      0: { generation: 1, items: [10] },
+      1: { generation: 1, items: [10] },
+      2: { generation: 1, items: [10] }
+    },
+    promises: [
+      "prefix=[10], votes={1,2}"
+    ]
+  },
+  {
+    title: "Quorum prefix recognized",
+    text: "A quorum of sequences agrees on the next id and the promise votes also reach quorum. Node 2 can now commit prefix [10].",
+    candidate: "[10]",
+    committed: "[10]",
+    support: "{0,1,2}",
+    votes: "{1,2}",
+    sequences: {
+      0: { generation: 1, items: [10] },
+      1: { generation: 1, items: [10] },
+      2: { generation: 1, items: [10] }
+    },
+    promises: [
+      "prefix=[10], votes={1,2}"
+    ]
+  },
+  {
+    title: "Append a second item",
+    text: "Node 0 appends 11 to its local sequence. The committed prefix remains [10] because the next position does not yet have quorum.",
+    candidate: "[10]",
+    committed: "[10]",
+    support: "{0,1,2}",
+    votes: "{1,2}",
+    sequences: {
+      0: { generation: 2, items: [10, 11] },
+      1: { generation: 1, items: [10] },
+      2: { generation: 1, items: [10] }
+    },
+    promises: [
+      "prefix=[10], votes={1,2}"
+    ]
+  },
+  {
+    title: "Second-position quorum emerges",
+    text: "Node 1 also appends 11. The candidate prefix becomes [10,11] and support for the longer prefix reaches quorum.",
+    candidate: "[10,11]",
+    committed: "[10]",
+    support: "{0,1}",
+    votes: "{0,1}",
+    sequences: {
+      0: { generation: 2, items: [10, 11] },
+      1: { generation: 2, items: [10, 11] },
+      2: { generation: 1, items: [10] }
+    },
+    promises: [
+      "prefix=[10], votes={1,2}",
+      "prefix=[10,11], votes={0,1}"
+    ]
+  },
+  {
+    title: "Commit extends to [10,11]",
+    text: "With quorum support and quorum promise votes for the longer prefix, the committed prefix can extend from [10] to [10,11].",
+    candidate: "[10,11]",
+    committed: "[10,11]",
+    support: "{0,1}",
+    votes: "{0,1}",
+    sequences: {
+      0: { generation: 2, items: [10, 11] },
+      1: { generation: 2, items: [10, 11] },
+      2: { generation: 1, items: [10] }
+    },
+    promises: [
+      "prefix=[10,11], votes={0,1}"
+    ]
+  }
+];
+
+const sequencesEl = document.getElementById("sequences");
+const titleEl = document.getElementById("title");
+const textEl = document.getElementById("text");
+const stepLabel = document.getElementById("stepLabel");
+const slider = document.getElementById("slider");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+
+let index = 0;
+
+function parseSeq(text) {
+  const inner = text.replace(/^\[|\]$/g, "").trim();
+  return inner ? inner.split(",").map(x => x.trim()) : [];
+}
+
+function parseSet(text) {
+  const inner = text.replace(/^\{|\}$/g, "").trim();
+  return inner ? inner.split(",").map(x => x.trim()) : [];
+}
+
+function tokenList(items, klass = "", emptyLabel = "empty") {
+  if (!items.length) {
+    return `<span class="token empty">${emptyLabel}</span>`;
+  }
+  return items.map(item => `<span class="token ${klass}">${item}</span>`).join("");
+}
+
+function dotList(items) {
+  const active = new Set(items.map(String));
+  return `
+    ${["0", "1", "2"].map(id => `<span class="node-dot${active.has(id) ? " on" : ""}">${id}</span>`).join("")}
+  `;
+}
+
+function parsePromise(text) {
+  const match = text.match(/^prefix=(\[[^\]]*\]),\s*votes=(\{[^}]*\})$/);
+  if (!match) {
+    return { prefix: [], votes: [] };
+  }
+  return {
+    prefix: parseSeq(match[1]),
+    votes: parseSet(match[2])
+  };
+}
+
+function renderSequences(step) {
+  sequencesEl.innerHTML = "";
+  const candidate = parseSeq(step.candidate);
+  const committed = parseSeq(step.committed);
+  const support = new Set(parseSet(step.support).map(String));
+  const votes = new Set(parseSet(step.votes).map(String));
+  const promises = step.promises.map(parsePromise);
+
+  Object.entries(step.sequences).forEach(([node, seq]) => {
+    const tokens = seq.items.length
+      ? seq.items.map((item, i) => {
+          const matchesCandidate = i < candidate.length && candidate[i] === String(item);
+          const matchesCommitted = i < committed.length && committed[i] === String(item);
+          const klass = matchesCommitted ? "commit" : (matchesCandidate ? "prefix" : "");
+          return `<span class="token ${klass}">${item}</span>`;
+        }).join("")
+      : '<span class="token empty">empty</span>';
+
+    const card = document.createElement("div");
+    card.className = "seq-card";
+    card.innerHTML = `
+      <div class="seq-head">
+        <h3>Node ${node}</h3>
+        <span class="gen">gen ${seq.generation}</span>
+      </div>
+      <div class="seq-body">
+        <div class="seq-field">
+          <span class="label">sequence</span>
+          <div class="tokens">${tokens}</div>
+        </div>
+        <div class="seq-field">
+          <span class="label">candidate prefix</span>
+          <div class="tokens">${tokenList(candidate, "prefix")}</div>
+        </div>
+        <div class="seq-field">
+          <span class="label">committed prefix</span>
+          <div class="tokens">${tokenList(committed, "commit")}</div>
+        </div>
+        <div class="seq-field">
+          <span class="label">node state</span>
+          <div class="tokens">
+            <span class="token ${support.has(String(node)) ? "support" : "off"}">${support.has(String(node)) ? "support" : "no-support"}</span>
+            <span class="token ${votes.has(String(node)) ? "commit" : "off"}">${votes.has(String(node)) ? "promise-vote" : "no-vote"}</span>
+          </div>
+        </div>
+        <div class="seq-field">
+          <span class="label">active promises</span>
+          <div class="promise-grid">
+            ${promises.length ? promises.map(promise => `
+              <div class="promise-inline">
+                <span class="label">prefix</span>
+                <div class="tokens">${tokenList(promise.prefix, "prefix")}</div>
+                <div class="tokens" style="margin-top:8px;">
+                  <span class="token ${promise.votes.includes(String(node)) ? "commit" : "off"}">${promise.votes.includes(String(node)) ? "voted" : "not-voted"}</span>
+                </div>
+              </div>
+            `).join("") : '<span class="token empty">no active promises</span>'}
+          </div>
+        </div>
+      </div>
+    `;
+    sequencesEl.appendChild(card);
+  });
+}
+
+function render() {
+  const step = STEPS[index];
+  titleEl.textContent = step.title;
+  textEl.textContent = step.text;
+  stepLabel.textContent = `step ${index + 1} / ${STEPS.length}`;
+  slider.max = String(STEPS.length - 1);
+  slider.value = String(index);
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === STEPS.length - 1;
+  renderSequences(step);
+}
+
+slider.addEventListener("input", e => {
+  index = Number(e.target.value);
+  render();
+});
+prevBtn.addEventListener("click", () => {
+  if (index > 0) {
+    index--;
+    render();
+  }
+});
+nextBtn.addEventListener("click", () => {
+  if (index < STEPS.length - 1) {
+    index++;
+    render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>

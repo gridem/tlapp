@@ -16,12 +16,27 @@ The source material discusses five variants:
 4. `Most`: majority-based proposal voting with commit payload propagation in the current model.
 5. `Rush`: the most advanced variant, using ordered prefix commitment with
    generation tracking. The current reduced model omits disconnects, so it does
-   not need timeout-based failure handling.
+   not need timeout-based failure handling. That gives it a structural
+   robustness advantage over timeout-driven designs, although the checked
+   models do not prove an absolute p99 latency bound.
 
 All five are now modeled in this repo.
 
 Detailed per-algorithm notes live under
 [`docs/leaderless-consensus/`](leaderless-consensus/README.md).
+
+Longer narrative material:
+
+- [`docs/article/leaderless-consensus.md`](article/leaderless-consensus.md):
+  Markdown article-length explanation of the whole algorithm family
+- [`docs/article/leaderless-consensus.html`](article/leaderless-consensus.html):
+  HTML blog-post version of the same article
+- [`docs/article/leaderless-consensus-short.md`](article/leaderless-consensus-short.md):
+  short professional summary
+- [`docs/article/leaderless-consensus-trace.html`](article/leaderless-consensus-trace.html):
+  interactive trace player for the set-based variants
+- [`docs/article/rush-prefix-visualizer.html`](article/rush-prefix-visualizer.html):
+  interactive visualizer for `Rush` prefix commitment
 
 ## Files
 
