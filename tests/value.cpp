@@ -1,8 +1,20 @@
 #include "value.h"
 
+#include <array>
+
 #include <gtest/gtest.h>
 
 namespace test {
+
+struct BigValue {
+  std::array<int, 64> items{};
+
+  bool operator==(const BigValue& other) const = default;
+
+  std::string toString() const {
+    return "BigValue";
+  }
+};
 
 TEST(Values, Create) {
   Value i{1, "i"};
@@ -53,4 +65,44 @@ TEST(Values, TypesManip) {
   ASSERT_NE(h1, h3);
 }
 
+TEST(Values, InlineStorageCopyMove) {
+  Value left{42, "left"};
+  Value copied{left};
+  Value moved{std::move(copied)};
+
+  ASSERT_EQ(left, moved);
+
+  Value assigned{0, "assigned"};
+  assigned = left;
+  ASSERT_EQ(assigned, left);
+}
+
+TEST(Values, HeapFallbackCopyMove) {
+  Value left{BigValue{}, "big"};
+  Value copied{left};
+  Value moved{std::move(copied)};
+
+  ASSERT_EQ(left, moved);
+
+  Value assigned{BigValue{}, "assigned"};
+  assigned = left;
+  ASSERT_EQ(assigned, left);
+}
+
 }  // namespace test
+
+namespace std {
+
+template <>
+struct hash<test::BigValue> {
+  size_t operator()(const test::BigValue& value) const noexcept {
+    size_t h = 0x9badbed;
+    for (auto&& item : value.items) {
+      h <<= 1;
+      h ^= calcHash(item);
+    }
+    return h;
+  }
+};
+
+}  // namespace std
