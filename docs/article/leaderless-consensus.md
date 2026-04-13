@@ -229,18 +229,16 @@ The structure is intentionally compact:
 
 That makes the final state easy to read. For the holding variants, the trace ends with all nodes committed to the same set. For `Sore`, it ends at the first violating state where live completed nodes disagree.
 
-### Rush Prefix Walkthrough
+### Rush State Walkthrough
 
-The `Rush` walkthrough is separate because the state shape is different. It shows:
+The `Rush` walkthrough is separate because the state shape is different. It shows the actual stored per-node state of the executable model:
 
-- one ordered sequence per node
-- the current candidate prefix
-- the committed prefix
-- whether each node is currently in `support(prefix)`
-- whether each node is currently in `promise.votes(prefix)`
-- active promises rendered inside each node card
+- per-node `committed`
+- per-node `core.proposals`
+- per-node `core.nodesMessages`
+- per-node `core.promises`
 
-This makes the core `Rush` distinction visible: correctness is about prefix-compatibility and prefix extension, not equality of full local sequences.
+That is deliberate. Quantities such as the next majority prefix and `support(prefix)` are derived inside `mergeState(...)` from the stored sequences and promises; they are not represented in the visual as standalone state fields because they are not actual stored state. The global `proposed` set and in-flight `stateMsgs` queue are omitted there to keep the walkthrough compact.
 
 ## Conclusions
 

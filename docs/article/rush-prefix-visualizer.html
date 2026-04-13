@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rush Prefix Visualizer</title>
+<title>Rush State Walkthrough</title>
 <style>
   :root {
     --bg: #eef2ec;
@@ -27,7 +27,7 @@
       linear-gradient(180deg, #eef2ec, #e4ebe1);
   }
   .wrap {
-    max-width: 980px;
+    max-width: 1100px;
     margin: 0 auto;
     padding: 36px 18px 72px;
   }
@@ -36,18 +36,16 @@
     font-size: clamp(2rem, 5vw, 3.1rem);
     line-height: 1.02;
   }
-  h2, h3 {
+  h2, h3, h4 {
     margin: 0 0 10px;
   }
   .sub {
-    max-width: 760px;
+    max-width: 820px;
     color: var(--muted);
     margin: 0 0 22px;
   }
   .toolbar,
-  .meta,
-  .chips,
-  .promise-list {
+  .meta {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -98,15 +96,7 @@
     color: var(--muted);
     margin: 0;
   }
-  .sequences {
-    display: grid;
-    gap: 12px;
-  }
-  .sequences {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .seq-card,
-  .promise-card {
+  .node-card {
     border: 1px solid #dde6d7;
     border-radius: 18px;
     background: #fcfefb;
@@ -120,28 +110,11 @@
     color: var(--muted);
     margin-bottom: 6px;
   }
-  .tokens {
+  .tokens,
+  .dots {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-  }
-  .seq-body {
-    display: grid;
-    gap: 10px;
-  }
-  .seq-field {
-    border-top: 1px solid #e8eee4;
-    padding-top: 10px;
-  }
-  .promise-grid {
-    display: grid;
-    gap: 8px;
-  }
-  .promise-inline {
-    border: 1px solid #e1e8dc;
-    border-radius: 14px;
-    background: #f8fbf7;
-    padding: 10px;
   }
   .token {
     min-width: 38px;
@@ -153,41 +126,36 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 13px;
   }
-  .token.prefix {
-    background: linear-gradient(180deg, #d8f5df, #c5edd0);
-    border-color: #9ad0aa;
-    color: #0f5132;
-    font-weight: 700;
-  }
   .token.commit {
     background: #eef4ff;
     border-color: #b7cdf7;
     color: #1d4ed8;
     font-weight: 700;
   }
-  .token.support {
+  .token.proposal {
     background: #dff7e6;
     border-color: #96d5a6;
     color: #14532d;
     font-weight: 700;
   }
-  .token.off {
-    background: #f5f7f4;
-    border-color: #dde5da;
-    color: #7a8777;
-  }
   .token.empty {
     color: var(--muted);
     background: #fafcf9;
   }
-  .seq-head,
-  .promise-head {
+  .nodes {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .node-head,
+  .row-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     margin-bottom: 10px;
   }
+  .status,
   .gen {
     font-size: 12px;
     padding: 3px 8px;
@@ -195,11 +163,30 @@
     background: #eef4ff;
     color: #35528d;
   }
-  .node-dots {
-    display: flex;
+  .status.empty {
+    background: #f5f7f4;
+    color: #6b7280;
+  }
+  .node-body {
+    display: grid;
+    gap: 10px;
+  }
+  .field {
+    border-top: 1px solid #e8eee4;
+    padding-top: 10px;
+  }
+  .sequence-grid {
+    display: grid;
     gap: 8px;
   }
-  .node-dot {
+  .sequence-row,
+  .promise-row {
+    border: 1px solid #e1e8dc;
+    border-radius: 14px;
+    background: #f8fbf7;
+    padding: 10px;
+  }
+  .dot {
     width: 34px;
     height: 34px;
     border-radius: 999px;
@@ -210,34 +197,29 @@
     background: #f4f7f2;
     color: #768174;
   }
-  .node-dot.on {
+  .dot.on {
     background: #dff7e6;
     border-color: #96d5a6;
     color: #14532d;
     font-weight: 700;
   }
-  .promise-body {
-    display: grid;
-    gap: 10px;
-  }
-  @media (max-width: 760px) {
-    .sequences {
+  @media (max-width: 900px) {
+    .nodes {
       grid-template-columns: 1fr;
-    }
-    .seq-head,
-    .promise-head {
-      align-items: start;
-      flex-direction: column;
     }
   }
 </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Rush Prefix Visualizer</h1>
+    <h1>Rush State Walkthrough</h1>
     <p class="sub">
-      A compact view of `Rush`. The active step is shown first, then the candidate prefix,
-      committed prefix, support set, promise votes, and per-node ordered sequences.
+      A compact view of the actual stored per-node <code>Rush</code> state. Each step shows for each node the
+      stored <code>committed</code> prefix and local <code>core</code>. Derived quantities such as
+      majority prefixes and <code>support(prefix)</code> are computed inside <code>mergeState(...)</code>;
+      they are not represented here as standalone fields because they are not actual stored state. The
+      global <code>proposed</code> set and in-flight <code>stateMsgs</code> queue are omitted here to keep the
+      walkthrough compact.
     </p>
 
     <div class="toolbar">
@@ -251,152 +233,117 @@
       <section class="panel">
         <div class="meta">
           <span class="meta-chip">Rush</span>
-          <span class="meta-chip">ordered prefix commitment</span>
+          <span class="meta-chip">actual stored state</span>
+          <span class="meta-chip">prefix-compatible commitment</span>
         </div>
-        <h2 class="step-title" id="title">Per-Node Sequences</h2>
+        <h2 class="step-title" id="title">Initial state</h2>
         <p class="step-copy" id="text"></p>
-        <div class="sequences" id="sequences"></div>
+
+        <div class="nodes" id="nodes"></div>
+
         <p class="note">
-          Each node card shows its own sequence, the current candidate prefix,
-          the committed prefix, whether that node is currently in
-          `support(prefix)` and `promise.votes(prefix)`, and the active
-          promises as seen from that node.
+          The step data below is intentionally state-faithful: it shows only fields that really exist in
+          <code>RushState</code>, <code>RushNodeState</code>, and <code>RushCoreState</code>.
         </p>
       </section>
-
     </div>
   </div>
 
 <script>
+const EMPTY_ROW = () => ({ generation: 0, items: [] });
+
+function rows(a, b, c) {
+  return { 0: a, 1: b, 2: c };
+}
+
+function core(proposals, node0, node1, node2, promises = []) {
+  return { proposals, nodesMessages: rows(node0, node1, node2), promises };
+}
+
+function local(committed, proposals, node0, node1, node2, promises = []) {
+  return { committed, core: core(proposals, node0, node1, node2, promises) };
+}
+
+function msg(from, to, proposals, node0, node1, node2, promises = []) {
+  return { from, to, core: core(proposals, node0, node1, node2, promises) };
+}
+
 const STEPS = [
   {
     title: "Initial state",
-    text: "All node sequences are empty and no promises exist.",
-    candidate: "[]",
-    committed: "[]",
-    support: "{}",
-    votes: "{}",
-    sequences: {
-      0: { generation: 0, items: [] },
-      1: { generation: 0, items: [] },
-      2: { generation: 0, items: [] }
-    },
-    promises: []
+    text: "All three nodes start with empty committed prefixes, empty local cores, and an empty state-message queue.",
+    nodes: {
+      0: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+      1: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+      2: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
+    }
   },
   {
     title: "Propose(0, 10)",
-    text: "Node 0 appends proposal 10 to its own sequence and bumps generation.",
-    candidate: "[10]",
-    committed: "[]",
-    support: "{0}",
-    votes: "{}",
-    sequences: {
-      0: { generation: 1, items: [10] },
-      1: { generation: 0, items: [] },
-      2: { generation: 0, items: [] }
-    },
-    promises: []
+    text: "Node 0 proposes 10. The proposal is inserted into the global proposed set, appended to node 0's own stored sequence, and broadcast as a full core snapshot.",
+    nodes: {
+      0: local([], [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
+      1: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+      2: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
+    }
   },
   {
-    title: "Propose(1, 10)",
-    text: "Node 1 independently appends the same proposal id. The candidate prefix [10] now has support from two nodes.",
-    candidate: "[10]",
-    committed: "[]",
-    support: "{0,1}",
-    votes: "{1}",
-    sequences: {
-      0: { generation: 1, items: [10] },
-      1: { generation: 1, items: [10] },
-      2: { generation: 0, items: [] }
-    },
-    promises: [
-      "prefix=[10], votes={1}"
-    ]
+    title: "DeliverState(0 -> 1)",
+    text: "Node 1 receives node 0's core. Its stored state now records proposal 10, the remote sequence for node 0, its own local sequence [10], and the promise record prefix [10] -> {1}.",
+    nodes: {
+      0: local([], [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
+      1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
+      2: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
+    }
   },
   {
-    title: "DeliverState(1 -> 2)",
-    text: "Node 2 learns a core that starts with 10. That extends support(prefix), but promise votes are still tracked separately.",
-    candidate: "[10]",
-    committed: "[]",
-    support: "{0,1,2}",
-    votes: "{1,2}",
-    sequences: {
-      0: { generation: 1, items: [10] },
-      1: { generation: 1, items: [10] },
-      2: { generation: 1, items: [10] }
-    },
-    promises: [
-      "prefix=[10], votes={1,2}"
-    ]
+    title: "DeliverState(1 -> 0)",
+    text: "Node 0 receives node 1's richer core. During mergeState(...), quorum support for [10] is derived from the stored node sequences and node 0 commits [10]. The committed prefix is stored; the temporary quorum candidate is not.",
+    nodes: {
+      0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+      1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
+      2: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
+    }
   },
   {
-    title: "Quorum prefix recognized",
-    text: "A quorum of sequences agrees on the next id and the promise votes also reach quorum. Node 2 can now commit prefix [10].",
-    candidate: "[10]",
-    committed: "[10]",
-    support: "{0,1,2}",
-    votes: "{1,2}",
-    sequences: {
-      0: { generation: 1, items: [10] },
-      1: { generation: 1, items: [10] },
-      2: { generation: 1, items: [10] }
-    },
-    promises: [
-      "prefix=[10], votes={1,2}"
-    ]
+    title: "Propose(2, 11)",
+    text: "Node 2 is still pristine, so it may propose 11. Its local stored core now contains only proposal 11 and its own sequence [11].",
+    nodes: {
+      0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+      1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
+      2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
+    }
   },
   {
-    title: "Append a second item",
-    text: "Node 0 appends 11 to its local sequence. The committed prefix remains [10] because the next position does not yet have quorum.",
-    candidate: "[10]",
-    committed: "[10]",
-    support: "{0,1,2}",
-    votes: "{1,2}",
-    sequences: {
-      0: { generation: 2, items: [10, 11] },
-      1: { generation: 1, items: [10] },
-      2: { generation: 1, items: [10] }
-    },
-    promises: [
-      "prefix=[10], votes={1,2}"
-    ]
+    title: "DeliverState(2 -> 1)",
+    text: "Node 1 merges node 2's core. It learns proposal 11, extends its own stored sequence to [10,11], and keeps the earlier promise record for [10].",
+    nodes: {
+      0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+      1: local([], [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
+      2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
+    }
   },
   {
-    title: "Second-position quorum emerges",
-    text: "Node 1 also appends 11. The candidate prefix becomes [10,11] and support for the longer prefix reaches quorum.",
-    candidate: "[10,11]",
-    committed: "[10]",
-    support: "{0,1}",
-    votes: "{0,1}",
-    sequences: {
-      0: { generation: 2, items: [10, 11] },
-      1: { generation: 2, items: [10, 11] },
-      2: { generation: 1, items: [10] }
-    },
-    promises: [
-      "prefix=[10], votes={1,2}",
-      "prefix=[10,11], votes={0,1}"
-    ]
+    title: "DeliverState(1 -> 0)",
+    text: "Node 0 merges node 1's richer core. It learns 11, extends its own sequence to [10,11], and stores the promise record [10,11] -> {0}. Its committed prefix is still only [10].",
+    nodes: {
+      0: local([10], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }]),
+      1: local([], [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
+      2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
+    }
   },
   {
-    title: "Commit extends to [10,11]",
-    text: "With quorum support and quorum promise votes for the longer prefix, the committed prefix can extend from [10] to [10,11].",
-    candidate: "[10,11]",
-    committed: "[10,11]",
-    support: "{0,1}",
-    votes: "{0,1}",
-    sequences: {
-      0: { generation: 2, items: [10, 11] },
-      1: { generation: 2, items: [10, 11] },
-      2: { generation: 1, items: [10] }
-    },
-    promises: [
-      "prefix=[10,11], votes={0,1}"
-    ]
+    title: "DeliverState(0 -> 1)",
+    text: "Node 1 receives node 0's newer core and commits [10,11]. The stored committed prefixes now differ in length: node 0 has [10], node 1 has [10,11]. That is still safe because the prefixes are compatible.",
+    nodes: {
+      0: local([10], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }]),
+      1: local([10, 11], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }),
+      2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
+    }
   }
 ];
 
-const sequencesEl = document.getElementById("sequences");
+const nodesEl = document.getElementById("nodes");
 const titleEl = document.getElementById("title");
 const textEl = document.getElementById("text");
 const stepLabel = document.getElementById("stepLabel");
@@ -405,16 +352,6 @@ const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 
 let index = 0;
-
-function parseSeq(text) {
-  const inner = text.replace(/^\[|\]$/g, "").trim();
-  return inner ? inner.split(",").map(x => x.trim()) : [];
-}
-
-function parseSet(text) {
-  const inner = text.replace(/^\{|\}$/g, "").trim();
-  return inner ? inner.split(",").map(x => x.trim()) : [];
-}
 
 function tokenList(items, klass = "", emptyLabel = "empty") {
   if (!items.length) {
@@ -425,85 +362,73 @@ function tokenList(items, klass = "", emptyLabel = "empty") {
 
 function dotList(items) {
   const active = new Set(items.map(String));
+  return `${["0", "1", "2"].map(id => `<span class="dot${active.has(id) ? " on" : ""}">${id}</span>`).join("")}`;
+}
+
+function renderNodesMessages(nodesMessages) {
   return `
-    ${["0", "1", "2"].map(id => `<span class="node-dot${active.has(id) ? " on" : ""}">${id}</span>`).join("")}
+    <div class="sequence-grid">
+      ${Object.entries(nodesMessages).map(([node, seq]) => `
+        <div class="sequence-row">
+          <div class="row-head">
+            <strong>node ${node}</strong>
+            <span class="gen">gen ${seq.generation}</span>
+          </div>
+          <div class="tokens">${tokenList(seq.items, "", "empty")}</div>
+        </div>
+      `).join("")}
+    </div>
   `;
 }
 
-function parsePromise(text) {
-  const match = text.match(/^prefix=(\[[^\]]*\]),\s*votes=(\{[^}]*\})$/);
-  if (!match) {
-    return { prefix: [], votes: [] };
+function renderPromises(promises) {
+  if (!promises.length) {
+    return '<span class="token empty">no active promises</span>';
   }
-  return {
-    prefix: parseSeq(match[1]),
-    votes: parseSet(match[2])
-  };
+  return `
+    <div class="sequence-grid">
+      ${promises.map(promise => `
+        <div class="promise-row">
+          <span class="label">prefix</span>
+          <div class="tokens">${tokenList(promise.prefix, "commit")}</div>
+          <div style="margin-top:8px;">
+            <span class="label">votes</span>
+            <div class="dots">${dotList(promise.votes)}</div>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
-function renderSequences(step) {
-  sequencesEl.innerHTML = "";
-  const candidate = parseSeq(step.candidate);
-  const committed = parseSeq(step.committed);
-  const support = new Set(parseSet(step.support).map(String));
-  const votes = new Set(parseSet(step.votes).map(String));
-  const promises = step.promises.map(parsePromise);
-
-  Object.entries(step.sequences).forEach(([node, seq]) => {
-    const tokens = seq.items.length
-      ? seq.items.map((item, i) => {
-          const matchesCandidate = i < candidate.length && candidate[i] === String(item);
-          const matchesCommitted = i < committed.length && committed[i] === String(item);
-          const klass = matchesCommitted ? "commit" : (matchesCandidate ? "prefix" : "");
-          return `<span class="token ${klass}">${item}</span>`;
-        }).join("")
-      : '<span class="token empty">empty</span>';
-
-    const card = document.createElement("div");
-    card.className = "seq-card";
-    card.innerHTML = `
-      <div class="seq-head">
-        <h3>Node ${node}</h3>
-        <span class="gen">gen ${seq.generation}</span>
+function renderNode(node, state) {
+  const card = document.createElement("div");
+  card.className = "node-card";
+  card.innerHTML = `
+    <div class="node-head">
+      <h3>Node ${node}</h3>
+      <span class="status ${state.committed.length ? "" : "empty"}">${state.committed.length ? "committed" : "not committed"}</span>
+    </div>
+    <div class="node-body">
+      <div class="field">
+        <span class="label">committed</span>
+        <div class="tokens">${tokenList(state.committed, "commit", "empty")}</div>
       </div>
-      <div class="seq-body">
-        <div class="seq-field">
-          <span class="label">sequence</span>
-          <div class="tokens">${tokens}</div>
-        </div>
-        <div class="seq-field">
-          <span class="label">candidate prefix</span>
-          <div class="tokens">${tokenList(candidate, "prefix")}</div>
-        </div>
-        <div class="seq-field">
-          <span class="label">committed prefix</span>
-          <div class="tokens">${tokenList(committed, "commit")}</div>
-        </div>
-        <div class="seq-field">
-          <span class="label">node state</span>
-          <div class="tokens">
-            <span class="token ${support.has(String(node)) ? "support" : "off"}">${support.has(String(node)) ? "support" : "no-support"}</span>
-            <span class="token ${votes.has(String(node)) ? "commit" : "off"}">${votes.has(String(node)) ? "promise-vote" : "no-vote"}</span>
-          </div>
-        </div>
-        <div class="seq-field">
-          <span class="label">active promises</span>
-          <div class="promise-grid">
-            ${promises.length ? promises.map(promise => `
-              <div class="promise-inline">
-                <span class="label">prefix</span>
-                <div class="tokens">${tokenList(promise.prefix, "prefix")}</div>
-                <div class="tokens" style="margin-top:8px;">
-                  <span class="token ${promise.votes.includes(String(node)) ? "commit" : "off"}">${promise.votes.includes(String(node)) ? "voted" : "not-voted"}</span>
-                </div>
-              </div>
-            `).join("") : '<span class="token empty">no active promises</span>'}
-          </div>
-        </div>
+      <div class="field">
+        <span class="label">core.proposals</span>
+        <div class="tokens">${tokenList(state.core.proposals, "proposal", "empty")}</div>
       </div>
-    `;
-    sequencesEl.appendChild(card);
-  });
+      <div class="field">
+        <span class="label">core.nodesMessages</span>
+        ${renderNodesMessages(state.core.nodesMessages)}
+      </div>
+      <div class="field">
+        <span class="label">core.promises</span>
+        ${renderPromises(state.core.promises)}
+      </div>
+    </div>
+  `;
+  nodesEl.appendChild(card);
 }
 
 function render() {
@@ -515,22 +440,24 @@ function render() {
   slider.value = String(index);
   prevBtn.disabled = index === 0;
   nextBtn.disabled = index === STEPS.length - 1;
-  renderSequences(step);
+
+  nodesEl.innerHTML = "";
+  Object.entries(step.nodes).forEach(([node, state]) => renderNode(node, state));
 }
 
-slider.addEventListener("input", e => {
-  index = Number(e.target.value);
+slider.addEventListener("input", event => {
+  index = Number(event.target.value);
   render();
 });
 prevBtn.addEventListener("click", () => {
   if (index > 0) {
-    index--;
+    index -= 1;
     render();
   }
 });
 nextBtn.addEventListener("click", () => {
   if (index < STEPS.length - 1) {
-    index++;
+    index += 1;
     render();
   }
 });
