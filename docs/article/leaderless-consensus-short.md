@@ -4,7 +4,7 @@ I recently finished a focused verification pass on a small family of leaderless 
 
 The work covers five variants, from an intentionally naive failure case for learning purposes to a prefix-commit design with ordered state propagation.
 
-Sore is there to fail and make the weakness of a naive protocol explicit. Calm, Flat, and Most hold in the current finite models. Rush is the most advanced checked variant, using timeout-free prefix-based live consensus.
+Sore is there to fail and make the weakness of a naive protocol explicit. Calm, Flat, and Most hold in the current finite models. Rush is the most advanced checked variant, using timeout-free prefix-based live consensus, and its executable liveness check now also covers the 3-node case with one majority-preserving disconnect while still requiring a non-empty committed prefix to appear on at least one survivor.
 
 What mattered most in practice was not just the algorithm ladder itself, but the fact that it was checked as one coherent family with explicit safety and liveness properties.
 

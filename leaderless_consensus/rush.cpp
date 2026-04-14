@@ -298,6 +298,55 @@ RushState deliverState(RushState state, const RushStateMsg& msg) {
   return state;
 }
 
+RushGenerationState emptyGenerationState() {
+  return RushGenerationState{{}, 0};
+}
+
+RushCoreState pruneFailedCore(RushCoreState core,
+    NodeId failed,
+    const MessageSeq& committed) {
+  core.nodesMessages[failed] = emptyGenerationState();
+  core.promises =
+      normalizePromises(core.promises, core.nodesMessages, core.proposals, committed);
+  return core;
+}
+
+RushState disconnect(RushState state, NodeId failed) {
+  if (!state.alive.contains(failed)) {
+    return state;
+  }
+
+  state.alive.erase(failed);
+  RushStateMessages prunedMessages;
+  for (auto&& msg : state.stateMsgs) {
+    if (msg.from == failed || msg.to == failed) {
+      continue;
+    }
+    prunedMessages.insert(
+        RushStateMsg{msg.from, msg.to, pruneFailedCore(msg.core, failed, {})});
+  }
+  state.stateMsgs = prunedMessages;
+
+  auto survivors = state.alive;
+  for (auto&& node : survivors) {
+    const auto current = state.local.at(node);
+    auto next = current;
+    next.core = pruneFailedCore(next.core, failed, next.committed);
+    auto out = mergeState(next, node, makeEmptyCore(state.local.size()),
+        state.local.size(), state.proposed.size());
+    RushNodeState updated{out.core, out.committed};
+    if (updated == current) {
+      continue;
+    }
+    state.local[node] = updated;
+    if (updated.core != current.core) {
+      state.stateMsgs = broadcastState(state.stateMsgs, state.alive, node, updated.core);
+    }
+  }
+
+  return state;
+}
+
 bool coreWellFormed(const RushCoreState& core,
     const ProposalSet& proposed,
     const NodeSet& allNodes,
@@ -350,8 +399,10 @@ bool invariant(const RushState& state) {
     }
   }
 
-  for (auto&& [left, leftState] : state.local) {
-    for (auto&& [right, rightState] : state.local) {
+  for (auto&& left : state.alive) {
+    const auto& leftState = state.local.at(left);
+    for (auto&& right : state.alive) {
+      const auto& rightState = state.local.at(right);
       if (!isPrefix(leftState.committed, rightState.committed) &&
           !isPrefix(rightState.committed, leftState.committed)) {
         return false;
@@ -363,13 +414,22 @@ bool invariant(const RushState& state) {
 }
 
 bool commitHappened(const RushState& state) {
-  return commitHappenedAnyNonEmpty(state);
+  for (auto&& node : state.alive) {
+    if (!state.local.at(node).committed.empty()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 DEFINE_ALGORITHM(canProposeExpr, ::leaderless_consensus::rush::canPropose)
 DEFINE_ALGORITHM(proposeExpr, ::leaderless_consensus::rush::propose)
 DEFINE_ALGORITHM(canDeliverStateExpr, ::leaderless_consensus::rush::canDeliverState)
 DEFINE_ALGORITHM(deliverStateExpr, ::leaderless_consensus::rush::deliverState)
+DEFINE_ALGORITHM(canDisconnectExpr, ::leaderless_consensus::canDisconnect<RushState>)
+DEFINE_ALGORITHM(canLiveDisconnectExpr,
+    ::leaderless_consensus::canLiveDisconnect<RushState>)
+DEFINE_ALGORITHM(disconnectExpr, ::leaderless_consensus::rush::disconnect)
 DEFINE_ALGORITHM(invariantExpr, ::leaderless_consensus::rush::invariant)
 DEFINE_ALGORITHM(commitHappenedExpr, ::leaderless_consensus::rush::commitHappened)
 
@@ -392,10 +452,6 @@ struct BaseModel : IModel {
     };
   }
 
-  Boolean next() override {
-    return proposeAny() || deliverAnyState();
-  }
-
   std::optional<Boolean> ensure() override {
     return invariantExpr(state);
   }
@@ -413,8 +469,15 @@ struct SafetyModel : BaseModel {
 };
 
 struct LivenessModel : BaseModel {
+  Boolean disconnectAny() {
+    return $E(failed, nodes_) {
+      return canLiveDisconnectExpr(state, failed) &&
+             state++ == disconnectExpr(state, failed);
+    };
+  }
+
   Boolean next() override {
-    return proposeAny() || deliverAnyState();
+    return proposeAny() || deliverAnyState() || disconnectAny();
   }
 
   std::optional<LivenessBoolean> liveness() override {
@@ -429,7 +492,7 @@ TEST_F(EngineFixture, RushSafetyHoldsInvariant) {
   EXPECT_NO_THROW(e.run());
 }
 
-TEST_F(EngineFixture, RushLivenessCommits) {
+TEST_F(EngineFixture, RushLivenessCommitsWithMajorityAlive) {
   e.createModel<LivenessModel>();
   EXPECT_NO_THROW(e.run());
 }

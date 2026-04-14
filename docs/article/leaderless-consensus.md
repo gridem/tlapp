@@ -125,7 +125,7 @@ The algorithm grows commitment one position at a time. If a quorum of node seque
 
 If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks.
 
-`Rush` omits disconnect by design. The ordering logic is already the most expensive and subtle part of the family, and the current design does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.
+`Rush` does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.
 
 ## Message Semantics
 
@@ -162,7 +162,7 @@ The liveness checks are intentionally positive. The current question is not "doe
 More concretely:
 
 - `Calm`, `Flat`, and `Most` require that some node eventually commits a non-empty proposal set.
-- `Rush` requires that some node eventually commits a non-empty prefix.
+- `Rush` requires that some alive node eventually commits a non-empty prefix.
 
 Fairness is action-level rather than a coarse whole-transition rule.
 
@@ -171,9 +171,9 @@ Fairness is action-level rather than a coarse whole-transition rule.
 - For `Rush`, the liveness shape is `weakFairness(proposeAny()) && weakFairness(deliverAnyState()) && eventually(commitHappenedExpr(state))`.
 - `proposeAny()` means there exists some node and some proposal id such that a `Propose(node, id)` step is currently enabled and can be taken.
 - `deliverAnyState()` means there exists some in-flight `Rush` state message such that a `DeliverState(msg)` step is currently enabled and can be taken.
-- `commitHappenedExpr(state)` is the success predicate checked by `eventually(...)`: in the set-based variants it means some node has committed a non-empty proposal set, and in `Rush` it means some node has committed a non-empty prefix.
+- `commitHappenedExpr(state)` is the success predicate checked by `eventually(...)`: in the set-based variants it means some node has committed a non-empty proposal set, and in `Rush` it means some alive node has committed a non-empty prefix.
 - `weakFairness(action)` means the checker does not allow that action to stay continuously enabled forever without eventually taking a step of that kind.
-- `eventually(commitHappenedExpr(state))` adds the positive success condition: some node must actually commit, not merely keep the system active.
+- `eventually(commitHappenedExpr(state))` adds the positive success condition: in `Rush`, at least one node that remains alive must actually commit, not merely keep the system active.
 
 ## Verification Results
 
@@ -181,7 +181,7 @@ The current results are structurally clean:
 
 - `Sore` fails, as expected.
 - `Calm`, `Flat`, and `Most` hold in the current finite models.
-- `Rush` is the most advanced checked variant, using timeout-free prefix-based live consensus.
+- `Rush` is the most advanced checked variant, using timeout-free prefix-based live consensus. The executable liveness model also checks the 3-node case with one majority-preserving disconnect and requires a non-empty committed prefix to appear on at least one survivor.
 
 That statement should be read precisely. The result is not an informal argument that these variants "seem right." The result is that, within the current finite abstractions, the safety invariants were model-checked and the liveness properties were checked separately under explicit fairness assumptions.
 

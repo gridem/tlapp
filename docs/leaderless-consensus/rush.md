@@ -65,15 +65,15 @@ Compared with earlier drafts, the current model also:
 - stores promises by `prefix` only, not by `(prefix, support)`
 - normalizes promises after merges and after suffix sorting
 - uses bounded generations derived from the finite message space
-- omits `Disconnect` for now
+- keeps the safety model focused on proposal and state-message delivery
+- adds a separate liveness model that allows one majority-preserving disconnect in the 3-node case
 
 These changes are aimed at keeping the model finite and reducing avoidable
-state churn. `Rush` omits `Disconnect` by design, so it also does not need
-timeout-based failure handling. That gives it a structural
-robustness advantage over timeout-driven designs: progress is not gated on
-waiting for timeout expiry. It is reasonable to expect better tail-latency
-behavior from that design choice, but the checked models do not prove an
-absolute p99 bound.
+state churn. `Rush` still does not rely on timeout-based failure handling. That
+gives it a structural robustness advantage over timeout-driven designs:
+progress is not gated on waiting for timeout expiry. It is reasonable to expect
+better tail-latency behavior from that design choice, but the checked models do
+not prove an absolute p99 bound.
 
 ## Safety Shape
 
@@ -91,8 +91,7 @@ The implemented safety checks also require:
 - promise votes stay within `support(prefix)`
 
 The current executable model also carries a liveness check in a separate
-liveness model. The safety and liveness models use the same transition
-relation, since `Rush` omits `Disconnect` by design.
+liveness model.
 
 - In the executable TLA++ model, the liveness form is
   `weakFairness(proposeAny()) && weakFairness(deliverAnyState()) &&
@@ -105,14 +104,19 @@ relation, since `Rush` omits `Disconnect` by design.
   a `DeliverState(msg)` step is currently enabled and can be taken.
 - `weakFairness(deliverAnyState())` means state delivery cannot stay
   continuously enabled forever without eventually taking a state-delivery step.
-- `commitHappenedExpr(state)` means some node has committed a non-empty prefix.
+- `commitHappenedExpr(state)` means some alive node has committed a non-empty prefix.
 - `eventually(commitHappenedExpr(state))` means that commit condition must
   eventually become true.
+- The liveness-only failure model additionally allows one disconnect while a
+  majority remains alive. In the 3-node configuration used here, that means one
+  node may fail and the remaining two must still reach a non-empty commit on at
+  least one survivor.
 
 Recent `build/rel` runs:
 
 - executable safety model: about 12.9 seconds, `465187` states, `1607206` transitions
-- executable liveness model: about 22.3 seconds, `465187` states, `1607206` transitions
+- executable liveness model with one majority-preserving disconnect:
+  about 59.2 seconds, `747652` states, `3377695` transitions
 - TLC safety: in progress; a recent safety-only run started cleanly but remained
   slow after `60` seconds (`372` generated, `270` distinct)
 - TLC liveness: in progress; the current `LiveSpec` now parses and starts

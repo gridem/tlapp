@@ -44,11 +44,14 @@ InitPromises == {}
 EmptyNodesMessages ==
   [n \in Nodes |-> [messages |-> <<>>, generation |-> 0]]
 
+EmptyCore ==
+  [proposals |-> {},
+   nodesMessages |-> EmptyNodesMessages,
+   promises |-> InitPromises]
+
 InitLocal ==
   [n \in Nodes |->
-    [core |-> [proposals |-> {},
-               nodesMessages |-> EmptyNodesMessages,
-               promises |-> InitPromises],
+    [core |-> EmptyCore,
      committed |-> <<>>]]
 
 Init ==
@@ -139,6 +142,15 @@ NormalizePromises(promises, nodesMessages, proposals, committed) ==
         /\ ~IsPrefix(p.prefix, committed)
         /\ votes # {}
         /\ p.votes = votes}
+
+PruneFailedCore(core, failed, committed) ==
+  LET nodes1 ==
+        [core.nodesMessages EXCEPT
+          ![failed] = [messages |-> <<>>, generation |-> 0]]
+  IN [core EXCEPT
+        !.nodesMessages = nodes1,
+        !.promises =
+          NormalizePromises(core.promises, nodes1, core.proposals, committed)]
 
 BumpGeneration(generation, steps, proposalCount) ==
   LET cap == 2 * proposalCount + 1
@@ -237,9 +249,7 @@ Propose(node, msg) ==
   /\ msg \notin proposed
   /\ local[node] = InitLocal[node]
   /\ LET incoming ==
-           [proposals |-> {msg},
-            nodesMessages |-> EmptyNodesMessages,
-            promises |-> InitPromises]
+           [EmptyCore EXCEPT !.proposals = {msg}]
          out == MergeResult(local[node], node, incoming, Cardinality(proposed \cup {msg}))
      IN
        /\ out.changed
@@ -267,9 +277,66 @@ ProposeAny ==
 DeliverAnyState ==
   \E msg \in stateMsgs : DeliverState(msg)
 
+DisconnectNodeState(node, failed) ==
+  LET prunedState ==
+        [local[node] EXCEPT
+          !.core = PruneFailedCore(local[node].core, failed, local[node].committed)]
+      out == MergeResult(prunedState, node, EmptyCore, Cardinality(proposed))
+  IN [core |-> out.core, committed |-> out.committed]
+
+DisconnectChangedNodes(failed) ==
+  {node \in (alive \ {failed}) :
+     DisconnectNodeState(node, failed).core # local[node].core}
+
+DisconnectStateMessages(failed) ==
+  LET survivors == alive \ {failed}
+      changed == DisconnectChangedNodes(failed)
+      retainedMsgs ==
+        {msg \in stateMsgs :
+           /\ msg.from # failed
+           /\ msg.to # failed
+           /\ msg.from \notin changed}
+      retained ==
+        {[msg EXCEPT !.core = PruneFailedCore(msg.core, failed, <<>>)] :
+           msg \in retainedMsgs}
+      rebroadcast ==
+        UNION {{[from |-> from,
+                  to |-> to,
+                  core |-> DisconnectNodeState(from, failed).core] :
+                   to \in (survivors \ {from})} :
+                from \in changed}
+  IN retained \cup rebroadcast
+
+Disconnect(failed) ==
+  /\ failed \in alive
+  /\ alive' = alive \ {failed}
+  /\ proposed' = proposed
+  /\ local' =
+       [node \in Nodes |->
+         IF node \in (alive \ {failed})
+         THEN DisconnectNodeState(node, failed)
+         ELSE local[node]]
+  /\ stateMsgs' = DisconnectStateMessages(failed)
+
+DisconnectAny ==
+  \E failed \in Nodes : Disconnect(failed)
+
+LiveDisconnect(failed) ==
+  /\ failed \in alive
+  /\ Cardinality(alive \ {failed}) >= Majority
+  /\ Disconnect(failed)
+
+LiveDisconnectAny ==
+  \E failed \in Nodes : LiveDisconnect(failed)
+
 Next ==
   \/ ProposeAny
   \/ DeliverAnyState
+
+LiveNext ==
+  \/ ProposeAny
+  \/ DeliverAnyState
+  \/ LiveDisconnectAny
 
 CoreWellFormed(core) ==
   /\ core \in CoreState
@@ -301,8 +368,8 @@ MessageWellFormed ==
     /\ CoreWellFormed(msg.core)
 
 PrefixAgreement ==
-  \A left \in Nodes :
-    \A right \in Nodes :
+  \A left \in alive :
+    \A right \in alive :
       Comparable(local[left].committed, local[right].committed)
 
 Invariant ==
@@ -312,14 +379,15 @@ Invariant ==
   /\ PrefixAgreement
 
 CommitHappened ==
-  \E node \in Nodes :
+  \E node \in alive :
     local[node].committed # <<>>
 
 Termination == <>CommitHappened
 
 Spec == Init /\ [][Next]_vars
 LiveSpec ==
-  /\ Spec
+  /\ Init
+  /\ [][LiveNext]_vars
   /\ WF_vars(ProposeAny)
   /\ WF_vars(DeliverAnyState)
 

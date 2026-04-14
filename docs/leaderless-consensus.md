@@ -15,10 +15,10 @@ The source material discusses five variants:
 3. `Flat`: uniform merge with vote preservation and payload-free commit.
 4. `Most`: majority-based proposal voting with commit payload propagation in the current model.
 5. `Rush`: the most advanced variant, using ordered prefix commitment with
-   generation tracking. It omits disconnects by design, so it does not need
-   timeout-based failure handling. That gives it a structural robustness
-   advantage over timeout-driven designs, although the checked models do not
-   prove an absolute p99 latency bound.
+   generation tracking. It does not rely on timeout-based failure handling,
+   which gives it a structural robustness advantage over timeout-driven
+   designs, although the checked models do not prove an absolute p99 latency
+   bound.
 
 All five are now modeled in this repo.
 
@@ -64,7 +64,9 @@ The executable and TLC models use small finite abstractions:
 - In `Rush`, the analogous rule is stricter: a proposal may be proposed only while the node is still in its initial local state.
 - Broadcast sends to the other live nodes only.
 - The set-based variants model disconnect as an immediate local state update on survivors.
-- `Rush` omits disconnect transitions by design.
+- `Rush` keeps the safety model focused on proposal and state-message delivery,
+  while the liveness model additionally allows one majority-preserving
+  disconnect in the 3-node case.
 
 ## Safety Checks
 
@@ -98,9 +100,10 @@ the TLA+ spec:
 - `Flat` also uses separate safety and liveness models: safety keeps the full
   disconnect space, while liveness requires some node to commit a non-empty
   proposal set under majority-preserving disconnects
-- `Rush` uses separate safety and liveness models over the same no-disconnect
-  transition relation, and liveness requires some node to commit a non-empty
-  prefix
+- `Rush` uses separate safety and liveness models: safety checks the core
+  prefix-ordering protocol without disconnect, while liveness additionally
+  allows one majority-preserving disconnect and requires some alive node to
+  commit a non-empty prefix
 - `Calm`, `Flat`, and `Most` use action-level weak fairness on `ProposeAny`
   and `DeliverAnyVote`
 - `Rush` uses action-level weak fairness on `ProposeAny` and `DeliverAnyState`
@@ -116,11 +119,16 @@ In the executable TLA++ models:
   `Propose(node, id)` step is currently enabled and can be taken
 - `deliverAnyState()` means there exists some in-flight `Rush` state message
   such that a `DeliverState(msg)` step is currently enabled and can be taken
+- in the `Rush` liveness model, one disconnect is also allowed as long as a
+  majority remains alive; with three nodes, that means one node may fail and
+  the remaining two must still be able to produce a non-empty commit on at
+  least one survivor
 - `weakFairness(action)` means the checker does not allow that action to stay
   continuously enabled forever without eventually taking a step of that kind
 - the separate `eventually(...)` clause adds the positive success condition
-  that some node must actually commit; in code that is checked through
-  `commitHappenedExpr(state)`
+  that commit must actually happen; in code that is checked through
+  `commitHappenedExpr(state)`, which means some node commits in the set-based
+  variants and some alive node commits in `Rush`
 
 ## Verification Result
 
@@ -170,7 +178,7 @@ Recent checks from `build/rel` and TLC:
 | `Calm` | 3.6s | 8.4s | 5.5s | 22.6s |
 | `Flat` | 28.0s | 46.7s | 45.5s | 161.3s |
 | `Most` | 3.3s | 11.7s | 3.6s | 69.5s |
-| `Rush` | 12.9s | in progress | 22.3s | in progress |
+| `Rush` | 12.9s | in progress | 59.2s | in progress |
 
 Current takeaway:
 

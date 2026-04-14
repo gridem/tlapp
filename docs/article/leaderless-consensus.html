@@ -100,7 +100,7 @@
 </ul>
 <p>The algorithm grows commitment one position at a time. If a quorum of node sequences has the same id at the next uncommitted position, the candidate prefix can be extended. Support for that prefix is recomputed from current node sequences, promise votes are intersected with that support, and a quorum condition decides whether the prefix is committed.</p>
 <p>If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks.</p>
-<p><code>Rush</code> omits disconnect by design. The ordering logic is already the most expensive and subtle part of the family, and the current design does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.</p>
+<p><code>Rush</code> does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.</p>
 
 <h2 id="message-semantics">Message Semantics</h2>
 <p>The variants can also be understood by the amount of meaning they place into messages.</p>
@@ -133,7 +133,7 @@
 <p>More concretely:</p>
 <ul>
 <li><code>Calm</code>, <code>Flat</code>, and <code>Most</code> require that some node eventually commits a non-empty proposal set.</li>
-<li><code>Rush</code> requires that some node eventually commits a non-empty prefix.</li>
+<li><code>Rush</code> requires that some alive node eventually commits a non-empty prefix.</li>
 </ul>
 <p>Fairness is action-level rather than a coarse whole-transition rule.</p>
 <ul>
@@ -142,9 +142,9 @@
 <li>For <code>Rush</code>, the liveness shape is <code>weakFairness(proposeAny()) &amp;&amp; weakFairness(deliverAnyState()) &amp;&amp; eventually(commitHappenedExpr(state))</code>.</li>
 <li><code>proposeAny()</code> means there exists some node and some proposal id such that a <code>Propose(node, id)</code> step is currently enabled and can be taken.</li>
 <li><code>deliverAnyState()</code> means there exists some in-flight <code>Rush</code> state message such that a <code>DeliverState(msg)</code> step is currently enabled and can be taken.</li>
-<li><code>commitHappenedExpr(state)</code> is the success predicate checked by <code>eventually(...)</code>: in the set-based variants it means some node has committed a non-empty proposal set, and in <code>Rush</code> it means some node has committed a non-empty prefix.</li>
+<li><code>commitHappenedExpr(state)</code> is the success predicate checked by <code>eventually(...)</code>: in the set-based variants it means some node has committed a non-empty proposal set, and in <code>Rush</code> it means some alive node has committed a non-empty prefix.</li>
 <li><code>weakFairness(action)</code> means the checker does not allow that action to stay continuously enabled forever without eventually taking a step of that kind.</li>
-<li><code>eventually(commitHappenedExpr(state))</code> adds the positive success condition: some node must actually commit, not merely keep the system active.</li>
+<li><code>eventually(commitHappenedExpr(state))</code> adds the positive success condition: in <code>Rush</code>, at least one node that remains alive must actually commit, not merely keep the system active.</li>
 </ul>
 
 <h2 id="verification-results">Verification Results</h2>
@@ -152,7 +152,7 @@
 <ul>
 <li><code>Sore</code> fails, as expected.</li>
 <li><code>Calm</code>, <code>Flat</code>, and <code>Most</code> hold in the current finite models.</li>
-<li><code>Rush</code> is the most advanced checked variant, using timeout-free prefix-based live consensus.</li>
+<li><code>Rush</code> is the most advanced checked variant, using timeout-free prefix-based live consensus. The executable liveness model also checks the 3-node case with one majority-preserving disconnect and requires a non-empty committed prefix to appear on at least one survivor.</li>
 </ul>
 <p>That statement should be read precisely. The result is not an informal argument that these variants “seem right.” The result is that, within the current finite abstractions, the safety invariants were model-checked and the liveness properties were checked separately under explicit fairness assumptions.</p>
 <p>This article focuses on the executable TLA++ side. That is the main engineering loop for this work: it is fast enough to refine the algorithms, rerun the full finite checks, and validate design corrections such as disconnect behavior, commit payload propagation, and <code>Rush</code> generation and promise handling.</p>
