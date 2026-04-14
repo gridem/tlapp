@@ -208,141 +208,209 @@ void Engine::checkLiveness() {
   auto weakLayout = makeBitLayout(liveness_->weakFairness.size());
   auto strongLayout = makeBitLayout(liveness_->strongFairness.size());
 
-  for (size_t i = 0; i < liveness_->eventually.size(); ++i) {
-    maybeLog("eventually", i + 1, liveness_->eventually.size());
-    auto&& predicate = liveness_->eventually[i];
-    auto cache = computePredicateCache(predicate, [&](size_t current, size_t total) {
-      maybeLog("eventually_states", current, total);
-    });
-    std::vector<const State*> cycle;
-    if (!findEventuallyCounterexample(cache, graph, cycle)) {
-      continue;
-    }
-    LOG(ERROR) << "Liveness eventually condition violated";
-    if (!cycle.empty()) {
-      trace(*cycle.front());
-      traceCycle(cycle);
-    }
-    throw LivenessError("Eventually condition violated");
-  }
-
   auto weakEnabled = makeBitRows(graphStates_.size(), weakLayout);
-  auto weakTaken = makeBitRows(sccs.components.size(), weakLayout);
+  std::vector<ActionCache> weakCaches;
+  weakCaches.reserve(liveness_->weakFairness.size());
   for (size_t i = 0; i < liveness_->weakFairness.size(); ++i) {
     maybeLog("weak_fairness", i + 1, liveness_->weakFairness.size());
     auto cache = computeActionCache(
         liveness_->weakFairness[i], graph, [&](size_t current, size_t total) {
           maybeLog("weak_fairness_states", current, total);
         });
+    weakCaches.push_back(cache);
     for (size_t node = 0; node < cache.enabled.size(); ++node) {
       if (cache.enabled[node]) {
         setBit(weakEnabled, weakLayout, node, i);
-      }
-      auto component = sccs.componentOf[node];
-      for (auto&& target : cache.targets[node]) {
-        if (sccs.componentOf[target] == component) {
-          setBit(weakTaken, weakLayout, component, i);
-          break;
-        }
       }
     }
   }
 
   auto strongEnabled = makeBitRows(graphStates_.size(), strongLayout);
-  auto strongTaken = makeBitRows(sccs.components.size(), strongLayout);
+  std::vector<ActionCache> strongCaches;
+  strongCaches.reserve(liveness_->strongFairness.size());
   for (size_t i = 0; i < liveness_->strongFairness.size(); ++i) {
     maybeLog("strong_fairness", i + 1, liveness_->strongFairness.size());
     auto cache = computeActionCache(
         liveness_->strongFairness[i], graph, [&](size_t current, size_t total) {
           maybeLog("strong_fairness_states", current, total);
         });
+    strongCaches.push_back(cache);
     for (size_t node = 0; node < cache.enabled.size(); ++node) {
       if (cache.enabled[node]) {
         setBit(strongEnabled, strongLayout, node, i);
       }
-      auto component = sccs.componentOf[node];
+    }
+  }
+
+  std::vector<size_t> componentMarks(graphStates_.size());
+  size_t componentStamp = 1;
+  std::vector<BitWord> weakEnabledAll(weakLayout.words);
+  std::vector<BitWord> weakTakenBits(weakLayout.words);
+  std::vector<BitWord> weakViolated(weakLayout.words);
+  std::vector<BitWord> strongEnabledAny(strongLayout.words);
+  std::vector<BitWord> strongTakenBits(strongLayout.words);
+  std::vector<BitWord> strongViolated(strongLayout.words);
+
+  auto isFairScc = [&](const std::vector<NodeId>& component) {
+    for (auto&& node : component) {
+      componentMarks[node] = componentStamp;
+    }
+
+    auto isTakenInside = [&](const auto& cache, NodeId node) {
       for (auto&& target : cache.targets[node]) {
-        if (sccs.componentOf[target] == component) {
-          setBit(strongTaken, strongLayout, component, i);
+        if (componentMarks[target] == componentStamp) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (weakLayout.words != 0) {
+      fillFullBits(weakEnabledAll, weakLayout);
+      std::fill(weakTakenBits.begin(), weakTakenBits.end(), 0);
+      for (auto&& node : component) {
+        auto nodeEnabled = rowBits(weakEnabled, weakLayout, node);
+        for (size_t word = 0; word < weakLayout.words; ++word) {
+          weakEnabledAll[word] &= nodeEnabled[word];
+        }
+        for (size_t i = 0; i < weakCaches.size(); ++i) {
+          if (isTakenInside(weakCaches[i], node)) {
+            setBit(weakTakenBits, weakLayout, 0, i);
+          }
+        }
+      }
+      for (size_t word = 0; word < weakLayout.words; ++word) {
+        weakViolated[word] = weakEnabledAll[word] & ~weakTakenBits[word];
+      }
+      weakViolated.back() &= weakLayout.tailMask;
+      if (anyBits(weakViolated)) {
+        ++componentStamp;
+        if (componentStamp == 0) {
+          std::fill(componentMarks.begin(), componentMarks.end(), 0);
+          componentStamp = 1;
+        }
+        return false;
+      }
+    }
+
+    if (strongLayout.words != 0) {
+      std::fill(strongEnabledAny.begin(), strongEnabledAny.end(), 0);
+      std::fill(strongTakenBits.begin(), strongTakenBits.end(), 0);
+      for (auto&& node : component) {
+        auto nodeEnabled = rowBits(strongEnabled, strongLayout, node);
+        for (size_t word = 0; word < strongLayout.words; ++word) {
+          strongEnabledAny[word] |= nodeEnabled[word];
+        }
+        for (size_t i = 0; i < strongCaches.size(); ++i) {
+          if (isTakenInside(strongCaches[i], node)) {
+            setBit(strongTakenBits, strongLayout, 0, i);
+          }
+        }
+      }
+      for (size_t word = 0; word < strongLayout.words; ++word) {
+        strongViolated[word] = strongEnabledAny[word] & ~strongTakenBits[word];
+      }
+      strongViolated.back() &= strongLayout.tailMask;
+      if (anyBits(strongViolated)) {
+        ++componentStamp;
+        if (componentStamp == 0) {
+          std::fill(componentMarks.begin(), componentMarks.end(), 0);
+          componentStamp = 1;
+        }
+        return false;
+      }
+    }
+
+    ++componentStamp;
+    if (componentStamp == 0) {
+      std::fill(componentMarks.begin(), componentMarks.end(), 0);
+      componentStamp = 1;
+    }
+    return true;
+  };
+
+  for (size_t i = 0; i < liveness_->eventually.size(); ++i) {
+    maybeLog("eventually", i + 1, liveness_->eventually.size());
+    auto&& predicate = liveness_->eventually[i];
+    auto cache = computePredicateCache(predicate, [&](size_t current, size_t total) {
+      maybeLog("eventually_states", current, total);
+    });
+
+    std::vector<uint8_t> allowed(graphStates_.size(), 1);
+    for (size_t node = 0; node < cache.holds.size(); ++node) {
+      allowed[node] = cache.holds[node] ? 0 : 1;
+    }
+    auto restrictedGraph = filterGraphInfo(graph, allowed);
+    auto restrictedSccs = computeSccs(restrictedGraph, allowed);
+    std::vector<uint8_t> reachableBad(graphStates_.size());
+    std::deque<NodeId> toVisit;
+    for (NodeId node = 0; node < graphStates_.size(); ++node) {
+      if (!allowed[node]) {
+        continue;
+      }
+      auto it = processed_.find(graphStates_[node]);
+      if (it == processed_.end()) {
+        throw EngineError("Invalid trace root for liveness graph");
+      }
+      if (it->second == nullptr) {
+        reachableBad[node] = 1;
+        toVisit.push_back(node);
+      }
+    }
+    while (!toVisit.empty()) {
+      auto node = toVisit.front();
+      toVisit.pop_front();
+      for (auto&& target : restrictedGraph.outgoing[node]) {
+        if (reachableBad[target]) {
+          continue;
+        }
+        reachableBad[target] = 1;
+        toVisit.push_back(target);
+      }
+    }
+    auto isEventuallyInfiniteScc = [&](const std::vector<NodeId>& component) {
+      if (component.size() > 1) {
+        return true;
+      }
+      auto node = component.front();
+      for (auto&& target : restrictedGraph.outgoing[node]) {
+        if (target == node) {
+          return true;
+        }
+      }
+      return graph.outgoing[node].empty();
+    };
+
+    for (size_t component = 0; component < restrictedSccs.components.size();
+        ++component) {
+      auto reachable = false;
+      for (auto&& node : restrictedSccs.components[component]) {
+        if (reachableBad[node]) {
+          reachable = true;
           break;
         }
       }
-    }
-  }
-
-  if (weakLayout.words != 0) {
-    std::vector<BitWord> enabledAll(weakLayout.words);
-    std::vector<BitWord> violated(weakLayout.words);
-    for (size_t i = 0; i < sccs.components.size(); ++i) {
-      if (!sccs.infinite[i]) {
+      if (!reachable) {
         continue;
       }
-
-      fillFullBits(enabledAll, weakLayout);
-      for (auto&& node : sccs.components[i]) {
-        auto nodeEnabled = rowBits(weakEnabled, weakLayout, node);
-        for (size_t word = 0; word < weakLayout.words; ++word) {
-          enabledAll[word] &= nodeEnabled[word];
-        }
+      if (!isEventuallyInfiniteScc(restrictedSccs.components[component])) {
+        continue;
       }
-
-      auto takenBits = rowBits(weakTaken, weakLayout, i);
-      for (size_t word = 0; word < weakLayout.words; ++word) {
-        violated[word] = enabledAll[word] & ~takenBits[word];
-      }
-      violated.back() &= weakLayout.tailMask;
-      if (!anyBits(violated)) {
+      if (!isFairScc(restrictedSccs.components[component])) {
         continue;
       }
 
       std::vector<const State*> cycle;
-      if (!extractCycleFromScc(sccs.components[i], graph, cycle)) {
+      if (!extractCycleFromScc(
+              restrictedSccs.components[component], restrictedGraph, cycle)) {
         throw EngineError("Invalid infinite SCC without cycle");
       }
-      LOG(ERROR) << "Liveness weak fairness condition violated";
+      LOG(ERROR) << "Liveness eventually condition violated";
       if (!cycle.empty()) {
         trace(*cycle.front());
         traceCycle(cycle);
       }
-      throw LivenessError("Weak fairness condition violated");
-    }
-  }
-
-  if (strongLayout.words != 0) {
-    std::vector<BitWord> enabledAny(strongLayout.words);
-    std::vector<BitWord> violated(strongLayout.words);
-    for (size_t i = 0; i < sccs.components.size(); ++i) {
-      if (!sccs.infinite[i]) {
-        continue;
-      }
-
-      std::fill(enabledAny.begin(), enabledAny.end(), 0);
-      for (auto&& node : sccs.components[i]) {
-        auto nodeEnabled = rowBits(strongEnabled, strongLayout, node);
-        for (size_t word = 0; word < strongLayout.words; ++word) {
-          enabledAny[word] |= nodeEnabled[word];
-        }
-      }
-
-      auto takenBits = rowBits(strongTaken, strongLayout, i);
-      for (size_t word = 0; word < strongLayout.words; ++word) {
-        violated[word] = enabledAny[word] & ~takenBits[word];
-      }
-      violated.back() &= strongLayout.tailMask;
-      if (!anyBits(violated)) {
-        continue;
-      }
-
-      std::vector<const State*> cycle;
-      if (!extractCycleFromScc(sccs.components[i], graph, cycle)) {
-        throw EngineError("Invalid infinite SCC without cycle");
-      }
-      LOG(ERROR) << "Liveness strong fairness condition violated";
-      if (!cycle.empty()) {
-        trace(*cycle.front());
-        traceCycle(cycle);
-      }
-      throw LivenessError("Strong fairness condition violated");
+      throw LivenessError("Eventually condition violated");
     }
   }
 
@@ -440,6 +508,31 @@ Engine::GraphInfo Engine::buildGraphInfo() const {
   }
 
   return graph;
+}
+
+Engine::GraphInfo Engine::filterGraphInfo(const GraphInfo& graph,
+    const std::vector<uint8_t>& allowed) const {
+  GraphInfo filtered;
+  filtered.stateIds = graph.stateIds;
+  filtered.outgoing = graph.outgoing;
+
+  for (size_t i = 0; i < filtered.outgoing.size(); ++i) {
+    if (!allowed.empty() && !allowed[i]) {
+      filtered.outgoing[i].clear();
+      continue;
+    }
+
+    auto& outgoing = filtered.outgoing[i];
+    size_t nextWrite = 0;
+    for (auto&& target : outgoing) {
+      if (allowed.empty() || allowed[target]) {
+        outgoing[nextWrite++] = target;
+      }
+    }
+    outgoing.resize(nextWrite);
+  }
+
+  return filtered;
 }
 
 bool Engine::holdsOnState(const BoundPredicate<Boolean>& e, const State& state) {
@@ -548,9 +641,12 @@ Engine::ActionCache Engine::computeActionCache(const BoundNextAction<Boolean>& a
   return cache;
 }
 
-Engine::SccInfo Engine::computeSccs(const GraphInfo& graph) const {
+Engine::SccInfo Engine::computeSccs(const GraphInfo& graph,
+    const std::vector<uint8_t>& allowed) const {
   SccInfo sccs;
   sccs.componentOf.resize(graphStates_.size(), static_cast<NodeId>(-1));
+
+  auto isAllowed = [&](NodeId state) { return allowed.empty() || allowed[state]; };
 
   std::vector<int> index(graphStates_.size(), -1);
   std::vector<int> lowlink(graphStates_.size(), -1);
@@ -566,6 +662,9 @@ Engine::SccInfo Engine::computeSccs(const GraphInfo& graph) const {
     onStack[state] = 1;
 
     for (auto&& next : graph.outgoing[state]) {
+      if (!isAllowed(next)) {
+        continue;
+      }
       if (index[next] == -1) {
         strongConnect(next);
         lowlink[state] = std::min(lowlink[state], lowlink[next]);
@@ -593,7 +692,7 @@ Engine::SccInfo Engine::computeSccs(const GraphInfo& graph) const {
   };
 
   for (NodeId state = 0; state < graphStates_.size(); ++state) {
-    if (index[state] == -1) {
+    if (isAllowed(state) && index[state] == -1) {
       strongConnect(state);
     }
   }

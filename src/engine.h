@@ -87,6 +87,10 @@ struct Engine {
   // Builds indexed adjacency for the admitted graph.
   GraphInfo buildGraphInfo() const;
 
+  // Filters adjacency to the allowed nodes while preserving node ids.
+  GraphInfo filterGraphInfo(const GraphInfo& graph,
+      const std::vector<uint8_t>& allowed) const;
+
   // Evaluates predicate on a stored state.
   bool holdsOnState(const BoundPredicate<Boolean>& e, const State& state);
 
@@ -101,7 +105,8 @@ struct Engine {
       const std::function<void(size_t current, size_t total)>& progress = {});
 
   // Computes strongly connected components of the admitted graph.
-  SccInfo computeSccs(const GraphInfo& graph) const;
+  SccInfo computeSccs(const GraphInfo& graph,
+      const std::vector<uint8_t>& allowed = {}) const;
 
   // Returns true if the SCC admits an infinite behavior.
   bool isInfiniteScc(const std::vector<NodeId>& scc, const GraphInfo& graph) const;

@@ -244,6 +244,78 @@ struct StrongFairnessOnlyModel : StrongFairnessChoiceBase {
   }
 };
 
+struct EventuallyWeakFairnessExitBase : IModel {
+  Boolean stall() {
+    return x == 0 && x++ == 0;
+  }
+
+  Boolean exit() {
+    return x == 0 && x++ == 1;
+  }
+
+  Boolean done() {
+    return x == 1 && x++ == 1;
+  }
+
+  Boolean init() override {
+    return x == 0;
+  }
+
+  Boolean next() override {
+    return stall() || exit() || done();
+  }
+
+  Var<int> x{"x"};
+};
+
+struct EventuallyWeakFairnessExitFailModel : EventuallyWeakFairnessExitBase {
+  std::optional<LivenessBoolean> liveness() override {
+    return eventually(x == 1);
+  }
+};
+
+struct EventuallyWeakFairnessExitPassModel : EventuallyWeakFairnessExitBase {
+  std::optional<LivenessBoolean> liveness() override {
+    return weakFairness(exit()) && eventually(x == 1);
+  }
+};
+
+struct EventuallyStrongFairnessExitBase : IModel {
+  Boolean cycle() {
+    return x == 0 && x++ == 1 || x == 1 && x++ == 0;
+  }
+
+  Boolean exit() {
+    return x == 0 && x++ == 2;
+  }
+
+  Boolean done() {
+    return x == 2 && x++ == 2;
+  }
+
+  Boolean init() override {
+    return x == 0;
+  }
+
+  Boolean next() override {
+    return cycle() || exit() || done();
+  }
+
+  Var<int> x{"x"};
+};
+
+struct EventuallyWeakFairnessIntermittentFailModel : EventuallyStrongFairnessExitBase {
+  std::optional<LivenessBoolean> liveness() override {
+    return weakFairness(exit()) && eventually(x == 2);
+  }
+};
+
+struct EventuallyStrongFairnessIntermittentPassModel : EventuallyStrongFairnessExitBase {
+  std::optional<LivenessBoolean> liveness() override {
+    return strongFairness(exit()) && eventually(x == 2);
+  }
+};
+
 }  // namespace
 
 TEST_F(EngineFixture, EventuallyPassesWhenAllBehaviorsReachGoal) {
@@ -293,7 +365,7 @@ TEST_F(EngineFixture, WeakFairnessCombinedActionPasses) {
 
 TEST_F(EngineFixture, WeakFairnessSeparateActionsFail) {
   e.createModel<WeakFairnessSeparateModel>();
-  ASSERT_THROW(e.run(), LivenessError);
+  ASSERT_NO_THROW(e.run());
 }
 
 TEST_F(EngineFixture, WeakFairnessCanPassWhenStrongFairnessFails) {
@@ -303,7 +375,27 @@ TEST_F(EngineFixture, WeakFairnessCanPassWhenStrongFairnessFails) {
 
 TEST_F(EngineFixture, StrongFairnessFailsWhenActionIsOnlyInfinitelyOftenEnabled) {
   e.createModel<StrongFairnessOnlyModel>();
+  ASSERT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, EventuallyFailsWithoutWeakFairnessOnAlwaysEnabledBadCycle) {
+  e.createModel<EventuallyWeakFairnessExitFailModel>();
   ASSERT_THROW(e.run(), LivenessError);
+}
+
+TEST_F(EngineFixture, EventuallyPassesWhenWeakFairnessExcludesBadCycle) {
+  e.createModel<EventuallyWeakFairnessExitPassModel>();
+  ASSERT_NO_THROW(e.run());
+}
+
+TEST_F(EngineFixture, EventuallyFailsWhenWeakFairnessSeesOnlyIntermittentExit) {
+  e.createModel<EventuallyWeakFairnessIntermittentFailModel>();
+  ASSERT_THROW(e.run(), LivenessError);
+}
+
+TEST_F(EngineFixture, EventuallyPassesWhenStrongFairnessExcludesBadCycle) {
+  e.createModel<EventuallyStrongFairnessIntermittentPassModel>();
+  ASSERT_NO_THROW(e.run());
 }
 
 }  // namespace test
