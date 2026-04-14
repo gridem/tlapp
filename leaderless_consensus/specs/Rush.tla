@@ -18,6 +18,8 @@ MaxGeneration == 2 * Cardinality(MessageIds) + 1
 
 Majority == Cardinality(Nodes) \div 2 + 1
 
+MajorityOf(nodes) == Cardinality(nodes) \div 2 + 1
+
 GenerationState ==
   [messages : MessageSeqs, generation : 0..MaxGeneration]
 
@@ -33,7 +35,7 @@ NodeState ==
   [core : CoreState, committed : MessageSeqs]
 
 StateMessage ==
-  [from : Nodes, to : Nodes, core : CoreState]
+  [from : Nodes, to : Nodes, core : CoreState, committed : MessageSeqs]
 
 VARIABLES alive, proposed, local, stateMsgs
 
@@ -49,10 +51,11 @@ EmptyCore ==
    nodesMessages |-> EmptyNodesMessages,
    promises |-> InitPromises]
 
+EmptyNodeState ==
+  [core |-> EmptyCore, committed |-> <<>>]
+
 InitLocal ==
-  [n \in Nodes |->
-    [core |-> EmptyCore,
-     committed |-> <<>>]]
+  [n \in Nodes |-> EmptyNodeState]
 
 Init ==
   /\ alive = Nodes
@@ -68,6 +71,13 @@ IsPrefix(left, right) ==
 
 Comparable(left, right) ==
   IsPrefix(left, right) \/ IsPrefix(right, left)
+
+SuffixAfter(values, prefix) ==
+  IF IsPrefix(prefix, values)
+  THEN IF Len(prefix) = Len(values)
+       THEN <<>>
+       ELSE SubSeq(values, Len(prefix) + 1, Len(values))
+  ELSE <<>>
 
 RECURSIVE SortedSeqFromSet(_)
 
@@ -91,10 +101,13 @@ SortFrom(seq, idx) ==
        ELSE SubSeq(seq, 1, idx - 1) \o
             SortedSeqFromSet(SeqElems(SubSeq(seq, idx, Len(seq))))
 
-BroadcastState(queue, from, core, aliveSet) ==
+BroadcastState(queue, from, state, aliveSet) ==
   {m \in queue : ~(m.from = from /\ m.to \in (aliveSet \ {from}))} \cup
-  {[from |-> from, to |-> to, core |-> core] :
-     to \in (aliveSet \ {from})}
+  {[from |-> from,
+    to |-> to,
+    core |-> state.core,
+    committed |-> state.committed] :
+      to \in (aliveSet \ {from})}
 
 RECURSIVE SeqLess(_, _)
 
@@ -108,6 +121,25 @@ SeqLess(left, right) ==
             ELSE IF Head(left) > Head(right)
                  THEN FALSE
                  ELSE SeqLess(Tail(left), Tail(right))
+
+RECURSIVE RemoveCommitted(_, _, _)
+
+RemoveCommitted(seq, committedIds, i) ==
+  IF i > Len(seq)
+  THEN <<>>
+  ELSE IF seq[i] \in committedIds
+       THEN RemoveCommitted(seq, committedIds, i + 1)
+       ELSE <<seq[i]>> \o RemoveCommitted(seq, committedIds, i + 1)
+
+WithoutCommitted(seq, committed) ==
+  RemoveCommitted(seq, SeqElems(committed), 1)
+
+MergeCommitted(left, right) ==
+  IF IsPrefix(left, right)
+  THEN right
+  ELSE IF IsPrefix(right, left)
+       THEN left
+       ELSE left
 
 MergeNodesMessages(current, incoming) ==
   [n \in Nodes |->
@@ -125,32 +157,64 @@ PromiseVotesFor(promises, prefix) ==
 
 PutPromiseVotes(promises, prefix, votes) ==
   LET retained == {p \in promises : p.prefix # prefix}
-  IN IF votes = {}
+  IN IF prefix = <<>> \/ votes = {}
      THEN retained
      ELSE retained \cup {[prefix |-> prefix, votes |-> votes]}
 
-PrefixSupport(nodesMessages, prefix) ==
-  {n \in Nodes :
+PrefixSupport(nodesMessages, aliveSet, prefix) ==
+  {n \in aliveSet :
      /\ Len(nodesMessages[n].messages) >= Len(prefix)
      /\ prefix = SubSeq(nodesMessages[n].messages, 1, Len(prefix))}
 
-NormalizePromises(promises, nodesMessages, proposals, committed) ==
+NormalizePromises(promises, nodesMessages, aliveSet, proposals) ==
   {p \in PromiseState :
-     LET support == PrefixSupport(nodesMessages, p.prefix)
+     LET support == PrefixSupport(nodesMessages, aliveSet, p.prefix)
          votes == PromiseVotesFor(promises, p.prefix) \cap support
-     IN /\ SeqElems(p.prefix) \subseteq proposals
-        /\ ~IsPrefix(p.prefix, committed)
+     IN /\ p.prefix # <<>>
+        /\ p.prefix \in MessageSeqs
+        /\ SeqElems(p.prefix) \subseteq proposals
         /\ votes # {}
         /\ p.votes = votes}
 
-PruneFailedCore(core, failed, committed) ==
+RebaseGeneration(state, fromCommitted, toCommitted) ==
+  LET delta == SuffixAfter(toCommitted, fromCommitted)
+      messages0 == state.messages
+      messages1 ==
+        IF /\ delta # <<>>
+           /\ IsPrefix(delta, messages0)
+        THEN SuffixAfter(messages0, delta)
+        ELSE messages0
+  IN [state EXCEPT !.messages = WithoutCommitted(messages1, toCommitted)]
+
+RebasePromises(promises, fromCommitted, toCommitted) ==
+  LET delta == SuffixAfter(toCommitted, fromCommitted)
+  IN UNION {
+       LET prefix0 == promise.prefix
+           prefix1 ==
+             IF /\ delta # <<>>
+                /\ IsPrefix(delta, prefix0)
+             THEN SuffixAfter(prefix0, delta)
+             ELSE prefix0
+           prefix2 == WithoutCommitted(prefix1, toCommitted)
+       IN IF prefix2 = <<>>
+          THEN {}
+          ELSE {[promise EXCEPT !.prefix = prefix2]}
+       : promise \in promises}
+
+RebaseCore(core, aliveSet, fromCommitted, toCommitted) ==
   LET nodes1 ==
-        [core.nodesMessages EXCEPT
-          ![failed] = [messages |-> <<>>, generation |-> 0]]
-  IN [core EXCEPT
-        !.nodesMessages = nodes1,
-        !.promises =
-          NormalizePromises(core.promises, nodes1, core.proposals, committed)]
+        [n \in Nodes |->
+          RebaseGeneration(core.nodesMessages[n], fromCommitted, toCommitted)]
+      proposals1 == core.proposals \ SeqElems(toCommitted)
+      promises1 ==
+        NormalizePromises(
+          RebasePromises(core.promises, fromCommitted, toCommitted),
+          nodes1,
+          aliveSet,
+          proposals1)
+  IN [proposals |-> proposals1,
+      nodesMessages |-> nodes1,
+      promises |-> promises1]
 
 BumpGeneration(generation, steps, proposalCount) ==
   LET cap == 2 * proposalCount + 1
@@ -158,62 +222,58 @@ BumpGeneration(generation, steps, proposalCount) ==
      THEN generation + steps
      ELSE cap
 
-BaseCore(core, self, incoming, committed, proposalCount) ==
-  LET mergedNodes == MergeNodesMessages(core.nodesMessages, incoming.nodesMessages)
-      newIds == NewProposalSeq(core.proposals, incoming.proposals)
-      self0 == mergedNodes[self]
-      self1 ==
-        IF Len(newIds) = 0
-        THEN self0
-        ELSE [self0 EXCEPT
-                !.messages = @ \o newIds,
-                !.generation = BumpGeneration(@, Len(newIds), proposalCount)]
-      proposals1 == core.proposals \cup incoming.proposals
-      nodes1 == [mergedNodes EXCEPT ![self] = self1]
-  IN
-    [proposals |-> proposals1,
-     nodesMessages |-> nodes1,
-     promises |-> NormalizePromises(core.promises \cup incoming.promises,
-                                    nodes1, proposals1, committed)]
-
-MajorityIds(nodesMessages, idx) ==
+MajorityIds(nodesMessages, aliveSet, idx) ==
   {id \in MessageIds :
-     Cardinality({n \in Nodes :
+     Cardinality({n \in aliveSet :
                     /\ Len(nodesMessages[n].messages) >= idx
-                    /\ nodesMessages[n].messages[idx] = id}) >= Majority}
+                    /\ nodesMessages[n].messages[idx] = id}) >=
+       MajorityOf(aliveSet)}
 
-RECURSIVE Iterate(_, _, _, _, _, _, _)
+RECURSIVE Iterate(_, _, _, _, _, _, _, _)
 
-Iterate(core, self, idx, sorted, prefix, committed, proposalCount) ==
+Iterate(core, self, idx, sorted, prefix, committed, aliveSet, proposalCount) ==
   IF idx > Cardinality(core.proposals)
   THEN [core |-> core, committed |-> committed]
   ELSE
-    LET ids == MajorityIds(core.nodesMessages, idx)
+    LET ids == MajorityIds(core.nodesMessages, aliveSet, idx)
     IN
       IF ids # {}
       THEN
         LET id == CHOOSE item \in ids : TRUE
             prefix1 == Append(prefix, id)
-            support1 == PrefixSupport(core.nodesMessages, prefix1)
+            support1 == PrefixSupport(core.nodesMessages, aliveSet, prefix1)
             votes0 ==
               PromiseVotesFor(core.promises, prefix1) \cup
               (IF self \in support1 THEN {self} ELSE {})
             votes1 == votes0 \cap support1
             committed1 ==
-              IF /\ Cardinality(support1) >= Majority
-                 /\ Cardinality(votes1) >= Majority
+              IF /\ Cardinality(support1) >= MajorityOf(aliveSet)
+                 /\ Cardinality(votes1) >= MajorityOf(aliveSet)
               THEN prefix1
               ELSE committed
             promises1 == PutPromiseVotes(core.promises, prefix1, votes1)
             core1 ==
               [core EXCEPT
                  !.promises =
-                   NormalizePromises(promises1, core.nodesMessages,
-                                     core.proposals, committed1)]
-        IN Iterate(core1, self, idx + 1, sorted, prefix1, committed1, proposalCount)
+                   NormalizePromises(
+                     promises1,
+                     core.nodesMessages,
+                     aliveSet,
+                     core.proposals)]
+        IN Iterate(
+             core1,
+             self,
+             idx + 1,
+             sorted,
+             prefix1,
+             committed1,
+             aliveSet,
+             proposalCount)
       ELSE IF ~sorted
            THEN
              LET sortedMsgs == SortFrom(core.nodesMessages[self].messages, idx)
+                 nodes1 ==
+                   [core.nodesMessages EXCEPT ![self].messages = sortedMsgs]
                  core1 ==
                    IF sortedMsgs = core.nodesMessages[self].messages
                    THEN core
@@ -222,54 +282,98 @@ Iterate(core, self, idx, sorted, prefix, committed, proposalCount) ==
                            !.nodesMessages[self].generation =
                              BumpGeneration(@, 1, proposalCount),
                            !.promises =
-                             NormalizePromises(@, [core.nodesMessages EXCEPT ![self].messages = sortedMsgs],
-                                               core.proposals, committed)]
-             IN Iterate(core1, self, idx, TRUE, prefix, committed, proposalCount)
+                             NormalizePromises(@, nodes1, aliveSet, core.proposals)]
+             IN Iterate(
+                  core1,
+                  self,
+                  idx,
+                  TRUE,
+                  prefix,
+                  committed,
+                  aliveSet,
+                  proposalCount)
            ELSE [core |-> core, committed |-> committed]
 
-MergeResult(state, self, incoming, proposalCount) ==
-  LET base == BaseCore(state.core, self, incoming, state.committed, proposalCount)
-      iter ==
-        Iterate(base, self, Len(state.committed) + 1, FALSE,
-                state.committed, state.committed, proposalCount)
-  IN
-    IF iter.core = state.core
-    THEN [changed |-> FALSE,
-          core |-> state.core,
-          committed |-> state.committed]
-    ELSE [changed |-> TRUE,
-          core |-> iter.core,
-          committed |->
-            IF Len(iter.committed) > Len(state.committed)
-            THEN iter.committed
-            ELSE state.committed]
+MergeResult(state, self, incoming, aliveSet, proposalCount) ==
+  LET committed == MergeCommitted(state.committed, incoming.committed)
+      currentCore ==
+        RebaseCore(state.core, aliveSet, state.committed, committed)
+      incomingCore ==
+        RebaseCore(incoming.core, aliveSet, incoming.committed, committed)
+      mergedNodes ==
+        MergeNodesMessages(currentCore.nodesMessages, incomingCore.nodesMessages)
+      newIds == NewProposalSeq(currentCore.proposals, incomingCore.proposals)
+      self0 == mergedNodes[self]
+      self1 ==
+        IF Len(newIds) = 0
+        THEN self0
+        ELSE [self0 EXCEPT
+                !.messages = @ \o newIds,
+                !.generation = BumpGeneration(@, Len(newIds), proposalCount)]
+      proposals1 == currentCore.proposals \cup incomingCore.proposals
+      nodes1 == [mergedNodes EXCEPT ![self] = self1]
+      promises1 ==
+        NormalizePromises(
+          currentCore.promises \cup incomingCore.promises,
+          nodes1,
+          aliveSet,
+          proposals1)
+      base ==
+        [proposals |-> proposals1,
+         nodesMessages |-> nodes1,
+         promises |-> promises1]
+      iter == Iterate(base, self, 1, FALSE, <<>>, <<>>, aliveSet, proposalCount)
+      finalCommitted == committed \o iter.committed
+      finalCore == RebaseCore(iter.core, aliveSet, committed, finalCommitted)
+  IN [changed |-> (finalCore # state.core \/ finalCommitted # state.committed),
+      core |-> finalCore,
+      committed |-> finalCommitted]
 
 Propose(node, msg) ==
   /\ node \in alive
   /\ msg \notin proposed
-  /\ local[node] = InitLocal[node]
+  /\ local[node] = EmptyNodeState
   /\ LET incoming ==
-           [EmptyCore EXCEPT !.proposals = {msg}]
-         out == MergeResult(local[node], node, incoming, Cardinality(proposed \cup {msg}))
+           [core |-> [EmptyCore EXCEPT !.proposals = {msg}],
+            committed |-> <<>>]
+         out ==
+           MergeResult(
+             local[node],
+             node,
+             incoming,
+             alive,
+             Cardinality(proposed \cup {msg}))
+         state1 == [core |-> out.core, committed |-> out.committed]
      IN
        /\ out.changed
        /\ alive' = alive
        /\ proposed' = proposed \cup {msg}
-       /\ local' = [local EXCEPT ![node] = [core |-> out.core,
-                                            committed |-> out.committed]]
-       /\ stateMsgs' = BroadcastState(stateMsgs, node, out.core, alive)
+       /\ local' = [local EXCEPT ![node] = state1]
+       /\ stateMsgs' = BroadcastState(stateMsgs, node, state1, alive)
 
 DeliverState(msg) ==
   /\ msg \in stateMsgs
   /\ msg.to \in alive
-  /\ LET out == MergeResult(local[msg.to], msg.to, msg.core, Cardinality(proposed))
+  /\ Comparable(local[msg.to].committed, msg.committed)
+  /\ LET incoming ==
+           [core |-> msg.core, committed |-> msg.committed]
+         out ==
+           MergeResult(
+             local[msg.to],
+             msg.to,
+             incoming,
+             alive,
+             Cardinality(proposed))
+         state1 == [core |-> out.core, committed |-> out.committed]
      IN
-       /\ out.changed
        /\ alive' = alive
        /\ proposed' = proposed
-       /\ local' = [local EXCEPT ![msg.to] = [core |-> out.core,
-                                              committed |-> out.committed]]
-       /\ stateMsgs' = BroadcastState(stateMsgs \ {msg}, msg.to, out.core, alive)
+       /\ IF out.changed
+          THEN /\ local' = [local EXCEPT ![msg.to] = state1]
+               /\ stateMsgs' =
+                    BroadcastState(stateMsgs \ {msg}, msg.to, state1, alive)
+          ELSE /\ local' = local
+               /\ stateMsgs' = stateMsgs \ {msg}
 
 ProposeAny ==
   \E node \in Nodes : \E msg \in MessageIds : Propose(node, msg)
@@ -277,16 +381,54 @@ ProposeAny ==
 DeliverAnyState ==
   \E msg \in stateMsgs : DeliverState(msg)
 
+Stabilize(node) ==
+  /\ node \in alive
+  /\ LET incoming ==
+           [core |-> EmptyCore, committed |-> local[node].committed]
+         out ==
+           MergeResult(
+             local[node],
+             node,
+             incoming,
+             alive,
+             Cardinality(proposed))
+         state1 == [core |-> out.core, committed |-> out.committed]
+     IN
+       /\ out.changed
+       /\ alive' = alive
+       /\ proposed' = proposed
+       /\ local' = [local EXCEPT ![node] = state1]
+       /\ stateMsgs' = BroadcastState(stateMsgs, node, state1, alive)
+
+StabilizeAny ==
+  \E node \in Nodes : Stabilize(node)
+
+PruneFailedCore(core, aliveSet, failed) ==
+  LET nodes1 ==
+        [core.nodesMessages EXCEPT
+          ![failed] = [messages |-> <<>>, generation |-> 0]]
+  IN [core EXCEPT
+        !.nodesMessages = nodes1,
+        !.promises = NormalizePromises(core.promises, nodes1, aliveSet, core.proposals)]
+
 DisconnectNodeState(node, failed) ==
-  LET prunedState ==
-        [local[node] EXCEPT
-          !.core = PruneFailedCore(local[node].core, failed, local[node].committed)]
-      out == MergeResult(prunedState, node, EmptyCore, Cardinality(proposed))
+  LET survivors == alive \ {failed}
+      current == local[node]
+      next ==
+        [current EXCEPT
+          !.core = PruneFailedCore(current.core, survivors, failed)]
+      out ==
+        MergeResult(
+          next,
+          node,
+          [core |-> EmptyCore, committed |-> next.committed],
+          survivors,
+          Cardinality(proposed))
   IN [core |-> out.core, committed |-> out.committed]
 
 DisconnectChangedNodes(failed) ==
   {node \in (alive \ {failed}) :
-     DisconnectNodeState(node, failed).core # local[node].core}
+     DisconnectNodeState(node, failed) # local[node]}
 
 DisconnectStateMessages(failed) ==
   LET survivors == alive \ {failed}
@@ -297,12 +439,13 @@ DisconnectStateMessages(failed) ==
            /\ msg.to # failed
            /\ msg.from \notin changed}
       retained ==
-        {[msg EXCEPT !.core = PruneFailedCore(msg.core, failed, <<>>)] :
+        {[msg EXCEPT !.core = PruneFailedCore(msg.core, survivors, failed)] :
            msg \in retainedMsgs}
       rebroadcast ==
         UNION {{[from |-> from,
                   to |-> to,
-                  core |-> DisconnectNodeState(from, failed).core] :
+                  core |-> DisconnectNodeState(from, failed).core,
+                  committed |-> DisconnectNodeState(from, failed).committed] :
                    to \in (survivors \ {from})} :
                 from \in changed}
   IN retained \cup rebroadcast
@@ -332,21 +475,27 @@ LiveDisconnectAny ==
 Next ==
   \/ ProposeAny
   \/ DeliverAnyState
+  \/ StabilizeAny
 
 LiveNext ==
   \/ ProposeAny
   \/ DeliverAnyState
+  \/ StabilizeAny
   \/ LiveDisconnectAny
 
-CoreWellFormed(core) ==
+CoreWellFormed(core, aliveSet, committed) ==
   /\ core \in CoreState
   /\ core.proposals \subseteq proposed
+  /\ core.proposals \cap SeqElems(committed) = {}
   /\ \A n \in Nodes :
-       /\ SeqElems(core.nodesMessages[n].messages) \subseteq proposed
+       /\ SeqElems(core.nodesMessages[n].messages) \subseteq core.proposals
        /\ NoDuplicates(core.nodesMessages[n].messages)
   /\ \A promise \in core.promises :
-       /\ SeqElems(promise.prefix) \subseteq proposed
-       /\ promise.votes \subseteq PrefixSupport(core.nodesMessages, promise.prefix)
+       /\ promise.prefix # <<>>
+       /\ promise.prefix \in MessageSeqs
+       /\ SeqElems(promise.prefix) \subseteq core.proposals
+       /\ NoDuplicates(promise.prefix)
+       /\ promise.votes \subseteq PrefixSupport(core.nodesMessages, aliveSet, promise.prefix)
 
 TypeOK ==
   /\ alive \subseteq Nodes
@@ -355,8 +504,8 @@ TypeOK ==
   /\ stateMsgs \subseteq StateMessage
 
 LocalWellFormed ==
-  \A n \in Nodes :
-    /\ CoreWellFormed(local[n].core)
+  \A n \in alive :
+    /\ CoreWellFormed(local[n].core, alive, local[n].committed)
     /\ local[n].committed \in MessageSeqs
     /\ SeqElems(local[n].committed) \subseteq proposed
     /\ NoDuplicates(local[n].committed)
@@ -365,7 +514,10 @@ MessageWellFormed ==
   \A msg \in stateMsgs :
     /\ msg.from \in alive
     /\ msg.to \in alive
-    /\ CoreWellFormed(msg.core)
+    /\ CoreWellFormed(msg.core, alive, msg.committed)
+    /\ msg.committed \in MessageSeqs
+    /\ SeqElems(msg.committed) \subseteq proposed
+    /\ NoDuplicates(msg.committed)
 
 PrefixAgreement ==
   \A left \in alive :
@@ -379,16 +531,19 @@ Invariant ==
   /\ PrefixAgreement
 
 CommitHappened ==
-  \E node \in alive :
-    local[node].committed # <<>>
+  /\ alive # {}
+  /\ \A node \in alive : local[node].committed # <<>>
 
 Termination == <>CommitHappened
 
 Spec == Init /\ [][Next]_vars
+
 LiveSpec ==
   /\ Init
   /\ [][LiveNext]_vars
   /\ WF_vars(ProposeAny)
   /\ WF_vars(DeliverAnyState)
+  /\ WF_vars(StabilizeAny)
+  /\ Termination
 
 =============================================================================
