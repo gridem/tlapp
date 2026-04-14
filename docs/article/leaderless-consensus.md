@@ -32,7 +32,8 @@ In practice that means the following actions are explored whenever enabled:
 
 - `Propose`
 - message delivery
-- `Disconnect` for the variants that include failures
+- local stabilization where the protocol uses it
+- `Disconnect` in the variants and liveness models that include failures
 
 The explored state has two layers:
 
@@ -116,14 +117,14 @@ One important modeling correction in the final TLA++ model was to make commit me
 
 Each node tracks:
 
-- an unordered set of known proposal ids
-- one ordered message sequence per node, each with a generation
-- promise votes for candidate prefixes
+- an unordered set of known uncommitted proposal ids
+- one ordered suffix sequence per node, each with a generation and interpreted relative to `committed`
+- promise votes for uncommitted candidate prefixes
 - its own committed prefix
 
 The algorithm grows commitment one position at a time. If a quorum of node sequences has the same id at the next uncommitted position, the candidate prefix can be extended. Support for that prefix is recomputed from current node sequences, promise votes are intersected with that support, and a quorum condition decides whether the prefix is committed.
 
-If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks.
+When commitment grows, the node rebases its working state so the committed prefix is removed from `core.proposals`, from the stored per-node suffixes, and from promise prefixes. The `core` therefore represents only the uncommitted suffix state. If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks. A separate local `stabilize` step reruns the merge logic against an empty incoming core so this suffix state can still advance without waiting for another message.
 
 `Rush` does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.
 
@@ -134,7 +135,7 @@ The variants can also be understood by the amount of meaning they place into mes
 - `Sore` and `Calm` mostly exchange known proposals and the current node view.
 - `Flat` adds explicit vote support into vote messages.
 - `Calm` and `Most` use commit messages that carry the committed proposal set explicitly.
-- `Rush` gossips a full core state in each state message.
+- `Rush` gossips `(core, committed)` in each state message, with `core` containing only the uncommitted suffix state.
 
 This matters directly for state-space size. Richer messages make local reconstruction easier, but they also create more distinct in-flight states for the checker.
 
@@ -153,6 +154,7 @@ The implemented safety checks are more concrete than that summary:
 - For `Most`, per-proposal support must refer only to locally known proposals and only to valid nodes.
 - For `Rush`, queued state-message endpoints must stay live.
 - For `Rush`, every proposal id appearing in local cores, state messages, promises, or committed prefixes must stay within the global `proposed` set.
+- For `Rush`, committed ids must not remain in the uncommitted `core`.
 - For `Rush`, promise votes must stay within `support(prefix)`.
 - For the set-based variants, all live committed nodes must agree on the committed proposal set.
 - For `Rush`, every pair of committed prefixes must be prefix-comparable.
@@ -162,18 +164,19 @@ The liveness checks are intentionally positive. The current question is not "doe
 More concretely:
 
 - `Calm`, `Flat`, and `Most` require that some node eventually commits a non-empty proposal set.
-- `Rush` requires that some alive node eventually commits a non-empty prefix.
+- `Rush` requires that every alive node eventually commits a non-empty prefix.
 
 Fairness is action-level rather than a coarse whole-transition rule.
 
 - In the executable TLA++ models, it is expressed directly through `weakFairness(...)` on the relevant action groups.
 - For `Calm`, `Flat`, and `Most`, the liveness shape is `weakFairness(proposeAny()) && weakFairness(deliverAnyVote()) && eventually(commitHappenedExpr(state))`.
-- For `Rush`, the liveness shape is `weakFairness(proposeAny()) && weakFairness(deliverAnyState()) && eventually(commitHappenedExpr(state))`.
+- For `Rush`, the liveness shape is `weakFairness(proposeAny()) && weakFairness(deliverAnyState()) && weakFairness(stabilizeAny()) && eventually(commitHappenedExpr(state))`.
 - `proposeAny()` means there exists some node and some proposal id such that a `Propose(node, id)` step is currently enabled and can be taken.
 - `deliverAnyState()` means there exists some in-flight `Rush` state message such that a `DeliverState(msg)` step is currently enabled and can be taken.
-- `commitHappenedExpr(state)` is the success predicate checked by `eventually(...)`: in the set-based variants it means some node has committed a non-empty proposal set, and in `Rush` it means some alive node has committed a non-empty prefix.
+- `stabilizeAny()` means there exists some alive node whose local uncommitted suffix state can still advance by rerunning the merge logic against an empty incoming core.
+- `commitHappenedExpr(state)` is the success predicate checked by `eventually(...)`: in the set-based variants it means some node has committed a non-empty proposal set, and in `Rush` it means every alive node has committed a non-empty prefix.
 - `weakFairness(action)` means the checker does not allow that action to stay continuously enabled forever without eventually taking a step of that kind.
-- `eventually(commitHappenedExpr(state))` adds the positive success condition: in `Rush`, at least one node that remains alive must actually commit, not merely keep the system active.
+- `eventually(commitHappenedExpr(state))` adds the positive success condition: in `Rush`, all nodes that remain alive must actually commit, not merely keep the system active.
 
 ## Verification Results
 
@@ -181,7 +184,7 @@ The current results are structurally clean:
 
 - `Sore` fails, as expected.
 - `Calm`, `Flat`, and `Most` hold in the current finite models.
-- `Rush` is the most advanced checked variant, using timeout-free prefix-based live consensus. The executable liveness model also checks the 3-node case with one majority-preserving disconnect and requires a non-empty committed prefix to appear on at least one survivor.
+- `Rush` is the most advanced checked variant, using timeout-free prefix-based live consensus. The executable liveness model also checks the 3-node case with one majority-preserving disconnect and requires every survivor to commit a non-empty prefix.
 
 That statement should be read precisely. The result is not an informal argument that these variants "seem right." The result is that, within the current finite abstractions, the safety invariants were model-checked and the liveness properties were checked separately under explicit fairness assumptions.
 
@@ -238,7 +241,7 @@ The `Rush` walkthrough is separate because the state shape is different. It show
 - per-node `core.nodesMessages`
 - per-node `core.promises`
 
-That is deliberate. Quantities such as the next majority prefix and `support(prefix)` are derived inside `mergeState(...)` from the stored sequences and promises; they are not represented in the visual as standalone state fields because they are not actual stored state. The global `proposed` set and in-flight `stateMsgs` queue are omitted there to keep the walkthrough compact.
+That is deliberate. Quantities such as the next majority prefix and `support(prefix)` are derived inside `mergeState(...)` from the stored sequences and promises; they are not represented in the visual as standalone state fields because they are not actual stored state. In the current model, `core` is always the uncommitted suffix relative to `committed`. The global `proposed` set and in-flight `stateMsgs` queue are omitted there to keep the walkthrough compact.
 
 ## Conclusions
 

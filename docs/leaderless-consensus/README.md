@@ -24,7 +24,8 @@ Additional narrative material:
 - Queue contents are part of the state, so different in-flight messages produce
   different reachable states.
 - `Sore`, `Calm`, `Flat`, and `Most` include `Disconnect`.
-- `Rush` currently omits `Disconnect` while the ordering model is being reduced.
+- `Rush` keeps disconnect out of the safety model, but the liveness model
+  includes one majority-preserving disconnect in the 3-node case.
 
 ## Variants
 

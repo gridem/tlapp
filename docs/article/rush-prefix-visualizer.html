@@ -271,7 +271,7 @@ function msg(from, to, proposals, node0, node1, node2, promises = []) {
 const STEPS = [
   {
     title: "Initial state",
-    text: "All three nodes start with empty committed prefixes, empty local cores, and an empty state-message queue.",
+    text: "All three nodes start with empty committed prefixes and empty local cores.",
     nodes: {
       0: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
       1: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
@@ -280,7 +280,7 @@ const STEPS = [
   },
   {
     title: "Propose(0, 10)",
-    text: "Node 0 proposes 10. The proposal is inserted into the global proposed set, appended to node 0's own stored sequence, and broadcast as a full core snapshot.",
+    text: "Node 0 proposes 10. Its uncommitted core now contains proposal 10 and its own suffix [10].",
     nodes: {
       0: local([], [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
       1: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
@@ -289,7 +289,7 @@ const STEPS = [
   },
   {
     title: "DeliverState(0 -> 1)",
-    text: "Node 1 receives node 0's core. Its stored state now records proposal 10, the remote sequence for node 0, its own local sequence [10], and the promise record prefix [10] -> {1}.",
+    text: "Node 1 receives node 0's state. It now stores uncommitted proposal 10, records node 0's suffix [10], appends 10 to its own suffix, and stores promise [10] -> {1}.",
     nodes: {
       0: local([], [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
       1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
@@ -298,47 +298,65 @@ const STEPS = [
   },
   {
     title: "DeliverState(1 -> 0)",
-    text: "Node 0 receives node 1's richer core. During mergeState(...), quorum support for [10] is derived from the stored node sequences and node 0 commits [10]. The committed prefix is stored; the temporary quorum candidate is not.",
+    text: "Node 0 receives node 1's richer state and commits [10]. After commitment, the working core is rebased, so committed id 10 disappears from core.proposals, per-node suffixes, and promises.",
     nodes: {
-      0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+      0: local([10], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
       1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
       2: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
     }
   },
   {
     title: "Propose(2, 11)",
-    text: "Node 2 is still pristine, so it may propose 11. Its local stored core now contains only proposal 11 and its own sequence [11].",
+    text: "Node 2 is still pristine, so it may propose 11. Its local state contains only the uncommitted suffix [11].",
     nodes: {
-      0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+      0: local([10], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
       1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
       2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
     }
   },
   {
     title: "DeliverState(2 -> 1)",
-    text: "Node 1 merges node 2's core. It learns proposal 11, extends its own stored sequence to [10,11], and keeps the earlier promise record for [10].",
+    text: "Node 1 merges node 2's state. It learns uncommitted id 11, extends its own suffix to [10,11], and keeps the earlier promise record for [10].",
     nodes: {
-      0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+      0: local([10], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
       1: local([], [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
       2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
     }
   },
   {
     title: "DeliverState(1 -> 0)",
-    text: "Node 0 merges node 1's richer core. It learns 11, extends its own sequence to [10,11], and stores the promise record [10,11] -> {0}. Its committed prefix is still only [10].",
+    text: "Node 0 merges node 1's richer state. Because [10] is already committed locally, the incoming state is rebased first; node 0 only keeps the uncommitted suffix state for 11 and stores promise [11] -> {0}.",
     nodes: {
-      0: local([10], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }]),
+      0: local([10], [11], { generation: 2, items: [11] }, { generation: 2, items: [11] }, { generation: 1, items: [11] }, [{ prefix: [11], votes: [0] }]),
       1: local([], [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
       2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
     }
   },
   {
     title: "DeliverState(0 -> 1)",
-    text: "Node 1 receives node 0's newer core and commits [10,11]. The stored committed prefixes now differ in length: node 0 has [10], node 1 has [10,11]. That is still safe because the prefixes are compatible.",
+    text: "Node 1 receives node 0's newer state, adopts committed prefix [10], derives quorum support for suffix [11], and commits [10,11]. Its core becomes empty again after rebasing away the new committed prefix.",
     nodes: {
-      0: local([10], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }]),
-      1: local([10, 11], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }),
+      0: local([10], [11], { generation: 2, items: [11] }, { generation: 2, items: [11] }, { generation: 1, items: [11] }, [{ prefix: [11], votes: [0] }]),
+      1: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
       2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
+    }
+  },
+  {
+    title: "DeliverState(1 -> 2)",
+    text: "Node 2 receives node 1's committed state. Because the incoming committed prefix [10,11] extends its local view, node 2 adopts that committed prefix and its core also collapses to the empty suffix state.",
+    nodes: {
+      0: local([10], [11], { generation: 2, items: [11] }, { generation: 2, items: [11] }, { generation: 1, items: [11] }, [{ prefix: [11], votes: [0] }]),
+      1: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+      2: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
+    }
+  },
+  {
+    title: "DeliverState(1 -> 0)",
+    text: "Node 0 finally receives node 1's committed state and extends its own committed prefix from [10] to [10,11]. All three nodes now agree on the same committed prefix, and every local core is empty.",
+    nodes: {
+      0: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+      1: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+      2: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
     }
   }
 ];

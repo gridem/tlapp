@@ -64,9 +64,9 @@ The executable and TLC models use small finite abstractions:
 - In `Rush`, the analogous rule is stricter: a proposal may be proposed only while the node is still in its initial local state.
 - Broadcast sends to the other live nodes only.
 - The set-based variants model disconnect as an immediate local state update on survivors.
-- `Rush` keeps the safety model focused on proposal and state-message delivery,
-  while the liveness model additionally allows one majority-preserving
-  disconnect in the 3-node case.
+- `Rush` keeps the safety model focused on proposal, state-message delivery,
+  and local stabilization, while the liveness model additionally allows one
+  majority-preserving disconnect in the 3-node case.
 
 ## Safety Checks
 
@@ -84,6 +84,7 @@ The set-based variants (`Sore`, `Calm`, `Flat`, `Most`) check:
 - all proposed and committed ids stay within the proposed ids
 - all ids inside local cores, state messages, and promise prefixes stay within
   the proposed ids
+- committed ids do not remain in the uncommitted `Rush` core
 - promise votes stay within `support(prefix)`
 - committed sequences remain pairwise prefix-comparable
 
@@ -102,8 +103,8 @@ the TLA+ spec:
   proposal set under majority-preserving disconnects
 - `Rush` uses separate safety and liveness models: safety checks the core
   prefix-ordering protocol without disconnect, while liveness additionally
-  allows one majority-preserving disconnect and requires some alive node to
-  commit a non-empty prefix
+  allows one majority-preserving disconnect and requires every surviving node
+  to commit a non-empty prefix
 - `Calm`, `Flat`, and `Most` use action-level weak fairness on `ProposeAny`
   and `DeliverAnyVote`
 - `Rush` uses action-level weak fairness on `ProposeAny` and `DeliverAnyState`
@@ -114,21 +115,22 @@ In the executable TLA++ models:
 - set-based liveness uses `weakFairness(proposeAny()) &&
   weakFairness(deliverAnyVote())`
 - `Rush` liveness uses `weakFairness(proposeAny()) &&
-  weakFairness(deliverAnyState())`
+  weakFairness(deliverAnyState()) && weakFairness(stabilizeAny())`
 - `proposeAny()` means there exists some node and some proposal id such that a
   `Propose(node, id)` step is currently enabled and can be taken
 - `deliverAnyState()` means there exists some in-flight `Rush` state message
   such that a `DeliverState(msg)` step is currently enabled and can be taken
+- `stabilizeAny()` means there exists some alive node whose local suffix state
+  can still advance without receiving a new message
 - in the `Rush` liveness model, one disconnect is also allowed as long as a
   majority remains alive; with three nodes, that means one node may fail and
-  the remaining two must still be able to produce a non-empty commit on at
-  least one survivor
+  the remaining two must both still be able to produce a non-empty commit
 - `weakFairness(action)` means the checker does not allow that action to stay
   continuously enabled forever without eventually taking a step of that kind
 - the separate `eventually(...)` clause adds the positive success condition
   that commit must actually happen; in code that is checked through
   `commitHappenedExpr(state)`, which means some node commits in the set-based
-  variants and some alive node commits in `Rush`
+  variants and every alive node commits in `Rush`
 
 ## Verification Result
 
@@ -139,7 +141,9 @@ Executable TLA++ sample on the current branch tip:
 - `Flat`: holds under the current reduced executable model, including the liveness check
 - `Most`: holds under the current finite model, including the liveness check
 - `Rush`: the most advanced checked variant, using timeout-free prefix-based
-  live consensus
+  live consensus, with the executable liveness model also covering the 3-node
+  case with one majority-preserving disconnect and requiring every survivor to
+  commit a non-empty prefix
 
 Current failures in the executable model:
 
@@ -178,7 +182,7 @@ Recent checks from `build/rel` and TLC:
 | `Calm` | 3.6s | 8.4s | 5.5s | 22.6s |
 | `Flat` | 28.0s | 46.7s | 45.5s | 161.3s |
 | `Most` | 3.3s | 11.7s | 3.6s | 69.5s |
-| `Rush` | 12.9s | in progress | 59.2s | in progress |
+| `Rush` | 25.0s | in progress | 77.8s | in progress |
 
 Current takeaway:
 

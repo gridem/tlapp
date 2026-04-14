@@ -25,7 +25,8 @@
 <ul>
 <li><code>Propose</code></li>
 <li>message delivery</li>
-<li><code>Disconnect</code> for the variants that include failures</li>
+<li>local stabilization where the protocol uses it</li>
+<li><code>Disconnect</code> in the variants and liveness models that include failures</li>
 </ul>
 <p>The explored state has two layers:</p>
 <ul>
@@ -93,13 +94,13 @@
 <p><code>Rush</code> is the most advanced variant. It does not commit an unordered set. It commits a sequence and requires committed sequences to remain prefix-compatible.</p>
 <p>Each node tracks:</p>
 <ul>
-<li>an unordered set of known proposal ids,</li>
-<li>one ordered message sequence per node, each with a generation,</li>
-<li>promise votes for candidate prefixes,</li>
+<li>an unordered set of known uncommitted proposal ids,</li>
+<li>one ordered suffix sequence per node, each with a generation and interpreted relative to <code>committed</code>,</li>
+<li>promise votes for uncommitted candidate prefixes,</li>
 <li>and its own committed prefix.</li>
 </ul>
 <p>The algorithm grows commitment one position at a time. If a quorum of node sequences has the same id at the next uncommitted position, the candidate prefix can be extended. Support for that prefix is recomputed from current node sequences, promise votes are intersected with that support, and a quorum condition decides whether the prefix is committed.</p>
-<p>If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks.</p>
+<p>When commitment grows, the node rebases its working state so the committed prefix is removed from <code>core.proposals</code>, from the stored per-node suffixes, and from promise prefixes. The <code>core</code> therefore represents only the uncommitted suffix state. If no majority exists at the current position, the node sorts its own remaining suffix once. That canonicalizes the local tail and can unlock later majority checks. A separate local <code>stabilize</code> step reruns the merge logic against an empty incoming core so this suffix state can still advance without waiting for another message.</p>
 <p><code>Rush</code> does not rely on timeout-driven failure handling to make progress. That makes it the most robust variant in this set from a protocol structure perspective: progress is not gated on waiting for a timeout before moving forward. In practical terms, that removes one common source of tail-latency inflation. The checked models support that structural claim, but they do not prove an absolute p99 latency bound.</p>
 
 <h2 id="message-semantics">Message Semantics</h2>
@@ -108,7 +109,7 @@
 <li><code>Sore</code> and <code>Calm</code> mostly exchange known proposals and the current node view.</li>
 <li><code>Flat</code> adds explicit vote support into vote messages.</li>
 <li><code>Calm</code> and <code>Most</code> use commit messages that carry the committed proposal set explicitly.</li>
-<li><code>Rush</code> gossips a full core state in each state message.</li>
+<li><code>Rush</code> gossips <code>(core, committed)</code> in each state message, with <code>core</code> containing only the uncommitted suffix state.</li>
 </ul>
 <p>This matters directly for state-space size. Richer messages make local reconstruction easier, but they also create more distinct in-flight states for the checker.</p>
 
@@ -125,6 +126,7 @@
 <li>For <code>Most</code>, per-proposal support must refer only to locally known proposals and only to valid nodes.</li>
 <li>For <code>Rush</code>, queued state-message endpoints must stay live.</li>
 <li>For <code>Rush</code>, every proposal id appearing in local cores, state messages, promises, or committed prefixes must stay within the global <code>proposed</code> set.</li>
+<li>For <code>Rush</code>, committed ids must not remain in the uncommitted <code>core</code>.</li>
 <li>For <code>Rush</code>, promise votes must stay within <code>support(prefix)</code>.</li>
 <li>For the set-based variants, all live committed nodes must agree on the committed proposal set.</li>
 <li>For <code>Rush</code>, every pair of committed prefixes must be prefix-comparable.</li>
@@ -133,18 +135,19 @@
 <p>More concretely:</p>
 <ul>
 <li><code>Calm</code>, <code>Flat</code>, and <code>Most</code> require that some node eventually commits a non-empty proposal set.</li>
-<li><code>Rush</code> requires that some alive node eventually commits a non-empty prefix.</li>
+<li><code>Rush</code> requires that every alive node eventually commits a non-empty prefix.</li>
 </ul>
 <p>Fairness is action-level rather than a coarse whole-transition rule.</p>
 <ul>
 <li>In the executable TLA++ models, it is expressed directly through <code>weakFairness(...)</code> on the relevant action groups.</li>
 <li>For <code>Calm</code>, <code>Flat</code>, and <code>Most</code>, the liveness shape is <code>weakFairness(proposeAny()) &amp;&amp; weakFairness(deliverAnyVote()) &amp;&amp; eventually(commitHappenedExpr(state))</code>.</li>
-<li>For <code>Rush</code>, the liveness shape is <code>weakFairness(proposeAny()) &amp;&amp; weakFairness(deliverAnyState()) &amp;&amp; eventually(commitHappenedExpr(state))</code>.</li>
+<li>For <code>Rush</code>, the liveness shape is <code>weakFairness(proposeAny()) &amp;&amp; weakFairness(deliverAnyState()) &amp;&amp; weakFairness(stabilizeAny()) &amp;&amp; eventually(commitHappenedExpr(state))</code>.</li>
 <li><code>proposeAny()</code> means there exists some node and some proposal id such that a <code>Propose(node, id)</code> step is currently enabled and can be taken.</li>
 <li><code>deliverAnyState()</code> means there exists some in-flight <code>Rush</code> state message such that a <code>DeliverState(msg)</code> step is currently enabled and can be taken.</li>
-<li><code>commitHappenedExpr(state)</code> is the success predicate checked by <code>eventually(...)</code>: in the set-based variants it means some node has committed a non-empty proposal set, and in <code>Rush</code> it means some alive node has committed a non-empty prefix.</li>
+<li><code>stabilizeAny()</code> means there exists some alive node whose local uncommitted suffix state can still advance by rerunning the merge logic against an empty incoming core.</li>
+<li><code>commitHappenedExpr(state)</code> is the success predicate checked by <code>eventually(...)</code>: in the set-based variants it means some node has committed a non-empty proposal set, and in <code>Rush</code> it means every alive node has committed a non-empty prefix.</li>
 <li><code>weakFairness(action)</code> means the checker does not allow that action to stay continuously enabled forever without eventually taking a step of that kind.</li>
-<li><code>eventually(commitHappenedExpr(state))</code> adds the positive success condition: in <code>Rush</code>, at least one node that remains alive must actually commit, not merely keep the system active.</li>
+<li><code>eventually(commitHappenedExpr(state))</code> adds the positive success condition: in <code>Rush</code>, all nodes that remain alive must actually commit, not merely keep the system active.</li>
 </ul>
 
 <h2 id="verification-results">Verification Results</h2>
@@ -152,7 +155,7 @@
 <ul>
 <li><code>Sore</code> fails, as expected.</li>
 <li><code>Calm</code>, <code>Flat</code>, and <code>Most</code> hold in the current finite models.</li>
-<li><code>Rush</code> is the most advanced checked variant, using timeout-free prefix-based live consensus. The executable liveness model also checks the 3-node case with one majority-preserving disconnect and requires a non-empty committed prefix to appear on at least one survivor.</li>
+<li><code>Rush</code> is the most advanced checked variant, using timeout-free prefix-based live consensus. The executable liveness model also checks the 3-node case with one majority-preserving disconnect and requires every survivor to commit a non-empty prefix.</li>
 </ul>
 <p>That statement should be read precisely. The result is not an informal argument that these variants “seem right.” The result is that, within the current finite abstractions, the safety invariants were model-checked and the liveness properties were checked separately under explicit fairness assumptions.</p>
 <p>This article focuses on the executable TLA++ side. That is the main engineering loop for this work: it is fast enough to refine the algorithms, rerun the full finite checks, and validate design corrections such as disconnect behavior, commit payload propagation, and <code>Rush</code> generation and promise handling.</p>
@@ -613,7 +616,7 @@
 </div>
 
 <h3 id="rush-state-walkthrough">Rush State Walkthrough</h3>
-<p>The second walkthrough is separate because <code>Rush</code> has a different state shape. It shows the actual stored per-node state of the executable model: for each node the stored <code>committed</code> prefix and local <code>core</code>. Derived quantities such as the next majority prefix and <code>support(prefix)</code> are computed inside <code>mergeState(...)</code>; they are not shown here as standalone state fields because they are not actually stored. The global <code>proposed</code> set and in-flight <code>stateMsgs</code> queue are omitted to keep the walkthrough compact.</p>
+<p>The second walkthrough is separate because <code>Rush</code> has a different state shape. It shows the actual stored per-node state of the executable model: for each node the stored <code>committed</code> prefix and local <code>core</code>. Derived quantities such as the next majority prefix and <code>support(prefix)</code> are computed inside <code>mergeState(...)</code>; they are not shown here as standalone state fields because they are not actually stored. In the current model, <code>core</code> is always the uncommitted suffix relative to <code>committed</code>. The global <code>proposed</code> set and in-flight <code>stateMsgs</code> queue are omitted to keep the walkthrough compact.</p>
 
 <div class="lrw-wrap" id="lrw-rush">
   <div class="lrw-toolbar">
@@ -895,9 +898,7 @@
   const STEPS = [
     {
       title: "Initial state",
-      text: "All three nodes start with empty committed prefixes, empty local cores, and an empty state-message queue.",
-      proposed: [],
-      stateMsgs: [],
+      text: "All three nodes start with empty committed prefixes and empty local cores.",
       nodes: {
         0: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
         1: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
@@ -906,12 +907,7 @@
     },
     {
       title: "Propose(0, 10)",
-      text: "Node 0 proposes 10. The proposal is inserted into the global proposed set, appended to node 0's own stored sequence, and broadcast as a full core snapshot.",
-      proposed: [10],
-      stateMsgs: [
-        msg(0, 1, [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
-        msg(0, 2, [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW())
-      ],
+      text: "Node 0 proposes 10. Its uncommitted core now contains proposal 10 and its own suffix [10].",
       nodes: {
         0: local([], [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
         1: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
@@ -920,13 +916,7 @@
     },
     {
       title: "DeliverState(0 -> 1)",
-      text: "Node 1 receives node 0's core. Its stored state now records proposal 10, the remote sequence for node 0, its own local sequence [10], and the promise record prefix [10] -> {1}.",
-      proposed: [10],
-      stateMsgs: [
-        msg(0, 2, [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
-        msg(1, 0, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
-        msg(1, 2, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }])
-      ],
+      text: "Node 1 receives node 0's state. It now stores uncommitted proposal 10, records node 0's suffix [10], appends 10 to its own suffix, and stores promise [10] -> {1}.",
       nodes: {
         0: local([], [10], { generation: 1, items: [10] }, EMPTY_ROW(), EMPTY_ROW()),
         1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
@@ -935,76 +925,65 @@
     },
     {
       title: "DeliverState(1 -> 0)",
-      text: "Node 0 receives node 1's richer core. During mergeState(...), quorum support for [10] is derived from the stored node sequences and node 0 commits [10]. The committed prefix is stored; the temporary quorum candidate is not.",
-      proposed: [10],
-      stateMsgs: [
-        msg(1, 2, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
-        msg(0, 1, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
-        msg(0, 2, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW())
-      ],
+      text: "Node 0 receives node 1's richer state and commits [10]. After commitment, the working core is rebased, so committed id 10 disappears from core.proposals, per-node suffixes, and promises.",
       nodes: {
-        0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+        0: local([10], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
         1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
         2: local([], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
       }
     },
     {
       title: "Propose(2, 11)",
-      text: "Node 2 is still pristine, so it may propose 11. Its local stored core now contains only proposal 11 and its own sequence [11].",
-      proposed: [10, 11],
-      stateMsgs: [
-        msg(1, 2, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
-        msg(0, 1, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
-        msg(0, 2, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
-        msg(2, 0, [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] }),
-        msg(2, 1, [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
-      ],
+      text: "Node 2 is still pristine, so it may propose 11. Its local state contains only the uncommitted suffix [11].",
       nodes: {
-        0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+        0: local([10], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
         1: local([], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW(), [{ prefix: [10], votes: [1] }]),
         2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
       }
     },
     {
       title: "DeliverState(2 -> 1)",
-      text: "Node 1 merges node 2's core. It learns proposal 11, extends its own stored sequence to [10,11], and keeps the earlier promise record for [10].",
-      proposed: [10, 11],
-      stateMsgs: [
-        msg(0, 1, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
-        msg(0, 2, [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
-        msg(2, 0, [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] }),
-        msg(1, 0, [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
-        msg(1, 2, [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }])
-      ],
+      text: "Node 1 merges node 2's state. It learns uncommitted id 11, extends its own suffix to [10,11], and keeps the earlier promise record for [10].",
       nodes: {
-        0: local([10], [10], { generation: 1, items: [10] }, { generation: 1, items: [10] }, EMPTY_ROW()),
+        0: local([10], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
         1: local([], [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
         2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
       }
     },
     {
       title: "DeliverState(1 -> 0)",
-      text: "Node 0 merges node 1's richer core. It learns 11, extends its own sequence to [10,11], and stores the promise record [10,11] -> {0}. Its committed prefix is still only [10].",
-      proposed: [10, 11],
-      stateMsgs: [
-        msg(2, 0, [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] }),
-        msg(1, 2, [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
-        msg(0, 1, [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }]),
-        msg(0, 2, [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }])
-      ],
+      text: "Node 0 merges node 1's richer state. Because [10] is already committed locally, the incoming state is rebased first; node 0 only keeps the uncommitted suffix state for 11 and stores promise [11] -> {0}.",
       nodes: {
-        0: local([10], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }]),
+        0: local([10], [11], { generation: 2, items: [11] }, { generation: 2, items: [11] }, { generation: 1, items: [11] }, [{ prefix: [11], votes: [0] }]),
         1: local([], [10, 11], { generation: 1, items: [10] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10], votes: [1] }]),
         2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
       }
     },
     {
       title: "DeliverState(0 -> 1)",
-      text: "Node 1 receives node 0's newer core and commits [10,11]. The stored committed prefixes now differ in length: node 0 has [10], node 1 has [10,11]. That is still safe because the prefixes are compatible.",
+      text: "Node 1 receives node 0's newer state, adopts committed prefix [10], derives quorum support for suffix [11], and commits [10,11]. Its core becomes empty again after rebasing away the new committed prefix.",
       nodes: {
-        0: local([10], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }, [{ prefix: [10, 11], votes: [0] }]),
-        1: local([10, 11], [10, 11], { generation: 2, items: [10, 11] }, { generation: 2, items: [10, 11] }, { generation: 1, items: [11] }),
+        0: local([10], [11], { generation: 2, items: [11] }, { generation: 2, items: [11] }, { generation: 1, items: [11] }, [{ prefix: [11], votes: [0] }]),
+        1: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
         2: local([], [11], EMPTY_ROW(), EMPTY_ROW(), { generation: 1, items: [11] })
+      }
+    },
+    {
+      title: "DeliverState(1 -> 2)",
+      text: "Node 2 receives node 1's committed state. Because the incoming committed prefix [10,11] extends its local view, node 2 adopts that committed prefix and its core also collapses to the empty suffix state.",
+      nodes: {
+        0: local([10], [11], { generation: 2, items: [11] }, { generation: 2, items: [11] }, { generation: 1, items: [11] }, [{ prefix: [11], votes: [0] }]),
+        1: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+        2: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
+      }
+    },
+    {
+      title: "DeliverState(1 -> 0)",
+      text: "Node 0 finally receives node 1's committed state and extends its own committed prefix from [10] to [10,11]. All three nodes now agree on the same committed prefix, and every local core is empty.",
+      nodes: {
+        0: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+        1: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW()),
+        2: local([10, 11], [], EMPTY_ROW(), EMPTY_ROW(), EMPTY_ROW())
       }
     }
   ];
